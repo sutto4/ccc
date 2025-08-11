@@ -1,0 +1,74 @@
+import Link from "next/link"
+import type { PropsWithChildren } from "react"
+import { notFound, redirect } from "next/navigation"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import SiteHeader from "@/components/site-header"
+import { getMockGuildById } from "@/lib/data"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+
+export default async function GuildLayout(props: PropsWithChildren<{ params: { id: string } }>) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    redirect("/signin")
+  }
+
+  const guild = getMockGuildById(props.params.id)
+  if (!guild) return notFound()
+
+  const tabs = [
+    { href: `/guilds/${guild.id}`, label: "Overview" },
+    { href: `/guilds/${guild.id}/users`, label: "Users & Roles" },
+    { href: `/guilds/${guild.id}/groups`, label: "Groups" },
+    { href: `/guilds/${guild.id}/settings`, label: "Settings" },
+  ]
+
+  return (
+    <main className="min-h-[100dvh] bg-background">
+      <SiteHeader />
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    <Link href="/">Dashboard</Link>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{guild.name}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <h1 className="text-2xl md:text-3xl font-bold truncate">{guild.name}</h1>
+            <p className="text-muted-foreground text-sm">Guild ID: {guild.id}</p>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="w-full justify-start">
+              {tabs.map((t) => (
+                <TabsTrigger key={t.href} value={t.label.toLowerCase()} asChild>
+                  <Link href={t.href}>{t.label}</Link>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="mt-6">{props.children}</div>
+      </div>
+    </main>
+  )
+}
