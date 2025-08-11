@@ -1,41 +1,39 @@
 import type { ExternalGroup, GuildMember, GuildRole } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const isServer = typeof window === "undefined";
 
-if (typeof window !== "undefined") {
-	console.log("API_BASE in browser:", API_BASE);
+// Server talks straight to the bot. Browser uses the Nginx proxy.
+// You can still override client base via NEXT_PUBLIC_API_BASE_URL if you want.
+const clientBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api").replace(/\/+$/, "");
+const API_BASE = isServer ? "http://127.0.0.1:3001" : clientBase;
+
+async function fetchJson<T>(url: string) {
+	const res = await fetch(url, { cache: "no-store" });
+	if (!res.ok) {
+		const text = await res.text().catch(() => "");
+		throw new Error(`Fetch failed ${res.status} ${res.statusText} at ${url} :: ${text.slice(0,200)}`);
+	}
+	return res.json() as Promise<T>;
 }
 
 export async function fetchRoles(guildId: string): Promise<GuildRole[]> {
-	const url = API_BASE
-		? `${API_BASE}/guilds/${guildId}/roles`
-		: `/api/mock/guilds/${guildId}/roles`;
-	const res = await fetch(url, { cache: "no-store" });
-	if (!res.ok) throw new Error("Failed to load roles");
-	return res.json();
+	const url = `${API_BASE}/guilds/${guildId}/roles`;
+	return fetchJson<GuildRole[]>(url);
 }
 
 export async function fetchMembers(
 	guildId: string,
-	params: { q?: string; role?: string[]; group?: string[] }
+	params: { q?: string; role?: string[]; group?: string[] },
 ): Promise<GuildMember[]> {
 	const usp = new URLSearchParams();
 	if (params.q) usp.set("q", params.q);
 	if (params.role?.length) usp.set("role", params.role.join(","));
 	if (params.group?.length) usp.set("group", params.group.join(","));
-	const path = API_BASE
-		? `${API_BASE}/guilds/${guildId}/members?${usp.toString()}`
-		: `/api/mock/guilds/${guildId}/members?${usp.toString()}`;
-	const res = await fetch(path, { cache: "no-store" });
-	if (!res.ok) throw new Error("Failed to load members");
-	return res.json();
+	const url = `${API_BASE}/guilds/${guildId}/members?${usp.toString()}`;
+	return fetchJson<GuildMember[]>(url);
 }
 
 export async function fetchExternalGroups(): Promise<ExternalGroup[]> {
-	const url = API_BASE
-		? `${API_BASE}/external/groups`
-		: `/api/mock/external/groups`;
-	const res = await fetch(url, { cache: "no-store" });
-	if (!res.ok) throw new Error("Failed to load external groups");
-	return res.json();
+	const url = `${API_BASE}/external/groups`;
+	return fetchJson<ExternalGroup[]>(url);
 }
