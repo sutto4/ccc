@@ -18,7 +18,7 @@ export default function SiteHeader() {
       <div className="mx-auto max-w-6xl px-4 md:px-6 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="font-semibold">
-            Discord Admin
+            Community Command Centre
           </Link>
           <nav className="hidden md:flex items-center gap-3 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-foreground">
