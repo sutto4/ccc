@@ -26,6 +26,7 @@ Create a .env.local file at the project root with:
 - NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
 - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
 - NEXT_PUBLIC_API_BASE_URL=/api
+- SERVER_API_BASE_URL=http://localhost:3001
 
 Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep secrets server-side [^1].
 
@@ -48,6 +49,7 @@ Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep
     - NEXT_PUBLIC_APP_BASE_URL=https://YOUR_DOMAIN.com
     - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
     - NEXT_PUBLIC_API_BASE_URL=/api
+    - SERVER_API_BASE_URL=https://YOUR_API_DOMAIN.com
 - Add your domain to Discord OAuth redirect list.
 - Deploy.
 
