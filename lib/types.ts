@@ -33,3 +33,30 @@ export type ExternalGroup = {
 	assigned_on: string; // or Date ISO
 	assigned_by: string;
 };
+
+export type Guild = {
+  id: string;
+  name: string;
+  memberCount?: number;
+  roleCount?: number;
+  rolesCount?: number;
+  icon?: string | null;
+  iconUrl?: string | null;
+  premium?: boolean;
+  createdAt?: string | null;
+};
+
+export type GuildRole = {
+  guildId: string;
+  roleId: string;
+  name: string;
+  color: string | null;
+  hoist?: boolean;
+  mentionable?: boolean;
+};
+
+export type ExternalGroup = {
+  accountid: string;
+  group: string;
+};
+

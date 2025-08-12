@@ -1,3 +1,14 @@
+export async function updateRole(
+	guildId: string,
+	roleId: string,
+	patch: { name?: string; color?: string; hoist?: boolean; mentionable?: boolean }
+) {
+	return fetchJson(`/guilds/${guildId}/roles/${roleId}`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(patch),
+	});
+}
 // api.ts
 import type { ExternalGroup, Guild, GuildMember, GuildRole } from "./types";
 
