@@ -1,4 +1,15 @@
 // app/lib/api.ts
+
+export type Guild = {
+  id: string;
+  name: string;
+  memberCount: number;
+  roleCount: number;
+  iconUrl: string | null;
+  premium: boolean;
+  createdAt: string | null;
+};
+
 export type Role = {
   guildId: string;
   roleId: string;
@@ -18,6 +29,7 @@ export type Member = {
 };
 
 export type Features = { custom_groups: boolean; premium_members?: boolean };
+
 export type MembersPage = {
   guildId: string;
   page: { limit: number; after: string; nextAfter: string | null; total: number | null };
@@ -37,13 +49,25 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await r.json();
       if (body?.error) msg = body.error;
       else if (body?.message) msg = body.message;
-    } catch {}
+    } catch {
+      // ignore
+    }
     throw new Error(msg);
   }
   return r.json() as Promise<T>;
 }
 
-export const fetchFeatures = (guildId: string) => j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
+// --- Guilds ---
+export function fetchGuilds(accessToken?: string) {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  return j<Guild[]>("/guilds", { headers });
+}
+
+// --- Features / Roles / Members ---
+export const fetchFeatures = (guildId: string) =>
+  j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
+
 export const fetchRoles = (guildId: string) => j<Role[]>(`/guilds/${guildId}/roles`);
 
 export function fetchMembersPaged(
@@ -67,7 +91,13 @@ export const searchMembers = (guildId: string, q: string, limit = 25) => {
 };
 
 export const addRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
-  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "POST", headers: { "x-user-id": callerId } });
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "POST",
+    headers: { "x-user-id": callerId },
+  });
 
 export const removeRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
-  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "DELETE", headers: { "x-user-id": callerId } });
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "DELETE",
+    headers: { "x-user-id": callerId },
+  });
