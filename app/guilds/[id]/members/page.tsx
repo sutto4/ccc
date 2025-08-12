@@ -21,7 +21,6 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [cursor, setCursor] = useState<string | null>('0');
   const [total, setTotal] = useState<number | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -30,7 +29,7 @@ export default function MembersPage() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
 
-  // role picker state
+  // role picker
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [roleSearch, setRoleSearch] = useState('');
 
@@ -44,7 +43,7 @@ export default function MembersPage() {
         setFeatures(feat.features || { custom_groups: false, premium_members: false });
 
         if (!feat.features?.premium_members && !feat.features?.custom_groups) {
-          return; // no premium, do not load heavy data
+          return;
         }
 
         const [rs, page] = await Promise.all([
@@ -86,14 +85,20 @@ export default function MembersPage() {
     }
   }
 
-  const roleMap = useMemo(() => {
+  const roleName = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of roles) m.set(r.roleId, r.name);
     return m;
   }, [roles]);
 
+  const roleColor = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const r of roles) m.set(r.roleId, r.color);
+    return m;
+  }, [roles]);
+
   const allRoles = useMemo(
-    () => roles.map(r => ({ id: r.roleId, name: r.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    () => roles.map(r => ({ id: r.roleId, name: r.name, color: r.color })).sort((a, b) => a.name.localeCompare(b.name)),
     [roles]
   );
 
@@ -136,26 +141,26 @@ export default function MembersPage() {
   async function onRemoveRole(userId: string, roleId: string) {
     if (!myId) return alert('No session user id');
     try {
-      await removeRole(guildId, userId, roleId, myId);
+      await removeRole(guildId!, userId, roleId, myId);
       setMembers(prev => prev.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m
       ));
     } catch (e: any) {
-      alert(`Remove failed: ${e?.message || e}`);
+      alert(String(e?.message || e));
     }
   }
 
   async function onAddRole(userId: string, roleId: string) {
     if (!myId) return alert('No session user id');
     try {
-      await addRole(guildId, userId, roleId, myId);
+      await addRole(guildId!, userId, roleId, myId);
       setMembers(prev => prev.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: Array.from(new Set([...m.roleIds, roleId])) } : m
       ));
       setPickerFor(null);
       setRoleSearch('');
     } catch (e: any) {
-      alert(`Add failed: ${e?.message || e}`);
+      alert(String(e?.message || e));
     }
   }
 
@@ -165,52 +170,34 @@ export default function MembersPage() {
         <h1 className="text-2xl font-semibold">Members</h1>
         <div className="text-sm text-gray-500">
           Guild: <span className="font-mono">{guildId}</span>{' '}
-          {typeof total === 'number' && (
-            <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
-          )}
+          {typeof total === 'number' && <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          className="border rounded px-3 py-2 bg-transparent"
-          placeholder="Search username, discord id, or accountid"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+        <input className="border rounded px-3 py-2 bg-transparent"
+               placeholder="Search username, discord id, or accountid"
+               value={search} onChange={e => setSearch(e.target.value)} />
 
-        <select
-          className="border rounded px-3 py-2 bg-transparent"
-          value={roleFilter || ''}
-          onChange={e => setRoleFilter(e.target.value || null)}
-        >
+        <select className="border rounded px-3 py-2 bg-transparent"
+                value={roleFilter || ''} onChange={e => setRoleFilter(e.target.value || null)}>
           <option value="">All roles</option>
           {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
 
-        <select
-          className="border rounded px-3 py-2 bg-transparent"
-          value={groupFilter || ''}
-          onChange={e => setGroupFilter(e.target.value || null)}
-        >
+        <select className="border rounded px-3 py-2 bg-transparent"
+                value={groupFilter || ''} onChange={e => setGroupFilter(e.target.value || null)}>
           <option value="">All groups</option>
           {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
 
-        <button
-          className="border rounded px-3 py-2"
-          onClick={() => { setSearch(''); setRoleFilter(null); setGroupFilter(null); }}
-        >
+        <button className="border rounded px-3 py-2"
+                onClick={() => { setSearch(''); setRoleFilter(null); setGroupFilter(null); }}>
           Clear
         </button>
 
         <div className="ml-auto">
-          <button
-            className="border rounded px-3 py-2"
-            onClick={loadMore}
-            disabled={!cursor || loadingMore}
-            title={!cursor ? 'No more' : 'Load next page'}
-          >
+          <button className="border rounded px-3 py-2" onClick={loadMore} disabled={!cursor || loadingMore}>
             {loadingMore ? 'Loading…' : (cursor ? 'Load more' : 'No more')}
           </button>
         </div>
@@ -240,46 +227,48 @@ export default function MembersPage() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {(m.roleIds || []).map(rid => {
-                        const name = roleMap.get(rid) || rid;
+                        const name = roleName.get(rid) || rid;
+                        const color = roleColor.get(rid) || null;
                         return (
-                          <span key={rid} className="inline-flex items-center gap-1 px-2 py-1 rounded border">
+                          <span key={rid} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color || '#999' }} />
                             <span>{name}</span>
                             <button
-                              className="text-xs opacity-70 hover:opacity-100"
+                              className="ml-1 rounded-full px-1 leading-none text-xs opacity-70 hover:opacity-100"
                               title="Remove role"
                               onClick={() => onRemoveRole(m.discordUserId, rid)}
                             >
-                              ✕
+                              ×
                             </button>
                           </span>
                         );
                       })}
                       <button
-                        className="px-2 py-1 rounded border"
+                        className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
                         title="Add role"
                         onClick={() => setPickerFor(pickerOpen ? null : m.discordUserId)}
                       >
-                        +
+                        <span className="h-2 w-2 rounded-full" />
+                        <span>Add</span>
+                        <span className="ml-1">＋</span>
                       </button>
                     </div>
 
                     {pickerOpen && (
                       <div className="mt-2 p-3 border rounded bg-background">
-                        <input
-                          className="border rounded px-2 py-1 w-full mb-2 bg-transparent"
-                          placeholder="Search roles…"
-                          value={roleSearch}
-                          onChange={e => setRoleSearch(e.target.value)}
-                        />
+                        <input className="border rounded px-2 py-1 w-full mb-2 bg-transparent" placeholder="Search roles…"
+                               value={roleSearch} onChange={e => setRoleSearch(e.target.value)} />
                         <div className="max-h-48 overflow-auto space-y-1">
                           {availableRoles.length === 0 && <div className="text-gray-500 text-sm">No roles</div>}
                           {availableRoles.map(r => (
-                            <button
-                              key={r.id}
+                            <button key={r.id}
                               className="w-full text-left px-2 py-1 rounded border hover:bg-gray-50 dark:hover:bg-neutral-800"
                               onClick={() => onAddRole(m.discordUserId, r.id)}
                             >
-                              {r.name}
+                              <span className="inline-flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: r.color || '#999' }} />
+                                {r.name}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -290,20 +279,14 @@ export default function MembersPage() {
                     <div className="flex flex-wrap gap-1">
                       {(m.groups || []).length === 0 ? <span className="text-gray-400">none</span> :
                         (m.groups || []).map(g => (
-                          <span key={g} className="px-2 py-1 rounded border">{g}</span>
+                          <span key={g} className="px-2 py-0.5 rounded-full border text-xs">{g}</span>
                         ))}
                     </div>
                   </td>
                 </tr>
               );
             })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
-                  No matches
-                </td>
-              </tr>
-            )}
+            {filtered.length === 0 && <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-500">No matches</td></tr>}
           </tbody>
         </table>
       </div>
