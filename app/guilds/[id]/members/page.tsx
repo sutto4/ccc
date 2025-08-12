@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   fetchFeatures, fetchRoles, fetchMembersPaged,
+  addRole, removeRole,
   type Member, type Role, type Features
 } from '../../../lib/api';
 
 export default function MembersPage() {
   const { id: guildId } = useParams<{ id: string }>();
+  const { data: session } = useSession();
+  const myId = (session as any)?.user?.id as string | undefined;
 
   const [features, setFeatures] = useState<Features>({ custom_groups: false, premium_members: false });
   const premium = Boolean(features.premium_members || features.custom_groups);
@@ -26,21 +30,29 @@ export default function MembersPage() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
 
+  // role picker state
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [roleSearch, setRoleSearch] = useState('');
+
   useEffect(() => {
     if (!guildId) return;
     let mounted = true;
     (async () => {
       try {
-        const [feat, rs] = await Promise.all([
-          fetchFeatures(guildId),
-          fetchRoles(guildId),
-        ]);
+        const feat = await fetchFeatures(guildId);
         if (!mounted) return;
         setFeatures(feat.features || { custom_groups: false, premium_members: false });
-        setRoles(rs);
 
-        const page = await fetchMembersPaged(guildId, { limit: 200, after: '0' });
+        if (!feat.features?.premium_members && !feat.features?.custom_groups) {
+          return; // no premium, do not load heavy data
+        }
+
+        const [rs, page] = await Promise.all([
+          fetchRoles(guildId),
+          fetchMembersPaged(guildId, { limit: 200, after: '0' }),
+        ]);
         if (!mounted) return;
+        setRoles(rs);
         setMembers(page.members);
         setCursor(page.page.nextAfter);
         setTotal(page.page.total);
@@ -58,11 +70,7 @@ export default function MembersPage() {
     setLoadingMore(true);
     try {
       const page = await fetchMembersPaged(guildId, {
-        limit: 200,
-        after: cursor,
-        q: search,
-        role: roleFilter || '',
-        group: premium ? (groupFilter || '') : ''
+        limit: 200, after: cursor, q: search, role: roleFilter || '', group: groupFilter || ''
       });
       setMembers(prev => {
         const byId = new Map(prev.map(m => [m.discordUserId, m]));
@@ -84,7 +92,7 @@ export default function MembersPage() {
     return m;
   }, [roles]);
 
-  const allRoleOptions = useMemo(
+  const allRoles = useMemo(
     () => roles.map(r => ({ id: r.roleId, name: r.name })).sort((a, b) => a.name.localeCompare(b.name)),
     [roles]
   );
@@ -115,12 +123,46 @@ export default function MembersPage() {
   }, [members, search, roleFilter, groupFilter, premium]);
 
   if (loading) return <div className="p-6">Loading…</div>;
+  if (!premium) {
+    return (
+      <div className="p-6 border rounded">
+        <h2 className="text-xl font-semibold">Members is a premium feature</h2>
+        <p className="text-sm text-muted-foreground mt-2">Upgrade to manage roles, see AccountID and custom groups.</p>
+      </div>
+    );
+  }
   if (!guildId) return <div className="p-6">No guild selected</div>;
+
+  async function onRemoveRole(userId: string, roleId: string) {
+    if (!myId) return alert('No session user id');
+    try {
+      await removeRole(guildId, userId, roleId, myId);
+      setMembers(prev => prev.map(m =>
+        m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m
+      ));
+    } catch (e: any) {
+      alert(`Remove failed: ${e?.message || e}`);
+    }
+  }
+
+  async function onAddRole(userId: string, roleId: string) {
+    if (!myId) return alert('No session user id');
+    try {
+      await addRole(guildId, userId, roleId, myId);
+      setMembers(prev => prev.map(m =>
+        m.discordUserId === userId ? { ...m, roleIds: Array.from(new Set([...m.roleIds, roleId])) } : m
+      ));
+      setPickerFor(null);
+      setRoleSearch('');
+    } catch (e: any) {
+      alert(`Add failed: ${e?.message || e}`);
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Members {premium ? '' : <span className="text-xs text-gray-500">(limited)</span>}</h1>
+        <h1 className="text-2xl font-semibold">Members</h1>
         <div className="text-sm text-gray-500">
           Guild: <span className="font-mono">{guildId}</span>{' '}
           {typeof total === 'number' && (
@@ -143,19 +185,17 @@ export default function MembersPage() {
           onChange={e => setRoleFilter(e.target.value || null)}
         >
           <option value="">All roles</option>
-          {allRoleOptions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
 
-        {premium && (
-          <select
-            className="border rounded px-3 py-2 bg-transparent"
-            value={groupFilter || ''}
-            onChange={e => setGroupFilter(e.target.value || null)}
-          >
-            <option value="">All groups</option>
-            {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        )}
+        <select
+          className="border rounded px-3 py-2 bg-transparent"
+          value={groupFilter || ''}
+          onChange={e => setGroupFilter(e.target.value || null)}
+        >
+          <option value="">All groups</option>
+          {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
 
         <button
           className="border rounded px-3 py-2"
@@ -183,56 +223,83 @@ export default function MembersPage() {
               <th className="text-left px-3 py-2">Discord</th>
               <th className="text-left px-3 py-2">AccountID</th>
               <th className="text-left px-3 py-2">Roles</th>
-              {premium && <th className="text-left px-3 py-2">Groups</th>}
+              <th className="text-left px-3 py-2">Groups</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(m => (
-              <tr key={m.discordUserId} className="border-t">
-                <td className="px-3 py-2">{m.username}</td>
-                <td className="px-3 py-2">{m.accountid ?? '—'}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    {(m.roleIds || []).map(rid => {
-                      const name = roleMap.get(rid) || rid;
-                      const active = roleFilter === rid;
-                      return (
-                        <button
-                          key={rid}
-                          className={`px-2 py-1 rounded border ${active ? 'bg-gray-200 dark:bg-neutral-800' : ''}`}
-                          onClick={() => setRoleFilter(active ? null : rid)}
-                          title={rid}
-                        >
-                          {name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </td>
-                {premium && (
+            {filtered.map(m => {
+              const pickerOpen = pickerFor === m.discordUserId;
+              const availableRoles = allRoles
+                .filter(r => !m.roleIds.includes(r.id))
+                .filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+
+              return (
+                <tr key={m.discordUserId} className="border-t align-top">
+                  <td className="px-3 py-2">{m.username}</td>
+                  <td className="px-3 py-2">{m.accountid ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(m.roleIds || []).map(rid => {
+                        const name = roleMap.get(rid) || rid;
+                        return (
+                          <span key={rid} className="inline-flex items-center gap-1 px-2 py-1 rounded border">
+                            <span>{name}</span>
+                            <button
+                              className="text-xs opacity-70 hover:opacity-100"
+                              title="Remove role"
+                              onClick={() => onRemoveRole(m.discordUserId, rid)}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button
+                        className="px-2 py-1 rounded border"
+                        title="Add role"
+                        onClick={() => setPickerFor(pickerOpen ? null : m.discordUserId)}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {pickerOpen && (
+                      <div className="mt-2 p-3 border rounded bg-background">
+                        <input
+                          className="border rounded px-2 py-1 w-full mb-2 bg-transparent"
+                          placeholder="Search roles…"
+                          value={roleSearch}
+                          onChange={e => setRoleSearch(e.target.value)}
+                        />
+                        <div className="max-h-48 overflow-auto space-y-1">
+                          {availableRoles.length === 0 && <div className="text-gray-500 text-sm">No roles</div>}
+                          {availableRoles.map(r => (
+                            <button
+                              key={r.id}
+                              className="w-full text-left px-2 py-1 rounded border hover:bg-gray-50 dark:hover:bg-neutral-800"
+                              onClick={() => onAddRole(m.discordUserId, r.id)}
+                            >
+                              {r.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {(m.groups || []).length === 0 ? <span className="text-gray-400">none</span> :
-                        (m.groups || []).map(g => {
-                          const active = groupFilter === g;
-                          return (
-                            <button
-                              key={g}
-                              className={`px-2 py-1 rounded border ${active ? 'bg-gray-200 dark:bg-neutral-800' : ''}`}
-                              onClick={() => setGroupFilter(active ? null : g)}
-                            >
-                              {g}
-                            </button>
-                          );
-                        })}
+                        (m.groups || []).map(g => (
+                          <span key={g} className="px-2 py-1 rounded border">{g}</span>
+                        ))}
                     </div>
                   </td>
-                )}
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={premium ? 4 : 3} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
                   No matches
                 </td>
               </tr>
