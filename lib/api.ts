@@ -1,76 +1,73 @@
-// api.ts
-import type { ExternalGroup, Guild, GuildMember, GuildRole } from "./types";
+// app/lib/api.ts
+export type Role = {
+  guildId: string;
+  roleId: string;
+  name: string;
+  color: string | null;
+  managed?: boolean;
+  editableByBot?: boolean;
+};
 
-const isServer = typeof window === "undefined";
+export type Member = {
+  guildId: string;
+  discordUserId: string;
+  username: string;
+  roleIds: string[];
+  accountid: string | null;
+  groups?: string[];
+};
 
-function stripTrailingSlash(url: string) {
-	return url.replace(/\/+$/, "");
-}
-function ensureLeadingSlash(path: string) {
-	return path.startsWith("/") ? path : `/${path}`;
-}
-function baseFromEnv(env: string | undefined, fallback: string) {
-	return stripTrailingSlash(env ?? fallback);
-}
+export type Features = { custom_groups: boolean; premium_members?: boolean };
+export type MembersPage = {
+  guildId: string;
+  page: { limit: number; after: string; nextAfter: string | null; total: number | null };
+  members: Member[];
+};
 
-// Browser goes via Nginx proxy at /api (or override with NEXT_PUBLIC_API_BASE_URL)
-const clientBase = baseFromEnv(process.env.NEXT_PUBLIC_API_BASE_URL, "/api");
+const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const BASE = RAW.replace(/\/+$/, "");
+const HAS_API_SUFFIX = /\/api$/i.test(BASE);
+const toUrl = (p: string) => (HAS_API_SUFFIX ? `${BASE}${p}` : `${BASE}/api${p}`);
 
-// Server should talk to the API with /api prefix baked in
-// Fallback now includes /api so we never end up at /guilds again
-const serverBase = baseFromEnv(
-	process.env.SERVER_API_BASE_URL,
-	"http://127.0.0.1:3001/api"
-);
-
-const API_BASE = isServer ? serverBase : clientBase;
-
-// uncomment for sanity checks during SSR
-// if (isServer) {
-// 	console.log("SERVER_API_BASE_URL=", process.env.SERVER_API_BASE_URL);
-// 	console.log("NEXT_PUBLIC_API_BASE_URL=", process.env.NEXT_PUBLIC_API_BASE_URL);
-// 	console.log("API_BASE resolved to:", API_BASE);
-// }
-
-async function fetchJson<T>(path: string, init?: RequestInit) {
-	const url = `${API_BASE}${ensureLeadingSlash(path)}`;
-	const res = await fetch(url, { cache: "no-store", ...init });
-	if (!res.ok) {
-		const text = await res.text().catch(() => "");
-		throw new Error(
-			`HTTP ${res.status} ${res.statusText} @ ${url} :: ${text.slice(0, 200)}`
-		);
-	}
-	return res.json() as Promise<T>;
-}
-
-export async function fetchGuilds(accessToken: string): Promise<Guild[]> {
-	return fetchJson<Guild[]>(`/guilds`, {
-		headers: { Authorization: `Bearer ${accessToken}` },
-	});
+async function j<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(toUrl(path), { cache: "no-store", ...(init || {}) });
+  if (!r.ok) {
+    let msg = `${path} failed: ${r.status}`;
+    try {
+      const body = await r.json();
+      if (body?.error) msg = body.error;
+      else if (body?.message) msg = body.message;
+    } catch {}
+    throw new Error(msg);
+  }
+  return r.json() as Promise<T>;
 }
 
-export async function fetchRoles(guildId: string): Promise<GuildRole[]> {
-	return fetchJson<GuildRole[]>(`/guilds/${guildId}/roles`);
+export const fetchFeatures = (guildId: string) => j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
+export const fetchRoles = (guildId: string) => j<Role[]>(`/guilds/${guildId}/roles`);
+
+export function fetchMembersPaged(
+  guildId: string,
+  opts?: { limit?: number; after?: string; q?: string; role?: string; group?: string; all?: boolean }
+) {
+  const { limit = 200, after = "0", q = "", role = "", group = "", all = false } = opts || {};
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("after", after);
+  if (q) params.set("q", q);
+  if (role) params.set("role", role);
+  if (group) params.set("group", group);
+  if (all) params.set("all", "true");
+  return j<MembersPage>(`/guilds/${guildId}/members-paged?${params.toString()}`);
 }
 
-export async function fetchMembers(
-	guildId: string,
-	params: { q?: string; role?: string[]; group?: string[] } = {}
-): Promise<GuildMember[]> {
-	const usp = new URLSearchParams();
-	if (params.q) usp.set("q", params.q);
-	if (params.role?.length) usp.set("role", params.role.join(","));
-	if (params.group?.length) usp.set("group", params.group.join(","));
-	const qs = usp.toString();
-	return fetchJson<GuildMember[]>(
-		`/guilds/${guildId}/members${qs ? `?${qs}` : ""}`
-	);
-}
+export const searchMembers = (guildId: string, q: string, limit = 25) => {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`);
+};
 
-export async function fetchExternalGroups(): Promise<ExternalGroup[]> {
-	return fetchJson<ExternalGroup[]>(`/external/groups`);
-}
+export const addRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "POST", headers: { "x-user-id": callerId } });
 
-// Optional: export for quick debugging elsewhere
-export { API_BASE };
+export const removeRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "DELETE", headers: { "x-user-id": callerId } });
