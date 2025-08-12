@@ -1,354 +1,267 @@
-"use client"
+'use client';
 
-import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useToast } from "@/hooks/use-toast"
-import { ChevronDown, Filter, Loader2, Plus, Search, Trash2 } from "lucide-react"
-import { fetchMembers, fetchRoles, fetchExternalGroups } from "@/lib/api"
-import type { ExternalGroup, GuildMember, GuildRole } from "@/lib/types"
-import { cn } from "@/lib/utils"
+  fetchRoles,
+  fetchMembersPaged,
+  addRole,
+  removeRole,
+  type Member,
+  type Role,
+} from '../../../lib/api';
 
-export default function UsersRolesPage({ params }: { params: { id: string } }) {
-  const guildId = params.id
-  const [q, setQ] = useState("")
-  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([])
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
-  const [bulkMode, setBulkMode] = useState<"add" | "remove">("add")
-  const { toast } = useToast()
+export default function UsersPage() {
+  const { id: guildId } = useParams<{ id: string }>();
+  const { data: session } = useSession();
+  const myId = (session as any)?.user?.id as string | undefined;
 
-  const { data: roles, isLoading: loadingRoles } = useQuery<GuildRole[]>({
-    queryKey: ["roles", guildId],
-    queryFn: () => fetchRoles(guildId),
-  })
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [cursor, setCursor] = useState<string | null>('0');
+  const [total, setTotal] = useState<number | null>(null);
 
-  const { data: groups } = useQuery<ExternalGroup[]>({
-    queryKey: ["groups"],
-    queryFn: () => fetchExternalGroups(),
-  })
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const { data: members, isLoading } = useQuery<GuildMember[]>({
-    queryKey: ["members", guildId, q, selectedRoleIds, selectedGroups],
-    queryFn: () => fetchMembers(guildId, { q, role: selectedRoleIds, group: selectedGroups }),
-  })
+  // filters
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
 
-  const allSelected = useMemo(() => {
-    const ids = new Set(selectedMembers)
-    return members?.length && members.every((m) => ids.has(m.discordUserId))
-  }, [selectedMembers, members])
+  // role editor UI
+  const [pickerFor, setPickerFor] = useState<string | null>(null); // discordUserId
+  const [roleSearch, setRoleSearch] = useState('');
 
-  const toggleSelectAll = () => {
-    if (!members) return
-    if (allSelected) {
-      setSelectedMembers([])
-    } else {
-      setSelectedMembers(members.map((m) => m.discordUserId))
+  useEffect(() => {
+    if (!guildId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const [rs, page] = await Promise.all([
+          fetchRoles(guildId),
+          fetchMembersPaged(guildId, { limit: 100, after: '0' }), // free tier defaults
+        ]);
+        if (!mounted) return;
+        setRoles(rs);
+        setMembers(page.members);
+        setCursor(page.page.nextAfter);
+        setTotal(page.page.total);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [guildId]);
+
+  async function loadMore() {
+    if (!guildId || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchMembersPaged(guildId, {
+        limit: 100,
+        after: cursor,
+        q: search,
+        role: roleFilter || ''
+      });
+      setMembers(prev => {
+        const byId = new Map(prev.map(m => [m.discordUserId, m]));
+        for (const m of page.members) byId.set(m.discordUserId, m);
+        return Array.from(byId.values());
+      });
+      setCursor(page.page.nextAfter);
+      setTotal(page.page.total ?? total);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
-  const pendingChanges = useMemo(
-    () =>
-      selectedMembers.map((id) => ({
-        memberId: id,
-        action: bulkMode,
-        roles: selectedRoleIds,
-      })),
-    [selectedMembers, bulkMode, selectedRoleIds],
-  )
+  const roleMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of roles) m.set(r.roleId, r.name);
+    return m;
+  }, [roles]);
+
+  const allRoles = useMemo(
+    () => roles.map(r => ({ id: r.roleId, name: r.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    [roles]
+  );
+
+  const filtered = useMemo(() => {
+    return members.filter(m => {
+      if (search) {
+        const q = search.toLowerCase();
+        const hit =
+          (m.username || '').toLowerCase().includes(q) ||
+          String(m.discordUserId || '').includes(q);
+        if (!hit) return false;
+      }
+      if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
+      return true;
+    });
+  }, [members, search, roleFilter]);
+
+  async function onRemoveRole(userId: string, roleId: string) {
+    if (!myId) return alert('No session user id');
+    try {
+      await removeRole(guildId!, userId, roleId, myId);
+      setMembers(prev => prev.map(m =>
+        m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m
+      ));
+    } catch (e: any) {
+      alert(`Remove failed: ${e?.message || e}`);
+    }
+  }
+
+  async function onAddRole(userId: string, roleId: string) {
+    if (!myId) return alert('No session user id');
+    try {
+      await addRole(guildId!, userId, roleId, myId);
+      setMembers(prev => prev.map(m =>
+        m.discordUserId === userId ? { ...m, roleIds: Array.from(new Set([...m.roleIds, roleId])) } : m
+      ));
+      setPickerFor(null);
+      setRoleSearch('');
+    } catch (e: any) {
+      alert(`Add failed: ${e?.message || e}`);
+    }
+  }
+
+  if (loading) return <div className="p-6">Loading…</div>;
+  if (!guildId) return <div className="p-6">No guild selected</div>;
 
   return (
-    <div className="grid gap-4">
-      <Card>
-        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1">
-            <CardTitle>Users & Roles</CardTitle>
-            <p className="text-muted-foreground text-sm">
-              Search, filter, and bulk manage roles. Cross-filter by external groups.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search by username, Discord ID, or accountid"
-                className="pl-8 w-72"
-                aria-label="Search members"
-              />
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
-                  <ChevronDown className="w-4 h-4 ml-2" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-xs uppercase text-muted-foreground">Discord roles</Label>
-                    <ScrollArea className="h-40 mt-2 rounded-md border p-2">
-                      <div className="grid gap-2">
-                        {loadingRoles ? (
-                          <div className="text-sm text-muted-foreground">Loading roles…</div>
-                        ) : (
-                          roles?.map((r) => (
-                            <label key={r.roleId} className="flex items-center gap-2 text-sm">
-                              <Checkbox
-                                checked={selectedRoleIds.includes(r.roleId)}
-                                onCheckedChange={(c) =>
-                                  setSelectedRoleIds((prev) =>
-                                    c ? [...prev, r.roleId] : prev.filter((id) => id !== r.roleId),
-                                  )
-                                }
-                              />
-                              <span className="inline-flex items-center gap-2">
-                                <span
-                                  aria-hidden
-                                  className="inline-block size-3 rounded"
-                                  style={{ backgroundColor: r.color ?? "#999999" }}
-                                />
-                                {r.name}
-                              </span>
-                            </label>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase text-muted-foreground">External groups</Label>
-                    <ScrollArea className="h-40 mt-2 rounded-md border p-2">
-                      <div className="grid gap-2">
-                        {groups?.map((g) => (
-                          <label key={`${g.accountid}:${g.group}`} className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              checked={selectedGroups.includes(g.group)}
-                              onCheckedChange={(c) =>
-                                setSelectedGroups((prev) =>
-                                  c ? [...prev, g.group] : prev.filter((s) => s !== g.group),
-                                )
-                              }
-                            />
-                            <span>{g.group}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-wrap gap-2">
-              {selectedRoleIds.map((r) => {
-                const roleName = roles?.find((x) => x.roleId === r)?.name ?? r
-                return (
-                  <Badge key={r} variant="secondary">
-                    Role: {roleName}
-                  </Badge>
-                )
-              })}
-              {selectedGroups.map((g) => (
-                <Badge key={g} variant="outline">
-                  Group: {g}
-                </Badge>
-              ))}
-              {(selectedGroups.length > 0 || selectedRoleIds.length > 0 || q) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setQ("")
-                    setSelectedGroups([])
-                    setSelectedRoleIds([])
-                  }}
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="mode" className="text-sm">
-                Bulk Action
-              </Label>
-              <div className="inline-flex overflow-hidden rounded-md border">
-                <Button
-                  variant={bulkMode === "add" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setBulkMode("add")}
-                  className={cn(bulkMode === "add" && "pointer-events-none")}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add
-                </Button>
-                <Button
-                  variant={bulkMode === "remove" ? "destructive" : "ghost"}
-                  size="sm"
-                  onClick={() => setBulkMode("remove")}
-                  className={cn(bulkMode === "remove" && "pointer-events-none")}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Remove
-                </Button>
-              </div>
-            </div>
-          </div>
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Users</h1>
+        <div className="text-sm text-gray-500">
+          Guild: <span className="font-mono">{guildId}</span>{' '}
+          {typeof total === 'number' && (
+            <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
+          )}
+        </div>
+      </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">
-                    <label className="flex items-center gap-2">
-                      <Checkbox aria-label="Select all" checked={!!allSelected} onCheckedChange={toggleSelectAll} />
-                    </label>
-                  </TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Discord Roles</TableHead>
-                  <TableHead>accountid</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4}>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Loading members…
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : members?.length ? (
-                  members.map((m) => (
-                    <TableRow key={m.discordUserId} data-selected={selectedMembers.includes(m.discordUserId)}>
-                      <TableCell>
-                        <Checkbox
-                          aria-label={`Select ${m.username}`}
-                          checked={selectedMembers.includes(m.discordUserId)}
-                          onCheckedChange={(c) =>
-                            setSelectedMembers((prev) =>
-                              c ? [...prev, m.discordUserId] : prev.filter((id) => id !== m.discordUserId),
-                            )
-                          }
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          className="border rounded px-3 py-2 bg-transparent"
+          placeholder="Search username or discord id"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+
+        <select
+          className="border rounded px-3 py-2 bg-transparent"
+          value={roleFilter || ''}
+          onChange={e => setRoleFilter(e.target.value || null)}
+        >
+          <option value="">All roles</option>
+          {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+
+        <button
+          className="border rounded px-3 py-2"
+          onClick={() => { setSearch(''); setRoleFilter(null); }}
+        >
+          Clear
+        </button>
+
+        <div className="ml-auto">
+          <button
+            className="border rounded px-3 py-2"
+            onClick={loadMore}
+            disabled={!cursor || loadingMore}
+            title={!cursor ? 'No more' : 'Load next page'}
+          >
+            {loadingMore ? 'Loading…' : (cursor ? 'Load more' : 'No more')}
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-auto border rounded">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 dark:bg-neutral-900">
+            <tr>
+              <th className="text-left px-3 py-2">Discord</th>
+              <th className="text-left px-3 py-2">Roles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(m => {
+              const pickerOpen = pickerFor === m.discordUserId;
+              const availableRoles = allRoles
+                .filter(r => !m.roleIds.includes(r.id))
+                .filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+
+              return (
+                <tr key={m.discordUserId} className="border-t align-top">
+                  <td className="px-3 py-2">{m.username}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(m.roleIds || []).map(rid => {
+                        const name = roleMap.get(rid) || rid;
+                        return (
+                          <span key={rid} className="inline-flex items-center gap-1 px-2 py-1 rounded border">
+                            <span>{name}</span>
+                            <button
+                              className="text-xs opacity-70 hover:opacity-100"
+                              title="Remove role"
+                              onClick={() => onRemoveRole(m.discordUserId, rid)}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button
+                        className="px-2 py-1 rounded border"
+                        title="Add role"
+                        onClick={() => setPickerFor(pickerOpen ? null : m.discordUserId)}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {pickerOpen && (
+                      <div className="mt-2 p-3 border rounded bg-background">
+                        <input
+                          className="border rounded px-2 py-1 w-full mb-2 bg-transparent"
+                          placeholder="Search roles…"
+                          value={roleSearch}
+                          onChange={e => setRoleSearch(e.target.value)}
                         />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span>{m.username}</span>
-                          <span className="text-xs text-muted-foreground">{m.discordUserId}</span>
+                        <div className="max-h-48 overflow-auto space-y-1">
+                          {availableRoles.length === 0 && <div className="text-gray-500 text-sm">No roles</div>}
+                          {availableRoles.map(r => (
+                            <button
+                              key={r.id}
+                              className="w-full text-left px-2 py-1 rounded border hover:bg-gray-50 dark:hover:bg-neutral-800"
+                              onClick={() => onAddRole(m.discordUserId, r.id)}
+                            >
+                              {r.name}
+                            </button>
+                          ))}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {m.roleIds.map((r) => {
-                            const role = roles?.find((x) => x.roleId === r)
-                            return (
-                              <Badge key={r} variant="outline" className="flex items-center gap-1">
-                                <span
-                                  aria-hidden
-                                  className="inline-block size-2 rounded"
-                                  style={{ backgroundColor: role?.color ?? "#999999" }}
-                                />
-                                {role?.name ?? r}
-                              </Badge>
-                            )
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>{m.accountid ?? "-"}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      No results
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-        <Separator />
-        <CardFooter className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Selected: <span className="font-medium text-foreground">{selectedMembers.length}</span>
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button disabled={selectedMembers.length === 0 || selectedRoleIds.length === 0}>
-                Preview audit ({pendingChanges.length})
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Review changes</DialogTitle>
-                <DialogDescription>
-                  The following actions will be recorded in the audit log and queued for processing.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="max-h-[50vh] overflow-y-auto space-y-3">
-                {pendingChanges.map((c) => (
-                  <div key={`${c.memberId}-${c.action}`} className="rounded-md border p-3">
-                    <div className="text-sm">
-                      Member: <span className="font-mono">{c.memberId}</span>
-                    </div>
-                    <div className="text-sm">
-                      Action:{" "}
-                      <Badge variant={c.action === "add" ? "default" : "destructive"} className="capitalize">
-                        {c.action} roles
-                      </Badge>
-                    </div>
-                    <div className="text-sm">
-                      Roles: <span className="font-mono">{c.roles.join(", ")}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={() => {
-                    toast({
-                      title: "Changes queued",
-                      description:
-                        "Role changes have been queued. This is a demo; no requests were sent. An audit entry was created.",
-                    })
-                    // no-op: in real app, POST to API and then refetch
-                    setSelectedMembers([])
-                  }}
-                >
-                  Confirm
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardFooter>
-      </Card>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={2} className="px-3 py-6 text-center text-gray-500">
+                  No matches
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
-  )
+  );
 }
