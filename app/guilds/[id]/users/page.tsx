@@ -17,11 +17,9 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // filters
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
 
-  // role picker
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [roleSearch, setRoleSearch] = useState('');
 
@@ -67,21 +65,18 @@ export default function UsersPage() {
     }
   }
 
-  const roleName = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of roles) m.set(r.roleId, r.name);
-    return m;
-  }, [roles]);
-
-  const roleColor = useMemo(() => {
-    const m = new Map<string, string | null>();
-    for (const r of roles) m.set(r.roleId, r.color);
+  const roleInfo = useMemo(() => {
+    const m = new Map<string, { name: string; color: string | null; editable: boolean }>();
+    for (const r of roles) m.set(r.roleId, { name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed });
     return m;
   }, [roles]);
 
   const allRoles = useMemo(
-    () => roles.map(r => ({ id: r.roleId, name: r.name, color: r.color })).sort((a, b) => a.name.localeCompare(b.name)),
-    [roles]
+    () => roles
+      .filter(r => r.roleId !== String(guildId)) // no @everyone
+      .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [roles, guildId]
   );
 
   const filtered = useMemo(() => {
@@ -98,6 +93,8 @@ export default function UsersPage() {
 
   async function onRemoveRole(userId: string, roleId: string) {
     if (!myId) return alert('No session user id');
+    const info = roleInfo.get(roleId);
+    if (!info?.editable) return; // locked
     try {
       await removeRole(guildId!, userId, roleId, myId);
       setMembers(prev => prev.map(m =>
@@ -110,6 +107,8 @@ export default function UsersPage() {
 
   async function onAddRole(userId: string, roleId: string) {
     if (!myId) return alert('No session user id');
+    const info = roleInfo.get(roleId);
+    if (!info?.editable) return;
     try {
       await addRole(guildId!, userId, roleId, myId);
       setMembers(prev => prev.map(m =>
@@ -163,6 +162,7 @@ export default function UsersPage() {
             {filtered.map(m => {
               const pickerOpen = pickerFor === m.discordUserId;
               const availableRoles = allRoles
+                .filter(r => r.editable)
                 .filter(r => !m.roleIds.includes(r.id))
                 .filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
 
@@ -172,19 +172,23 @@ export default function UsersPage() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {(m.roleIds || []).map(rid => {
-                        const name = roleName.get(rid) || rid;
-                        const color = roleColor.get(rid) || null;
+                        const info = roleInfo.get(rid);
+                        const name = info?.name || rid;
+                        const color = info?.color || null;
+                        const editable = info?.editable ?? false;
                         return (
                           <span key={rid} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color || '#999' }} />
                             <span>{name}</span>
-                            <button
-                              className="ml-1 rounded-full px-1 leading-none text-xs opacity-70 hover:opacity-100"
-                              title="Remove role"
-                              onClick={() => onRemoveRole(m.discordUserId, rid)}
-                            >
-                              ×
-                            </button>
+                            {editable && (
+                              <button
+                                className="ml-1 rounded-full px-1 leading-none text-xs opacity-70 hover:opacity-100"
+                                title="Remove role"
+                                onClick={() => onRemoveRole(m.discordUserId, rid)}
+                              >
+                                ×
+                              </button>
+                            )}
                           </span>
                         );
                       })}
@@ -224,9 +228,7 @@ export default function UsersPage() {
               );
             })}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={2} className="px-3 py-6 text-center text-gray-500">No matches</td>
-              </tr>
+              <tr><td colSpan={2} className="px-3 py-6 text-center text-gray-500">No matches</td></tr>
             )}
           </tbody>
         </table>

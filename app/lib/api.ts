@@ -1,6 +1,22 @@
 // app/lib/api.ts
-export type Role = { guildId: string; roleId: string; name: string; color: string | null };
-export type Member = { guildId: string; discordUserId: string; username: string; roleIds: string[]; accountid: string | null; groups?: string[] };
+export type Role = {
+  guildId: string;
+  roleId: string;
+  name: string;
+  color: string | null;
+  managed?: boolean;
+  editableByBot?: boolean;
+};
+
+export type Member = {
+  guildId: string;
+  discordUserId: string;
+  username: string;
+  roleIds: string[];
+  accountid: string | null;
+  groups?: string[];
+};
+
 export type Features = { custom_groups: boolean; premium_members?: boolean };
 export type MembersPage = {
   guildId: string;
@@ -21,9 +37,7 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await r.json();
       if (body?.error) msg = body.error;
       else if (body?.message) msg = body.message;
-    } catch {
-      // ignore
-    }
+    } catch {}
     throw new Error(msg);
   }
   return r.json() as Promise<T>;
