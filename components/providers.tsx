@@ -8,14 +8,8 @@ import { Toaster } from "@/components/ui/toaster";
 
 export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient());
-
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <SessionProvider basePath="/auth">
         <QueryClientProvider client={client}>
           {children}
