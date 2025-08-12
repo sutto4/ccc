@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { fetchRoles, fetchMembersPaged, addRole, removeRole, type Member, type Role } from '../../../lib/api';
+import { fetchRoles, fetchMembersPaged, searchMembers, addRole, removeRole, type Member, type Role } from '../../../lib/api';
 
 export default function UsersPage() {
   const { id: guildId } = useParams<{ id: string }>();
@@ -22,6 +22,9 @@ export default function UsersPage() {
 
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [roleSearch, setRoleSearch] = useState('');
+
+  const [serverResults, setServerResults] = useState<Member[] | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
 
   useEffect(() => {
     if (!guildId) return;
@@ -46,11 +49,36 @@ export default function UsersPage() {
     return () => { mounted = false; };
   }, [guildId]);
 
+  // server search when 2+ chars
+  useEffect(() => {
+    if (!guildId) return;
+    const q = search.trim();
+    if (q.length < 2) {
+      setServerResults(null);
+      setSearchBusy(false);
+      return;
+    }
+    let abort = false;
+    setSearchBusy(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchMembers(guildId, q, 25);
+        if (!abort) setServerResults(res);
+      } catch (e) {
+        console.error(e);
+        if (!abort) setServerResults([]);
+      } finally {
+        if (!abort) setSearchBusy(false);
+      }
+    }, 250);
+    return () => { abort = true; clearTimeout(t); };
+  }, [guildId, search]);
+
   async function loadMore() {
-    if (!guildId || !cursor || loadingMore) return;
+    if (!guildId || !cursor || loadingMore || serverResults) return;
     setLoadingMore(true);
     try {
-      const page = await fetchMembersPaged(guildId, { limit: 100, after: cursor, q: search, role: roleFilter || '' });
+      const page = await fetchMembersPaged(guildId, { limit: 100, after: cursor, q: '', role: roleFilter || '' });
       setMembers(prev => {
         const byId = new Map(prev.map(m => [m.discordUserId, m]));
         for (const m of page.members) byId.set(m.discordUserId, m);
@@ -80,26 +108,24 @@ export default function UsersPage() {
   );
 
   const filtered = useMemo(() => {
-    return members.filter(m => {
-      if (search) {
-        const q = search.toLowerCase();
-        const hit = (m.username || '').toLowerCase().includes(q) || String(m.discordUserId || '').includes(q);
-        if (!hit) return false;
-      }
-      if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
+    const base = serverResults ?? members;
+    return base.filter(m => {
+      if (!serverResults && roleFilter && !m.roleIds.includes(roleFilter)) return false;
       return true;
     });
-  }, [members, search, roleFilter]);
+  }, [members, serverResults, roleFilter]);
 
   async function onRemoveRole(userId: string, roleId: string) {
     if (!myId) return alert('No session user id');
     const info = roleInfo.get(roleId);
-    if (!info?.editable) return; // locked
+    if (!info?.editable) return;
     try {
       await removeRole(guildId!, userId, roleId, myId);
-      setMembers(prev => prev.map(m =>
+      const upd = (arr: Member[]) => arr.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m
-      ));
+      );
+      if (serverResults) setServerResults(upd);
+      setMembers(prev => upd(prev));
     } catch (e: any) {
       alert(String(e?.message || e));
     }
@@ -111,9 +137,11 @@ export default function UsersPage() {
     if (!info?.editable) return;
     try {
       await addRole(guildId!, userId, roleId, myId);
-      setMembers(prev => prev.map(m =>
+      const upd = (arr: Member[]) => arr.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: Array.from(new Set([...m.roleIds, roleId])) } : m
-      ));
+      );
+      if (serverResults) setServerResults(upd);
+      setMembers(prev => upd(prev));
       setPickerFor(null);
       setRoleSearch('');
     } catch (e: any) {
@@ -130,21 +158,34 @@ export default function UsersPage() {
         <h1 className="text-2xl font-semibold">Users</h1>
         <div className="text-sm text-gray-500">
           Guild: <span className="font-mono">{guildId}</span>{' '}
-          {typeof total === 'number' && <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>}
+          {typeof total === 'number' && !serverResults && (
+            <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
+          )}
+          {serverResults && <span className="ml-2">{searchBusy ? 'Searching…' : `${serverResults.length} result(s)`}</span>}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <input className="border rounded px-3 py-2 bg-transparent" placeholder="Search username or discord id"
-               value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="border rounded px-3 py-2 bg-transparent" value={roleFilter || ''}
-                onChange={e => setRoleFilter(e.target.value || null)}>
+        <input
+          className="border rounded px-3 py-2 bg-transparent"
+          placeholder="Search username or discord id"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <select
+          className="border rounded px-3 py-2 bg-transparent"
+          value={roleFilter || ''}
+          onChange={e => setRoleFilter(e.target.value || null)}
+          disabled={!!serverResults}
+        >
           <option value="">All roles</option>
           {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
-        <button className="border rounded px-3 py-2" onClick={() => { setSearch(''); setRoleFilter(null); }}>Clear</button>
+        <button className="border rounded px-3 py-2" onClick={() => { setSearch(''); setServerResults(null); setRoleFilter(null); }}>
+          Clear
+        </button>
         <div className="ml-auto">
-          <button className="border rounded px-3 py-2" onClick={loadMore} disabled={!cursor || loadingMore}>
+          <button className="border rounded px-3 py-2" onClick={loadMore} disabled={!cursor || loadingMore || !!serverResults}>
             {loadingMore ? 'Loading…' : (cursor ? 'Load more' : 'No more')}
           </button>
         </div>
@@ -205,12 +246,17 @@ export default function UsersPage() {
 
                     {pickerOpen && (
                       <div className="mt-2 p-3 border rounded bg-background">
-                        <input className="border rounded px-2 py-1 w-full mb-2 bg-transparent" placeholder="Search roles…"
-                               value={roleSearch} onChange={e => setRoleSearch(e.target.value)} />
+                        <input
+                          className="border rounded px-2 py-1 w-full mb-2 bg-transparent"
+                          placeholder="Search roles…"
+                          value={roleSearch}
+                          onChange={e => setRoleSearch(e.target.value)}
+                        />
                         <div className="max-h-48 overflow-auto space-y-1">
                           {availableRoles.length === 0 && <div className="text-gray-500 text-sm">No roles</div>}
                           {availableRoles.map(r => (
-                            <button key={r.id}
+                            <button
+                              key={r.id}
                               className="w-full text-left px-2 py-1 rounded border hover:bg-gray-50 dark:hover:bg-neutral-800"
                               onClick={() => onAddRole(m.discordUserId, r.id)}
                             >
@@ -228,7 +274,9 @@ export default function UsersPage() {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={2} className="px-3 py-6 text-center text-gray-500">No matches</td></tr>
+              <tr><td colSpan={2} className="px-3 py-6 text-center text-gray-500">
+                {serverResults ? (searchBusy ? 'Searching…' : 'No matches') : 'No matches'}
+              </td></tr>
             )}
           </tbody>
         </table>

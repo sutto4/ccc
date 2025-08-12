@@ -37,7 +37,7 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await r.json();
       if (body?.error) msg = body.error;
       else if (body?.message) msg = body.message;
-    } catch {}
+    } catch { /* ignore */ }
     throw new Error(msg);
   }
   return r.json() as Promise<T>;
@@ -58,6 +58,10 @@ export function fetchMembersPaged(
   if (group) params.set("group", group);
   return j<MembersPage>(`/guilds/${guildId}/members-paged?${params.toString()}`);
 }
+export const searchMembers = (guildId: string, q: string, limit = 25) => {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`);
+};
 export const addRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
   j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "POST", headers: { "x-user-id": callerId } });
 export const removeRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
