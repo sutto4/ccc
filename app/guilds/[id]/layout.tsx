@@ -15,17 +15,23 @@ import { fetchGuilds } from "@/lib/api"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
-export default async function GuildLayout(props: PropsWithChildren<{ params: { id: string } }>) {
+export default async function GuildLayout(
+  props: PropsWithChildren<{ params: Promise<{ id: string }> }>
+) {
+  // Next.js 15: params is a Promise, await it
+  const { id } = await props.params
+
   const session = await getServerSession(authOptions)
   if (!session) {
     redirect("/signin")
   }
 
   const guilds = await fetchGuilds(session.accessToken)
-  const guild = guilds.find((g) => g.id === props.params.id)
+  const guild = guilds.find((g) => g.id === id)
   if (!guild) return notFound()
 
   const tabs = [
+    { href: `/guilds/${guild.id}/members`, label: "Members" },
     { href: `/guilds/${guild.id}/users`, label: "Users" },
     { href: `/guilds/${guild.id}/roles`, label: "Roles" },
   ]
@@ -55,7 +61,7 @@ export default async function GuildLayout(props: PropsWithChildren<{ params: { i
         </div>
 
         <div className="mt-6">
-          <Tabs defaultValue="users" className="w-full">
+          <Tabs defaultValue="members" className="w-full">
             <TabsList className="w-full justify-start">
               {tabs.map((t) => (
                 <TabsTrigger key={t.href} value={t.label.toLowerCase()} asChild>
