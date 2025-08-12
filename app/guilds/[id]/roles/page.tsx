@@ -1,7 +1,8 @@
-"use client"
 
-import RolesAndGroups from "@/components/RolesAndGroups"
+"use client";
+import RolesAndGroups from "@/components/RolesAndGroups";
 
-  const guildId = params.id
-  return <RolesAndGroups guildId={guildId} />
+export default function RolesPage({ params }: { params: { id: string } }) {
+  const guildId = params.id;
+  return <RolesAndGroups guildId={guildId} />;
 }
