@@ -3,6 +3,7 @@ import type { DefaultSession } from "next-auth"
 declare module "next-auth" {
   interface Session {
     role?: "owner" | "admin" | "viewer"
+    accessToken?: string
     user: {
       id?: string
       discordId?: string
@@ -14,5 +15,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: "owner" | "admin" | "viewer"
     discordId?: string
+    accessToken?: string
   }
 }

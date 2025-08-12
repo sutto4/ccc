@@ -8,7 +8,7 @@ import { SessionProvider } from "next-auth/react"
 export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient())
   return (
-    <SessionProvider>
+    <SessionProvider basePath="/auth">
       <QueryClientProvider client={client}>
         {children}
         <Toaster />

@@ -2,8 +2,7 @@
 
 Overview
 - This UI now supports Discord OAuth via NextAuth and route protection.
-- API calls still use mock endpoints by default. You can flip a switch to point to your real API when ready.
-- Follow the steps below to configure local dev and deploy to Vercel. This incremental approach matches best practices to start with UI and add backend later [^1].
+- Follow the steps below to configure local dev and deploy to Vercel.
 
 Prereqs
 - Node.js 18+ and pnpm.
@@ -14,8 +13,8 @@ Prereqs
 - Add a Bot user (for later) but for UI auth you only need OAuth2.
 - Under OAuth2 → General:
   - Set Redirects:
-    - Local: http://localhost:3000/api/auth/callback/discord
-    - Prod: https://YOUR_DOMAIN.com/api/auth/callback/discord
+    - Local: http://localhost:3000/auth/callback/discord
+    - Prod: https://YOUR_DOMAIN.com/auth/callback/discord
 - Copy the Client ID and Client Secret.
 
 2) Configure environment variables
@@ -26,7 +25,7 @@ Create a .env.local file at the project root with:
 - DISCORD_CLIENT_SECRET=YOUR_DISCORD_CLIENT_SECRET
 - NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
 - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
-- NEXT_PUBLIC_API_BASE_URL=  # leave empty for mock; set e.g. https://api.example.com when ready
+- NEXT_PUBLIC_API_BASE_URL=/api
 
 Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep secrets server-side [^1].
 
@@ -38,12 +37,7 @@ Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep
 4) Route protection
 - Dashboard and all guild pages require sign-in. Unauthenticated users are redirected to /signin.
 
-5) Switch to a real API later (optional now)
-- Set NEXT_PUBLIC_API_BASE_URL to your API origin (e.g., https://api.example.com).
-- The UI will call that host instead of /api/mock for roles, members, and groups.
-- Ensure CORS allows your web origin.
-
-6) Deploy to Vercel (recommended)
+5) Deploy to Vercel (recommended)
 - Push the project to GitHub.
 - Import the repo in Vercel.
 - Set the same environment variables in Vercel Project Settings → Environment Variables:
@@ -51,13 +45,13 @@ Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep
   - NEXTAUTH_SECRET=...
   - DISCORD_CLIENT_ID=...
   - DISCORD_CLIENT_SECRET=...
-  - NEXT_PUBLIC_APP_BASE_URL=https://YOUR_DOMAIN.com
-  - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
-  - NEXT_PUBLIC_API_BASE_URL=  # optional
+    - NEXT_PUBLIC_APP_BASE_URL=https://YOUR_DOMAIN.com
+    - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
+    - NEXT_PUBLIC_API_BASE_URL=/api
 - Add your domain to Discord OAuth redirect list.
 - Deploy.
 
-7) Docker (optional)
+6) Docker (optional)
 Use this Dockerfile to containerize the UI:
 \`\`\`dockerfile
 # UI-only Next.js production image
@@ -102,7 +96,7 @@ import { SessionProvider } from "next-auth/react"
 export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient())
   return (
-    <SessionProvider>
+    <SessionProvider basePath="/auth">
       <QueryClientProvider client={client}>
         {children}
         <Toaster />

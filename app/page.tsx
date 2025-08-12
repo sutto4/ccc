@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ArrowRight, ShieldCheck, Sparkles, Users } from "lucide-react"
+import { ShieldCheck, Sparkles, Users } from "lucide-react"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,13 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import SiteHeader from "@/components/site-header"
 import InviteBotButton from "@/components/invite-bot-button"
-import { getMockGuilds } from "@/lib/data"
+import { fetchGuilds } from "@/lib/api"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
 export default async function Page() {
   const session = await getServerSession(authOptions)
-  const guilds = session ? getMockGuilds() : []
+  const guilds = session ? await fetchGuilds(session.accessToken) : []
 
   if (!session) {
     return (
@@ -93,11 +93,12 @@ export default async function Page() {
                     <span>Roles: {g.rolesCount}</span>
                   </div>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="flex gap-2">
                   <Button asChild size="sm">
-                    <Link href={`/guilds/${g.id}`} className="inline-flex items-center gap-2">
-                      Open <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    <Link href={`/guilds/${g.id}/users`}>Users</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="secondary">
+                    <Link href={`/guilds/${g.id}/roles`}>Roles</Link>
                   </Button>
                 </CardFooter>
               </Card>

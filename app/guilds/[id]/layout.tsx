@@ -11,7 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import SiteHeader from "@/components/site-header"
-import { getMockGuildById } from "@/lib/data"
+import { fetchGuilds } from "@/lib/api"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
@@ -21,14 +21,13 @@ export default async function GuildLayout(props: PropsWithChildren<{ params: { i
     redirect("/signin")
   }
 
-  const guild = getMockGuildById(props.params.id)
+  const guilds = await fetchGuilds(session.accessToken)
+  const guild = guilds.find((g) => g.id === props.params.id)
   if (!guild) return notFound()
 
   const tabs = [
-    { href: `/guilds/${guild.id}`, label: "Overview" },
-    { href: `/guilds/${guild.id}/users`, label: "Users & Roles" },
-    { href: `/guilds/${guild.id}/groups`, label: "Groups" },
-    { href: `/guilds/${guild.id}/settings`, label: "Settings" },
+    { href: `/guilds/${guild.id}/users`, label: "Users" },
+    { href: `/guilds/${guild.id}/roles`, label: "Roles" },
   ]
 
   return (
@@ -56,7 +55,7 @@ export default async function GuildLayout(props: PropsWithChildren<{ params: { i
         </div>
 
         <div className="mt-6">
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs defaultValue="users" className="w-full">
             <TabsList className="w-full justify-start">
               {tabs.map((t) => (
                 <TabsTrigger key={t.href} value={t.label.toLowerCase()} asChild>

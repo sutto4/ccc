@@ -6,7 +6,9 @@ export const authOptions: NextAuthOptions = {
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID || "",
       clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-      // Default scopes are fine for identify; add "email" if you need email
+      authorization: {
+        params: { scope: "identify guilds email" },
+      },
     }),
   ],
   session: { strategy: "jwt" },
@@ -15,6 +17,11 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, account, profile }) {
+      if (account) {
+        // persist OAuth access token
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(token as any).accessToken = account.access_token
+      }
       if (account && profile) {
         // Attach Discord identity info
         // @ts-expect-error id is present on Discord profile
@@ -34,6 +41,8 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).discordId = (token as any).discordId
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(session as any).role = (token as any).role ?? "viewer"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(session as any).accessToken = (token as any).accessToken
       }
       return session
     },
