@@ -1,4 +1,15 @@
 // app/lib/api.ts
+
+export type Guild = {
+  id: string;
+  name: string;
+  memberCount: number;
+  roleCount: number;
+  iconUrl: string | null;
+  premium: boolean;
+  createdAt: string | null;
+};
+
 export type Role = {
   guildId: string;
   roleId: string;
@@ -18,6 +29,7 @@ export type Member = {
 };
 
 export type Features = { custom_groups: boolean; premium_members?: boolean };
+
 export type MembersPage = {
   guildId: string;
   page: { limit: number; after: string; nextAfter: string | null; total: number | null };
@@ -37,32 +49,71 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await r.json();
       if (body?.error) msg = body.error;
       else if (body?.message) msg = body.message;
-    } catch { /* ignore */ }
+    } catch {}
     throw new Error(msg);
   }
   return r.json() as Promise<T>;
 }
 
-export const fetchFeatures = (guildId: string) => j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
+// Guilds
+export const fetchGuilds = (accessToken?: string) => {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  return j<Guild[]>("/guilds", { headers });
+};
+
+// Features and roles
+export const fetchFeatures = (guildId: string) =>
+  j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
+
 export const fetchRoles = (guildId: string) => j<Role[]>(`/guilds/${guildId}/roles`);
+
+// Members - paged
 export function fetchMembersPaged(
   guildId: string,
-  opts?: { limit?: number; after?: string; q?: string; role?: string; group?: string }
+  opts?: {
+    limit?: number;
+    after?: string;
+    q?: string;
+    role?: string;
+    group?: string;
+    all?: boolean;
+    source?: "auto" | "rest" | "gateway";
+    debug?: boolean;
+  }
 ) {
-  const { limit = 200, after = "0", q = "", role = "", group = "" } = opts || {};
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  params.set("after", after);
-  if (q) params.set("q", q);
-  if (role) params.set("role", role);
-  if (group) params.set("group", group);
-  return j<MembersPage>(`/guilds/${guildId}/members-paged?${params.toString()}`);
+  const { limit = 200, after = "0", q = "", role = "", group = "", all = false, source = "auto", debug = false } =
+    opts || {};
+  const p = new URLSearchParams();
+  p.set("limit", String(limit));
+  p.set("after", after);
+  if (q) p.set("q", q);
+  if (role) p.set("role", role);
+  if (group) p.set("group", group);
+  if (all) p.set("all", "true");
+  if (source !== "auto") p.set("source", source);
+  if (debug) p.set("debug", "1");
+  return j<MembersPage>(`/guilds/${guildId}/members-paged?${p.toString()}`);
 }
+
+// Members - legacy full list
+export const fetchMembersLegacy = (guildId: string) => j<Member[]>(`/guilds/${guildId}/members`);
+
+// Search
 export const searchMembers = (guildId: string, q: string, limit = 25) => {
   const params = new URLSearchParams({ q, limit: String(limit) });
   return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`);
 };
+
+// Role edits
 export const addRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
-  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "POST", headers: { "x-user-id": callerId } });
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "POST",
+    headers: { "x-user-id": callerId },
+  });
+
 export const removeRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
-  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, { method: "DELETE", headers: { "x-user-id": callerId } });
+  j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "DELETE",
+    headers: { "x-user-id": callerId },
+  });

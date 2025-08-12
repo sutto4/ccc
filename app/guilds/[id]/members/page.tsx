@@ -6,14 +6,14 @@ import { useSession } from 'next-auth/react';
 import {
   fetchFeatures,
   fetchRoles,
-  fetchMembersPaged,
   fetchMembersLegacy,
+  fetchMembersPaged,
   addRole,
   removeRole,
   type Member,
   type Role,
   type Features,
-} from '../../../lib/api';
+} from '@/lib/api';
 
 export default function MembersPage() {
   const { id: guildId } = useParams<{ id: string }>();
@@ -27,16 +27,13 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [cursor, setCursor] = useState<string | null>('0');
   const [total, setTotal] = useState<number | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // filters
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
 
-  // role picker
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [roleSearch, setRoleSearch] = useState('');
 
@@ -48,7 +45,6 @@ export default function MembersPage() {
         const feat = await fetchFeatures(guildId);
         if (!mounted) return;
         setFeatures(feat.features || { custom_groups: false, premium_members: false });
-
         if (!feat.features?.premium_members && !feat.features?.custom_groups) {
           return;
         }
@@ -57,45 +53,61 @@ export default function MembersPage() {
         if (!mounted) return;
         setRoles(rs);
 
-        // 1) try REST-all
-        let page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'auto' });
-        let list = page.members;
-
-        // 2) if weak, force gateway
-        if (list.length <= 1) {
-          const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
-          if (gw.members.length > list.length) {
-            page = gw;
-            list = gw.members;
-          }
-        }
-
-        // 3) still weak, use legacy cache endpoint
-        if (list.length <= 1) {
+        // 1) Legacy first
+        let list: Member[] = [];
+        try {
           const legacy = await fetchMembersLegacy(guildId);
-          if (legacy.length) {
+          if (!mounted) return;
+          if (legacy && legacy.length) {
             list = legacy;
-            page = {
-              guildId,
-              page: { limit: legacy.length, after: '0', nextAfter: null, total: legacy.length },
-              members: legacy
-            };
+            setMembers(list);
+            setCursor(null);
+            setTotal(legacy.length);
+          }
+        } catch (e) {
+          console.warn('legacy fetch failed', e);
+        }
+
+        // 2) Gateway all=true if empty
+        if (list.length === 0) {
+          try {
+            const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway', debug: true });
+            if (!mounted) return;
+            if (gw.members?.length) {
+              list = gw.members;
+              setMembers(list);
+              setCursor(gw.page.nextAfter);
+              setTotal(gw.page.total);
+            }
+          } catch (e) {
+            console.warn('gateway fetch failed', e);
           }
         }
 
-        if (!mounted) return;
-        setMembers(list);
-        setCursor(page.page.nextAfter);
-        setTotal(page.page.total);
-      } catch (e) {
-        console.error(e);
+        // 3) REST all=true if still empty
+        if (list.length === 0) {
+          try {
+            const pg = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'rest', debug: true });
+            if (!mounted) return;
+            if (pg.members?.length) {
+              list = pg.members;
+              setMembers(list);
+              setCursor(pg.page.nextAfter);
+              setTotal(pg.page.total);
+            }
+          } catch (e) {
+            console.warn('rest fetch failed', e);
+          }
+        }
+
+        if (list.length === 0) {
+          console.error('No members from any source');
+        }
       } finally {
         if (mounted) setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [guildId]);
 
   async function loadMore() {
@@ -116,19 +128,16 @@ export default function MembersPage() {
       });
       setCursor(page.page.nextAfter);
       setTotal(page.page.total ?? total);
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoadingMore(false);
     }
   }
 
-  // force refresh from gateway
   async function forceGatewayRefresh() {
     if (!guildId) return;
     setLoading(true);
     try {
-      const page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
+      const page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway', debug: true });
       setMembers(page.members);
       setCursor(page.page.nextAfter);
       setTotal(page.page.total);
@@ -143,7 +152,6 @@ export default function MembersPage() {
     }
   }
 
-  // role metadata map
   const roleInfo = useMemo(() => {
     const m = new Map<string, { name: string; color: string | null; editable: boolean }>();
     for (const r of roles) {
@@ -154,11 +162,10 @@ export default function MembersPage() {
   }, [roles, guildId]);
 
   const allRoles = useMemo(
-    () =>
-      roles
-        .filter(r => r.roleId !== String(guildId)) // hide @everyone
-        .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+    () => roles
+      .filter(r => r.roleId !== String(guildId))
+      .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, guildId]
   );
 
@@ -173,16 +180,14 @@ export default function MembersPage() {
     return members.filter(m => {
       if (search) {
         const q = search.toLowerCase();
-        const hit =
-          (m.username || '').toLowerCase().includes(q) ||
-          String(m.discordUserId || '').includes(q) ||
-          String(m.accountid || '').includes(q);
-        if (!hit) return false;
+        if (
+          !(m.username || '').toLowerCase().includes(q) &&
+          !String(m.discordUserId || '').includes(q) &&
+          !String(m.accountid || '').includes(q)
+        ) return false;
       }
       if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
-      if (premium && groupFilter) {
-        if (!m.groups || !m.groups.includes(groupFilter)) return false;
-      }
+      if (premium && groupFilter && !(m.groups || []).includes(groupFilter)) return false;
       return true;
     });
   }, [members, search, roleFilter, groupFilter, premium]);
@@ -325,10 +330,7 @@ export default function MembersPage() {
                         const color = info?.color || null;
                         const editable = info?.editable ?? false;
                         return (
-                          <span
-                            key={rid}
-                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-                          >
+                          <span key={rid} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color || '#999' }} />
                             <span>{name}</span>
                             {editable && (
@@ -399,7 +401,7 @@ export default function MembersPage() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
-                  No matches
+                  No members. Click “Force refresh”.
                 </td>
               </tr>
             )}
