@@ -11,7 +11,7 @@ export default function Providers({ children }: PropsWithChildren) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <SessionProvider basePath="/api/auth">
+      <SessionProvider basePath="/auth"> … </SessionProvider>
         <QueryClientProvider client={client}>
           {children}
           <Toaster />
