@@ -1,22 +1,14 @@
-"use client";
+import NextAuth from "next-auth";
+import DiscordProvider from "next-auth/providers/discord";
 
-import { type PropsWithChildren, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SessionProvider } from "next-auth/react";
-import { ThemeProvider } from "next-themes";
-import { Toaster } from "@/components/ui/toaster";
+const handler = NextAuth({
+  providers: [
+    DiscordProvider({
+      clientId: process.env.DISCORD_CLIENT_ID!,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
+    }),
+  ],
+  secret: process.env.NEXTAUTH_SECRET,
+});
 
-export default function Providers({ children }: PropsWithChildren) {
-  const [client] = useState(() => new QueryClient());
-
-  return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <SessionProvider basePath="/auth">
-        <QueryClientProvider client={client}>
-          {children}
-          <Toaster />
-        </QueryClientProvider>
-      </SessionProvider>
-    </ThemeProvider>
-  );
-}
+export { handler as GET, handler as POST };
