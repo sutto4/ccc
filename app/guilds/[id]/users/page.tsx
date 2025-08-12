@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import {
   fetchRoles,
   fetchMembersLegacy,
@@ -11,13 +12,18 @@ import {
   addRole,
   removeRole,
   type Member,
-  type Role
+  type Role,
 } from '@/lib/api';
+
+function getUserId(session: Session | null): string | undefined {
+  const u = session?.user as { id?: string } | undefined;
+  return u?.id;
+}
 
 export default function UsersPage() {
   const { id: guildId } = useParams<{ id: string }>();
   const { data: session } = useSession();
-  const myId = (session as any)?.user?.id as string | undefined;
+  const myId = getUserId(session);
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -35,7 +41,6 @@ export default function UsersPage() {
   const [serverResults, setServerResults] = useState<Member[] | null>(null);
   const [searchBusy, setSearchBusy] = useState(false);
 
-  // Load roles + members with strong fallbacks
   useEffect(() => {
     if (!guildId) return;
     let mounted = true;
@@ -45,7 +50,7 @@ export default function UsersPage() {
         if (!mounted) return;
         setRoles(rs);
 
-        // 1) Legacy first - if this returns 3, we are done
+        // 1) Legacy first
         let list: Member[] = [];
         try {
           const legacy = await fetchMembersLegacy(guildId);
@@ -60,7 +65,7 @@ export default function UsersPage() {
           console.warn('legacy fetch failed', e);
         }
 
-        // 2) If legacy empty, try gateway all=true
+        // 2) Gateway if needed
         if (list.length === 0) {
           try {
             const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway', debug: true });
@@ -76,7 +81,7 @@ export default function UsersPage() {
           }
         }
 
-        // 3) If still empty, fall back to REST all=true
+        // 3) REST if still empty
         if (list.length === 0) {
           try {
             const pg = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'rest', debug: true });
@@ -92,9 +97,7 @@ export default function UsersPage() {
           }
         }
 
-        if (list.length === 0) {
-          console.error('No members from any source');
-        }
+        if (list.length === 0) console.error('No members from any source');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -102,7 +105,6 @@ export default function UsersPage() {
     return () => { mounted = false; };
   }, [guildId]);
 
-  // Server search when 2+ chars
   useEffect(() => {
     if (!guildId) return;
     const q = search.trim();
@@ -117,8 +119,7 @@ export default function UsersPage() {
       try {
         const res = await searchMembers(guildId, q, 25);
         if (!abort) setServerResults(res);
-      } catch (e) {
-        console.error(e);
+      } catch {
         if (!abort) setServerResults([]);
       } finally {
         if (!abort) setSearchBusy(false);
@@ -139,8 +140,6 @@ export default function UsersPage() {
       });
       setCursor(page.page.nextAfter);
       setTotal(page.page.total ?? total);
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoadingMore(false);
     }
@@ -157,9 +156,9 @@ export default function UsersPage() {
       setServerResults(null);
       setSearch('');
       setRoleFilter(null);
-    } catch (e) {
-      console.error(e);
-      alert('Gateway refresh failed. Check bot intents and restart the bot.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Gateway refresh failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -173,7 +172,7 @@ export default function UsersPage() {
 
   const allRoles = useMemo(
     () => roles
-      .filter(r => r.roleId !== String(guildId)) // no @everyone
+      .filter(r => r.roleId !== String(guildId))
       .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, guildId]
@@ -198,8 +197,9 @@ export default function UsersPage() {
       );
       if (serverResults) setServerResults(upd);
       setMembers(prev => upd(prev));
-    } catch (e: any) {
-      alert(String(e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(msg);
     }
   }
 
@@ -216,8 +216,9 @@ export default function UsersPage() {
       setMembers(prev => upd(prev));
       setPickerFor(null);
       setRoleSearch('');
-    } catch (e: any) {
-      alert(String(e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(msg);
     }
   }
 
@@ -347,9 +348,7 @@ export default function UsersPage() {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={2} className="px-3 py-6 text-center text-gray-500">
-                No users. Click “Force refresh”.
-              </td></tr>
+              <tr><td colSpan={2} className="px-3 py-6 text-center text-gray-500">No users. Click “Force refresh”.</td></tr>
             )}
           </tbody>
         </table>

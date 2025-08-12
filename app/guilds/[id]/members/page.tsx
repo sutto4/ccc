@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import {
   fetchFeatures,
   fetchRoles,
@@ -15,10 +16,15 @@ import {
   type Features,
 } from '@/lib/api';
 
+function getUserId(session: Session | null): string | undefined {
+  const u = session?.user as { id?: string } | undefined;
+  return u?.id;
+}
+
 export default function MembersPage() {
   const { id: guildId } = useParams<{ id: string }>();
   const { data: session } = useSession();
-  const myId = (session as any)?.user?.id as string | undefined;
+  const myId = getUserId(session);
 
   const [features, setFeatures] = useState<Features>({ custom_groups: false, premium_members: false });
   const premium = Boolean(features.premium_members || features.custom_groups);
@@ -45,15 +51,13 @@ export default function MembersPage() {
         const feat = await fetchFeatures(guildId);
         if (!mounted) return;
         setFeatures(feat.features || { custom_groups: false, premium_members: false });
-        if (!feat.features?.premium_members && !feat.features?.custom_groups) {
-          return;
-        }
+        if (!feat.features?.premium_members && !feat.features?.custom_groups) return;
 
         const rs = await fetchRoles(guildId);
         if (!mounted) return;
         setRoles(rs);
 
-        // 1) Legacy first
+        // 1) Legacy
         let list: Member[] = [];
         try {
           const legacy = await fetchMembersLegacy(guildId);
@@ -68,7 +72,7 @@ export default function MembersPage() {
           console.warn('legacy fetch failed', e);
         }
 
-        // 2) Gateway all=true if empty
+        // 2) Gateway
         if (list.length === 0) {
           try {
             const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway', debug: true });
@@ -84,7 +88,7 @@ export default function MembersPage() {
           }
         }
 
-        // 3) REST all=true if still empty
+        // 3) REST
         if (list.length === 0) {
           try {
             const pg = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'rest', debug: true });
@@ -98,10 +102,6 @@ export default function MembersPage() {
           } catch (e) {
             console.warn('rest fetch failed', e);
           }
-        }
-
-        if (list.length === 0) {
-          console.error('No members from any source');
         }
       } finally {
         if (mounted) setLoading(false);
@@ -144,9 +144,9 @@ export default function MembersPage() {
       setSearch('');
       setRoleFilter(null);
       setGroupFilter(null);
-    } catch (e) {
-      console.error(e);
-      alert('Gateway refresh failed. Check bot intents and restart the bot.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Gateway refresh failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -180,11 +180,11 @@ export default function MembersPage() {
     return members.filter(m => {
       if (search) {
         const q = search.toLowerCase();
-        if (
-          !(m.username || '').toLowerCase().includes(q) &&
-          !String(m.discordUserId || '').includes(q) &&
-          !String(m.accountid || '').includes(q)
-        ) return false;
+        const hit =
+          (m.username || '').toLowerCase().includes(q) ||
+          String(m.discordUserId || '').includes(q) ||
+          String(m.accountid || '').includes(q);
+        if (!hit) return false;
       }
       if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
       if (premium && groupFilter && !(m.groups || []).includes(groupFilter)) return false;
@@ -212,8 +212,9 @@ export default function MembersPage() {
       setMembers(prev =>
         prev.map(m => (m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m))
       );
-    } catch (e: any) {
-      alert(String(e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(msg);
     }
   }
 
@@ -230,8 +231,9 @@ export default function MembersPage() {
       );
       setPickerFor(null);
       setRoleSearch('');
-    } catch (e: any) {
-      alert(String(e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(msg);
     }
   }
 
@@ -262,11 +264,7 @@ export default function MembersPage() {
           onChange={e => setRoleFilter(e.target.value || null)}
         >
           <option value="">All roles</option>
-          {allRoles.map(r => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
+          {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
 
         <select
@@ -275,20 +273,12 @@ export default function MembersPage() {
           onChange={e => setGroupFilter(e.target.value || null)}
         >
           <option value="">All groups</option>
-          {allGroups.map(g => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
+          {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
 
         <button
           className="border rounded px-3 py-2"
-          onClick={() => {
-            setSearch('');
-            setRoleFilter(null);
-            setGroupFilter(null);
-          }}
+          onClick={() => { setSearch(''); setRoleFilter(null); setGroupFilter(null); }}
         >
           Clear
         </button>
@@ -400,9 +390,7 @@ export default function MembersPage() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
-                  No members. Click “Force refresh”.
-                </td>
+                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">No members. Click “Force refresh”.</td>
               </tr>
             )}
           </tbody>
