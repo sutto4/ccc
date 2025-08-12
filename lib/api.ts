@@ -1,5 +1,5 @@
 // api.ts
-import type { ExternalGroup, GuildMember, GuildRole } from "./types";
+import type { ExternalGroup, Guild, GuildMember, GuildRole } from "./types";
 
 const isServer = typeof window === "undefined";
 
@@ -18,19 +18,26 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
 	return res.json() as Promise<T>;
 }
 
+export async function fetchGuilds(accessToken: string): Promise<Guild[]> {
+        return fetchJson<Guild[]>(`/guilds`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+        });
+}
+
 export async function fetchRoles(guildId: string): Promise<GuildRole[]> {
 	return fetchJson<GuildRole[]>(`/guilds/${guildId}/roles`);
 }
 
 export async function fetchMembers(
-	guildId: string,
-	params: { q?: string; role?: string[]; group?: string[] }
+        guildId: string,
+        params: { q?: string; role?: string[]; group?: string[] } = {}
 ): Promise<GuildMember[]> {
-	const usp = new URLSearchParams();
-	if (params.q) usp.set("q", params.q);
-	if (params.role?.length) usp.set("role", params.role.join(","));
-	if (params.group?.length) usp.set("group", params.group.join(","));
-	return fetchJson<GuildMember[]>(`/guilds/${guildId}/members?${usp.toString()}`);
+        const usp = new URLSearchParams();
+        if (params.q) usp.set("q", params.q);
+        if (params.role?.length) usp.set("role", params.role.join(","));
+        if (params.group?.length) usp.set("group", params.group.join(","));
+        const qs = usp.toString();
+        return fetchJson<GuildMember[]>(`/guilds/${guildId}/members${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchExternalGroups(): Promise<ExternalGroup[]> {
