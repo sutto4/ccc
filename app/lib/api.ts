@@ -18,9 +18,15 @@ export type Member = {
 
 export type Features = { custom_groups: boolean };
 
+export type MembersPage = {
+  guildId: string;
+  page: { limit: number; after: string; nextAfter: string | null; total: number | null };
+  members: Member[];
+};
+
 // Accept either base like "http://host:3001" or "http://host:3001/api"
 const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-const BASE = RAW.replace(/\/+$/, ""); // strip trailing slash
+const BASE = RAW.replace(/\/+$/, "");
 const HAS_API_SUFFIX = /\/api$/i.test(BASE);
 
 function url(path: string) {
@@ -42,6 +48,12 @@ export function fetchRoles(guildId: string) {
   return j<Role[]>(`/guilds/${guildId}/roles`);
 }
 
+// old full list (kept)
 export function fetchMembers(guildId: string) {
   return j<Member[]>(`/guilds/${guildId}/members`);
+}
+
+// new paged
+export function fetchMembersPaged(guildId: string, limit = 100, after = "0") {
+  return j<MembersPage>(`/guilds/${guildId}/members-paged?limit=${limit}&after=${encodeURIComponent(after)}`);
 }

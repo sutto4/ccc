@@ -2,16 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { fetchFeatures, fetchMembers, fetchRoles, type Member, type Role, type Features } from '../../../lib/api';
+import {
+  fetchFeatures, fetchRoles, fetchMembersPaged,
+  type Member, type Role, type Features, type MembersPage
+} from '../../../lib/api';
 
 export default function MembersPage() {
   const { id: guildId } = useParams<{ id: string }>();
 
-  const [loading, setLoading] = useState(true);
   const [features, setFeatures] = useState<Features>({ custom_groups: false });
   const [roles, setRoles] = useState<Role[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [cursor, setCursor] = useState<string | null>('0');
+  const [total, setTotal] = useState<number | null>(null);
 
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // filters
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -21,15 +29,20 @@ export default function MembersPage() {
     let mounted = true;
     (async () => {
       try {
-        const [feat, rs, ms] = await Promise.all([
+        const [feat, rs] = await Promise.all([
           fetchFeatures(guildId),
           fetchRoles(guildId),
-          fetchMembers(guildId),
         ]);
         if (!mounted) return;
         setFeatures(feat.features);
         setRoles(rs);
-        setMembers(ms);
+
+        // first page
+        const page = await fetchMembersPaged(guildId, 200, '0');
+        if (!mounted) return;
+        setMembers(page.members);
+        setCursor(page.page.nextAfter);
+        setTotal(page.page.total);
       } catch (e) {
         console.error(e);
       } finally {
@@ -38,6 +51,25 @@ export default function MembersPage() {
     })();
     return () => { mounted = false; };
   }, [guildId]);
+
+  async function loadMore() {
+    if (!guildId || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchMembersPaged(guildId, 200, cursor);
+      setMembers(prev => {
+        const byId = new Map(prev.map(m => [m.discordUserId, m]));
+        for (const m of page.members) byId.set(m.discordUserId, m);
+        return Array.from(byId.values());
+      });
+      setCursor(page.page.nextAfter);
+      setTotal(page.page.total ?? total);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const roleMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -83,7 +115,10 @@ export default function MembersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Members</h1>
         <div className="text-sm text-gray-500">
-          Guild: <span className="font-mono">{guildId}</span>
+          Guild: <span className="font-mono">{guildId}</span>{' '}
+          {typeof total === 'number' && (
+            <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
+          )}
         </div>
       </div>
 
@@ -121,6 +156,17 @@ export default function MembersPage() {
         >
           Clear
         </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            className="border rounded px-3 py-2"
+            onClick={loadMore}
+            disabled={!cursor || loadingMore}
+            title={!cursor ? 'No more' : 'Load next page'}
+          >
+            {loadingMore ? 'Loading…' : (cursor ? 'Load more' : 'No more')}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-auto border rounded">
