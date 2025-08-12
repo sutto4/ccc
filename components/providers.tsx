@@ -10,13 +10,8 @@ export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient());
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <SessionProvider basePath="/auth">
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <SessionProvider basePath="/api/auth">
         <QueryClientProvider client={client}>
           {children}
           <Toaster />
