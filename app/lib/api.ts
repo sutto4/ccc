@@ -1,4 +1,5 @@
 // app/lib/api.ts
+
 export type Role = {
   guildId: string;
   roleId: string;
@@ -17,14 +18,18 @@ export type Member = {
 
 export type Features = { custom_groups: boolean };
 
-// Normalize base (no trailing slash)
-const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-const API_BASE = RAW.replace(/\/+$/, ''); // strip trailing slashes
+// Accept either base like "http://host:3001" or "http://host:3001/api"
+const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const BASE = RAW.replace(/\/+$/, ""); // strip trailing slash
+const HAS_API_SUFFIX = /\/api$/i.test(BASE);
+
+function url(path: string) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return HAS_API_SUFFIX ? `${BASE}${p}` : `${BASE}/api${p}`;
+}
 
 async function j<T>(path: string): Promise<T> {
-  // Always prefix with /api here; API_BASE should be just origin like http://host:3001 or empty for same-origin
-  const url = `${API_BASE}/api${path}`;
-  const r = await fetch(url, { cache: 'no-store' });
+  const r = await fetch(url(path), { cache: "no-store" });
   if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json() as Promise<T>;
 }
