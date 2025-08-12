@@ -7,6 +7,7 @@ import {
   fetchFeatures,
   fetchRoles,
   fetchMembersPaged,
+  fetchMembersLegacy,
   addRole,
   removeRole,
   type Member,
@@ -52,15 +53,38 @@ export default function MembersPage() {
           return;
         }
 
-        // First load: grab everyone in small guilds
-        const [rs, page] = await Promise.all([
-          fetchRoles(guildId),
-          fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0' }),
-        ]);
-
+        const rs = await fetchRoles(guildId);
         if (!mounted) return;
         setRoles(rs);
-        setMembers(page.members);
+
+        // 1) try REST-all
+        let page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'auto' });
+        let list = page.members;
+
+        // 2) if weak, force gateway
+        if (list.length <= 1) {
+          const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
+          if (gw.members.length > list.length) {
+            page = gw;
+            list = gw.members;
+          }
+        }
+
+        // 3) still weak, use legacy cache endpoint
+        if (list.length <= 1) {
+          const legacy = await fetchMembersLegacy(guildId);
+          if (legacy.length) {
+            list = legacy;
+            page = {
+              guildId,
+              page: { limit: legacy.length, after: '0', nextAfter: null, total: legacy.length },
+              members: legacy
+            };
+          }
+        }
+
+        if (!mounted) return;
+        setMembers(list);
         setCursor(page.page.nextAfter);
         setTotal(page.page.total);
       } catch (e) {
@@ -96,6 +120,26 @@ export default function MembersPage() {
       console.error(e);
     } finally {
       setLoadingMore(false);
+    }
+  }
+
+  // force refresh from gateway
+  async function forceGatewayRefresh() {
+    if (!guildId) return;
+    setLoading(true);
+    try {
+      const page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
+      setMembers(page.members);
+      setCursor(page.page.nextAfter);
+      setTotal(page.page.total);
+      setSearch('');
+      setRoleFilter(null);
+      setGroupFilter(null);
+    } catch (e) {
+      console.error(e);
+      alert('Gateway refresh failed. Check bot intents and restart the bot.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -190,8 +234,9 @@ export default function MembersPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Members</h1>
-        <div className="text-sm text-gray-500">
-          Guild: <span className="font-mono">{guildId}</span>{' '}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span>Guild: <span className="font-mono">{guildId}</span></span>
+          <button className="border rounded px-2 py-1" onClick={forceGatewayRefresh}>Force refresh</button>
           {typeof total === 'number' && (
             <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
           )}

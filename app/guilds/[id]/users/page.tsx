@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { fetchRoles, fetchMembersPaged, searchMembers, addRole, removeRole, type Member, type Role } from '../../../lib/api';
+import {
+  fetchRoles,
+  fetchMembersPaged,
+  fetchMembersLegacy,
+  searchMembers,
+  addRole,
+  removeRole,
+  type Member,
+  type Role
+} from '../../../lib/api';
 
 export default function UsersPage() {
   const { id: guildId } = useParams<{ id: string }>();
@@ -26,18 +35,40 @@ export default function UsersPage() {
   const [serverResults, setServerResults] = useState<Member[] | null>(null);
   const [searchBusy, setSearchBusy] = useState(false);
 
+  // initial load with strong fallbacks
   useEffect(() => {
     if (!guildId) return;
     let mounted = true;
     (async () => {
       try {
-        const [rs, page] = await Promise.all([
-          fetchRoles(guildId),
-          fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0' })
-        ]);
+        const rs = await fetchRoles(guildId);
         if (!mounted) return;
         setRoles(rs);
-        setMembers(page.members);
+
+        // 1) try REST all
+        let page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'auto' });
+        let list = page.members;
+
+        // 2) if it smells wrong, force gateway
+        if (list.length <= 1) {
+          const gw = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
+          if (gw.members.length > list.length) {
+            page = gw;
+            list = gw.members;
+          }
+        }
+
+        // 3) still wrong, use legacy cache endpoint
+        if (list.length <= 1) {
+          const legacy = await fetchMembersLegacy(guildId);
+          if (legacy.length) {
+            list = legacy;
+            page = { guildId, page: { limit: legacy.length, after: '0', nextAfter: null, total: legacy.length }, members: legacy };
+          }
+        }
+
+        if (!mounted) return;
+        setMembers(list);
         setCursor(page.page.nextAfter);
         setTotal(page.page.total);
       } catch (e) {
@@ -49,6 +80,7 @@ export default function UsersPage() {
     return () => { mounted = false; };
   }, [guildId]);
 
+  // server search (2+ chars)
   useEffect(() => {
     if (!guildId) return;
     const q = search.trim();
@@ -77,7 +109,7 @@ export default function UsersPage() {
     if (!guildId || !cursor || loadingMore || serverResults) return;
     setLoadingMore(true);
     try {
-      const page = await fetchMembersPaged(guildId, { limit: 100, after: cursor, q: '', role: roleFilter || '' });
+      const page = await fetchMembersPaged(guildId, { limit: 100, after: cursor, role: roleFilter || '' });
       setMembers(prev => {
         const byId = new Map(prev.map(m => [m.discordUserId, m]));
         for (const m of page.members) byId.set(m.discordUserId, m);
@@ -92,6 +124,26 @@ export default function UsersPage() {
     }
   }
 
+  // force refresh from gateway
+  async function forceGatewayRefresh() {
+    if (!guildId) return;
+    setLoading(true);
+    try {
+      const page = await fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0', source: 'gateway' });
+      setMembers(page.members);
+      setCursor(page.page.nextAfter);
+      setTotal(page.page.total);
+      setServerResults(null);
+      setSearch('');
+      setRoleFilter(null);
+    } catch (e) {
+      console.error(e);
+      alert('Gateway refresh failed. Check bot intents and restart the bot.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const roleInfo = useMemo(() => {
     const m = new Map<string, { name: string; color: string | null; editable: boolean }>();
     for (const r of roles) m.set(r.roleId, { name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed });
@@ -100,7 +152,7 @@ export default function UsersPage() {
 
   const allRoles = useMemo(
     () => roles
-      .filter(r => r.roleId !== String(guildId))
+      .filter(r => r.roleId !== String(guildId)) // hide @everyone
       .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, guildId]
@@ -109,7 +161,7 @@ export default function UsersPage() {
   const filtered = useMemo(() => {
     const base = serverResults ?? members;
     return base.filter(m => {
-      if (!serverResults && roleFilter && !m.roleIds.includes(roleFilter)) return false;
+      if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
       return true;
     });
   }, [members, serverResults, roleFilter]);
@@ -155,8 +207,9 @@ export default function UsersPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Users</h1>
-        <div className="text-sm text-gray-500">
-          Guild: <span className="font-mono">{guildId}</span>{' '}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span>Guild: <span className="font-mono">{guildId}</span></span>
+          <button className="border rounded px-2 py-1" onClick={forceGatewayRefresh}>Force refresh</button>
           {typeof total === 'number' && !serverResults && (
             <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
           )}

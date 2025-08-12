@@ -68,7 +68,7 @@ export const fetchFeatures = (guildId: string) =>
 
 export const fetchRoles = (guildId: string) => j<Role[]>(`/guilds/${guildId}/roles`);
 
-// Members
+// Members - paged
 export function fetchMembersPaged(
   guildId: string,
   opts?: {
@@ -96,11 +96,16 @@ export function fetchMembersPaged(
   return j<MembersPage>(`/guilds/${guildId}/members-paged?${p.toString()}`);
 }
 
+// Members - legacy full list
+export const fetchMembersLegacy = (guildId: string) => j<Member[]>(`/guilds/${guildId}/members`);
+
+// Search
 export const searchMembers = (guildId: string, q: string, limit = 25) => {
   const params = new URLSearchParams({ q, limit: String(limit) });
   return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`);
 };
 
+// Role edits
 export const addRole = (guildId: string, userId: string, roleId: string, callerId: string) =>
   j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
     method: "POST",
