@@ -1,9 +1,17 @@
 // app/lib/api.ts
+export type Role = {
+	guildId: string;
+	roleId: string;
+	name: string;
+	color: string | null;
+};
+
 export type Member = {
-	discord_id: string;
-	discord_username: string;
-	accountid: number | null;
-	roles: string[];
+	guildId: string;
+	discordUserId: string;
+	username: string;
+	roleIds: string[];
+	accountid: string | null;
 	groups?: string[];
 };
 
@@ -11,14 +19,20 @@ export type Features = { custom_groups: boolean };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
-export async function fetchFeatures(guildId: string): Promise<{ guildId: string; features: Features }> {
-	const r = await fetch(`${API_BASE}/api/guilds/${guildId}/features`, { cache: 'no-store' });
-	if (!r.ok) throw new Error('features_fetch_failed');
-	return r.json();
+async function j<T>(url: string): Promise<T> {
+	const r = await fetch(url, { cache: 'no-store' });
+	if (!r.ok) throw new Error(`${url} failed: ${r.status}`);
+	return r.json() as Promise<T>;
 }
 
-export async function fetchMembersAugmented(guildId: string): Promise<{ guildId: string; members: Member[]; features: Features }> {
-	const r = await fetch(`${API_BASE}/api/guilds/${guildId}/members-augmented`, { cache: 'no-store' });
-	if (!r.ok) throw new Error('members_augmented_fetch_failed');
-	return r.json();
+export function fetchFeatures(guildId: string) {
+	return j<{ guildId: string; features: Features }>(`${API_BASE}/api/guilds/${guildId}/features`);
+}
+
+export function fetchRoles(guildId: string) {
+	return j<Role[]>(`${API_BASE}/api/guilds/${guildId}/roles`);
+}
+
+export function fetchMembers(guildId: string) {
+	return j<Member[]>(`${API_BASE}/api/guilds/${guildId}/members`);
 }

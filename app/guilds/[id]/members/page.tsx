@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-// use a safe relative import so you don't depend on tsconfig path aliases
 import { fetchFeatures, fetchMembers, fetchRoles, type Member, type Role, type Features } from '../../../lib/api';
 
 type Props = { params: { id: string } };
