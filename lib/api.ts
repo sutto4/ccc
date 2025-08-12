@@ -49,40 +49,51 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await r.json();
       if (body?.error) msg = body.error;
       else if (body?.message) msg = body.message;
-    } catch {
-      // ignore
-    }
+    } catch {}
     throw new Error(msg);
   }
   return r.json() as Promise<T>;
 }
 
-// --- Guilds ---
-export function fetchGuilds(accessToken?: string) {
+// Guilds
+export const fetchGuilds = (accessToken?: string) => {
   const headers: Record<string, string> = {};
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
   return j<Guild[]>("/guilds", { headers });
-}
+};
 
-// --- Features / Roles / Members ---
+// Features and roles
 export const fetchFeatures = (guildId: string) =>
   j<{ guildId: string; features: Features }>(`/guilds/${guildId}/features`);
 
 export const fetchRoles = (guildId: string) => j<Role[]>(`/guilds/${guildId}/roles`);
 
+// Members
 export function fetchMembersPaged(
   guildId: string,
-  opts?: { limit?: number; after?: string; q?: string; role?: string; group?: string; all?: boolean }
+  opts?: {
+    limit?: number;
+    after?: string;
+    q?: string;
+    role?: string;
+    group?: string;
+    all?: boolean;
+    source?: "auto" | "rest" | "gateway";
+    debug?: boolean;
+  }
 ) {
-  const { limit = 200, after = "0", q = "", role = "", group = "", all = false } = opts || {};
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  params.set("after", after);
-  if (q) params.set("q", q);
-  if (role) params.set("role", role);
-  if (group) params.set("group", group);
-  if (all) params.set("all", "true");
-  return j<MembersPage>(`/guilds/${guildId}/members-paged?${params.toString()}`);
+  const { limit = 200, after = "0", q = "", role = "", group = "", all = false, source = "auto", debug = false } =
+    opts || {};
+  const p = new URLSearchParams();
+  p.set("limit", String(limit));
+  p.set("after", after);
+  if (q) p.set("q", q);
+  if (role) p.set("role", role);
+  if (group) p.set("group", group);
+  if (all) p.set("all", "true");
+  if (source !== "auto") p.set("source", source);
+  if (debug) p.set("debug", "1");
+  return j<MembersPage>(`/guilds/${guildId}/members-paged?${p.toString()}`);
 }
 
 export const searchMembers = (guildId: string, q: string, limit = 25) => {
