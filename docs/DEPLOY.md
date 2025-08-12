@@ -13,8 +13,8 @@ Prereqs
 - Add a Bot user (for later) but for UI auth you only need OAuth2.
 - Under OAuth2 → General:
   - Set Redirects:
-    - Local: http://localhost:3000/api/auth/callback/discord
-    - Prod: https://YOUR_DOMAIN.com/api/auth/callback/discord
+    - Local: http://localhost:3000/auth/callback/discord
+    - Prod: https://YOUR_DOMAIN.com/auth/callback/discord
 - Copy the Client ID and Client Secret.
 
 2) Configure environment variables
@@ -96,7 +96,7 @@ import { SessionProvider } from "next-auth/react"
 export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient())
   return (
-    <SessionProvider>
+    <SessionProvider basePath="/auth">
       <QueryClientProvider client={client}>
         {children}
         <Toaster />

@@ -5,7 +5,7 @@ import { Button, type ButtonProps } from "@/components/ui/button"
 export default function InviteBotButton(props: ButtonProps) {
   const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID
   const redirectUri = process.env.NEXT_PUBLIC_APP_BASE_URL
-    ? `${process.env.NEXT_PUBLIC_APP_BASE_URL}/api/auth/callback/discord`
+    ? `${process.env.NEXT_PUBLIC_APP_BASE_URL}/auth/callback/discord`
     : undefined
   const scopes = ["bot", "applications.commands"]
   const permissions = "268954736" // example permissions set
