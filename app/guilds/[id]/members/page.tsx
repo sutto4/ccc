@@ -49,14 +49,15 @@ export default function MembersPage() {
         setFeatures(feat.features || { custom_groups: false, premium_members: false });
 
         if (!feat.features?.premium_members && !feat.features?.custom_groups) {
-          // not premium - do not load heavy data
           return;
         }
 
+        // First load: grab everyone in small guilds
         const [rs, page] = await Promise.all([
           fetchRoles(guildId),
-          fetchMembersPaged(guildId, { limit: 200, after: '0' }),
+          fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0' }),
         ]);
+
         if (!mounted) return;
         setRoles(rs);
         setMembers(page.members);
@@ -84,8 +85,8 @@ export default function MembersPage() {
         role: roleFilter || '',
         group: groupFilter || '',
       });
-      setMembers((prev) => {
-        const byId = new Map(prev.map((m) => [m.discordUserId, m]));
+      setMembers(prev => {
+        const byId = new Map(prev.map(m => [m.discordUserId, m]));
         for (const m of page.members) byId.set(m.discordUserId, m);
         return Array.from(byId.values());
       });
@@ -111,8 +112,8 @@ export default function MembersPage() {
   const allRoles = useMemo(
     () =>
       roles
-        .filter((r) => r.roleId !== String(guildId)) // hide @everyone
-        .map((r) => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
+        .filter(r => r.roleId !== String(guildId)) // hide @everyone
+        .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, guildId]
   );
@@ -125,7 +126,7 @@ export default function MembersPage() {
   }, [members, premium]);
 
   const filtered = useMemo(() => {
-    return members.filter((m) => {
+    return members.filter(m => {
       if (search) {
         const q = search.toLowerCase();
         const hit =
@@ -159,8 +160,8 @@ export default function MembersPage() {
     if (!info?.editable) return;
     try {
       await removeRole(guildId!, userId, roleId, myId);
-      setMembers((prev) =>
-        prev.map((m) => (m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter((r) => r !== roleId) } : m))
+      setMembers(prev =>
+        prev.map(m => (m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m))
       );
     } catch (e: any) {
       alert(String(e?.message || e));
@@ -173,8 +174,8 @@ export default function MembersPage() {
     if (!info?.editable) return;
     try {
       await addRole(guildId!, userId, roleId, myId);
-      setMembers((prev) =>
-        prev.map((m) =>
+      setMembers(prev =>
+        prev.map(m =>
           m.discordUserId === userId ? { ...m, roleIds: Array.from(new Set([...m.roleIds, roleId])) } : m
         )
       );
@@ -191,7 +192,9 @@ export default function MembersPage() {
         <h1 className="text-2xl font-semibold">Members</h1>
         <div className="text-sm text-gray-500">
           Guild: <span className="font-mono">{guildId}</span>{' '}
-          {typeof total === 'number' && <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>}
+          {typeof total === 'number' && (
+            <span className="ml-2">Loaded {members.length}{total ? ` / ~${total}` : ''}</span>
+          )}
         </div>
       </div>
 
@@ -200,16 +203,16 @@ export default function MembersPage() {
           className="border rounded px-3 py-2 bg-transparent"
           placeholder="Search username, discord id, or accountid"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value)}
         />
 
         <select
           className="border rounded px-3 py-2 bg-transparent"
           value={roleFilter || ''}
-          onChange={(e) => setRoleFilter(e.target.value || null)}
+          onChange={e => setRoleFilter(e.target.value || null)}
         >
           <option value="">All roles</option>
-          {allRoles.map((r) => (
+          {allRoles.map(r => (
             <option key={r.id} value={r.id}>
               {r.name}
             </option>
@@ -219,10 +222,10 @@ export default function MembersPage() {
         <select
           className="border rounded px-3 py-2 bg-transparent"
           value={groupFilter || ''}
-          onChange={(e) => setGroupFilter(e.target.value || null)}
+          onChange={e => setGroupFilter(e.target.value || null)}
         >
           <option value="">All groups</option>
-          {allGroups.map((g) => (
+          {allGroups.map(g => (
             <option key={g} value={g}>
               {g}
             </option>
@@ -258,12 +261,12 @@ export default function MembersPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((m) => {
+            {filtered.map(m => {
               const pickerOpen = pickerFor === m.discordUserId;
               const availableRoles = allRoles
-                .filter((r) => r.editable)
-                .filter((r) => !m.roleIds.includes(r.id))
-                .filter((r) => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+                .filter(r => r.editable)
+                .filter(r => !m.roleIds.includes(r.id))
+                .filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
 
               return (
                 <tr key={m.discordUserId} className="border-t align-top">
@@ -271,7 +274,7 @@ export default function MembersPage() {
                   <td className="px-3 py-2">{m.accountid ?? '-'}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
-                      {(m.roleIds || []).map((rid) => {
+                      {(m.roleIds || []).map(rid => {
                         const info = roleInfo.get(rid);
                         const name = info?.name || rid;
                         const color = info?.color || null;
@@ -312,23 +315,18 @@ export default function MembersPage() {
                           className="border rounded px-2 py-1 w-full mb-2 bg-transparent"
                           placeholder="Search roles..."
                           value={roleSearch}
-                          onChange={(e) => setRoleSearch(e.target.value)}
+                          onChange={e => setRoleSearch(e.target.value)}
                         />
                         <div className="max-h-48 overflow-auto space-y-1">
-                          {availableRoles.length === 0 && (
-                            <div className="text-gray-500 text-sm">No roles</div>
-                          )}
-                          {availableRoles.map((r) => (
+                          {availableRoles.length === 0 && <div className="text-gray-500 text-sm">No roles</div>}
+                          {availableRoles.map(r => (
                             <button
                               key={r.id}
                               className="w-full text-left px-2 py-1 rounded border hover:bg-gray-50 dark:hover:bg-neutral-800"
                               onClick={() => onAddRole(m.discordUserId, r.id)}
                             >
                               <span className="inline-flex items-center gap-2">
-                                <span
-                                  className="h-2 w-2 rounded-full"
-                                  style={{ backgroundColor: r.color || '#999' }}
-                                />
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: r.color || '#999' }} />
                                 {r.name}
                               </span>
                             </button>
@@ -342,7 +340,7 @@ export default function MembersPage() {
                       {(m.groups || []).length === 0 ? (
                         <span className="text-gray-400">none</span>
                       ) : (
-                        (m.groups || []).map((g) => (
+                        (m.groups || []).map(g => (
                           <span key={g} className="px-2 py-0.5 rounded-full border text-xs">
                             {g}
                           </span>

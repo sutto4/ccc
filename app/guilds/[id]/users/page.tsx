@@ -33,7 +33,7 @@ export default function UsersPage() {
       try {
         const [rs, page] = await Promise.all([
           fetchRoles(guildId),
-          fetchMembersPaged(guildId, { limit: 100, after: '0' })
+          fetchMembersPaged(guildId, { all: true, limit: 1000, after: '0' })
         ]);
         if (!mounted) return;
         setRoles(rs);
@@ -49,7 +49,6 @@ export default function UsersPage() {
     return () => { mounted = false; };
   }, [guildId]);
 
-  // server search when 2+ chars
   useEffect(() => {
     if (!guildId) return;
     const q = search.trim();
@@ -101,7 +100,7 @@ export default function UsersPage() {
 
   const allRoles = useMemo(
     () => roles
-      .filter(r => r.roleId !== String(guildId)) // no @everyone
+      .filter(r => r.roleId !== String(guildId))
       .map(r => ({ id: r.roleId, name: r.name, color: r.color, editable: !!r.editableByBot && !r.managed }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, guildId]
