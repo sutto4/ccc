@@ -15,10 +15,21 @@ import { fetchGuilds } from "@/lib/api"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+// simple server-side features fetcher using the same env as client
+async function fetchFeaturesSSR(guildId: string) {
+  const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || ""
+  const BASE = RAW.replace(/\/+$/, "")
+  const HAS_API_SUFFIX = /\/api$/i.test(BASE)
+  const url = `${HAS_API_SUFFIX ? BASE : BASE + "/api"}/guilds/${guildId}/features`
+  const r = await fetch(url, { cache: "no-store" })
+  if (!r.ok) return { custom_groups: false, premium_members: false }
+  const j = await r.json()
+  return j.features || { custom_groups: false, premium_members: false }
+}
+
 export default async function GuildLayout(
   props: PropsWithChildren<{ params: Promise<{ id: string }> }>
 ) {
-  // Next.js 15: params is a Promise, await it
   const { id } = await props.params
 
   const session = await getServerSession(authOptions)
@@ -30,9 +41,12 @@ export default async function GuildLayout(
   const guild = guilds.find((g) => g.id === id)
   if (!guild) return notFound()
 
+  const features = await fetchFeaturesSSR(id)
+  const premium = Boolean(features.premium_members || features.custom_groups)
+
   const tabs = [
-    { href: `/guilds/${guild.id}/members`, label: "Members" },
     { href: `/guilds/${guild.id}/users`, label: "Users" },
+    ...(premium ? [{ href: `/guilds/${guild.id}/members`, label: "Members" }] : []),
     { href: `/guilds/${guild.id}/roles`, label: "Roles" },
   ]
 
@@ -61,7 +75,7 @@ export default async function GuildLayout(
         </div>
 
         <div className="mt-6">
-          <Tabs defaultValue="members" className="w-full">
+          <Tabs defaultValue="users" className="w-full">
             <TabsList className="w-full justify-start">
               {tabs.map((t) => (
                 <TabsTrigger key={t.href} value={t.label.toLowerCase()} asChild>

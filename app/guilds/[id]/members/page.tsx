@@ -4,13 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   fetchFeatures, fetchRoles, fetchMembersPaged,
-  type Member, type Role, type Features, type MembersPage
+  type Member, type Role, type Features
 } from '../../../lib/api';
 
 export default function MembersPage() {
   const { id: guildId } = useParams<{ id: string }>();
 
-  const [features, setFeatures] = useState<Features>({ custom_groups: false });
+  const [features, setFeatures] = useState<Features>({ custom_groups: false, premium_members: false });
+  const premium = Boolean(features.premium_members || features.custom_groups);
+
   const [roles, setRoles] = useState<Role[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [cursor, setCursor] = useState<string | null>('0');
@@ -34,11 +36,10 @@ export default function MembersPage() {
           fetchRoles(guildId),
         ]);
         if (!mounted) return;
-        setFeatures(feat.features);
+        setFeatures(feat.features || { custom_groups: false, premium_members: false });
         setRoles(rs);
 
-        // first page
-        const page = await fetchMembersPaged(guildId, 200, '0');
+        const page = await fetchMembersPaged(guildId, { limit: 200, after: '0' });
         if (!mounted) return;
         setMembers(page.members);
         setCursor(page.page.nextAfter);
@@ -56,7 +57,13 @@ export default function MembersPage() {
     if (!guildId || !cursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await fetchMembersPaged(guildId, 200, cursor);
+      const page = await fetchMembersPaged(guildId, {
+        limit: 200,
+        after: cursor,
+        q: search,
+        role: roleFilter || '',
+        group: premium ? (groupFilter || '') : ''
+      });
       setMembers(prev => {
         const byId = new Map(prev.map(m => [m.discordUserId, m]));
         for (const m of page.members) byId.set(m.discordUserId, m);
@@ -83,11 +90,11 @@ export default function MembersPage() {
   );
 
   const allGroups = useMemo(() => {
-    if (!features.custom_groups) return [];
+    if (!premium) return [];
     const s = new Set<string>();
     for (const m of members) for (const g of m.groups || []) s.add(g);
     return Array.from(s).sort();
-  }, [members, features]);
+  }, [members, premium]);
 
   const filtered = useMemo(() => {
     return members.filter(m => {
@@ -100,12 +107,12 @@ export default function MembersPage() {
         if (!hit) return false;
       }
       if (roleFilter && !m.roleIds.includes(roleFilter)) return false;
-      if (features.custom_groups && groupFilter) {
+      if (premium && groupFilter) {
         if (!m.groups || !m.groups.includes(groupFilter)) return false;
       }
       return true;
     });
-  }, [members, search, roleFilter, groupFilter, features]);
+  }, [members, search, roleFilter, groupFilter, premium]);
 
   if (loading) return <div className="p-6">Loading…</div>;
   if (!guildId) return <div className="p-6">No guild selected</div>;
@@ -113,7 +120,7 @@ export default function MembersPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Members</h1>
+        <h1 className="text-2xl font-semibold">Members {premium ? '' : <span className="text-xs text-gray-500">(limited)</span>}</h1>
         <div className="text-sm text-gray-500">
           Guild: <span className="font-mono">{guildId}</span>{' '}
           {typeof total === 'number' && (
@@ -139,7 +146,7 @@ export default function MembersPage() {
           {allRoleOptions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
 
-        {features.custom_groups && (
+        {premium && (
           <select
             className="border rounded px-3 py-2 bg-transparent"
             value={groupFilter || ''}
@@ -157,7 +164,7 @@ export default function MembersPage() {
           Clear
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto">
           <button
             className="border rounded px-3 py-2"
             onClick={loadMore}
@@ -176,7 +183,7 @@ export default function MembersPage() {
               <th className="text-left px-3 py-2">Discord</th>
               <th className="text-left px-3 py-2">AccountID</th>
               <th className="text-left px-3 py-2">Roles</th>
-              {features.custom_groups && <th className="text-left px-3 py-2">Groups</th>}
+              {premium && <th className="text-left px-3 py-2">Groups</th>}
             </tr>
           </thead>
           <tbody>
@@ -202,7 +209,7 @@ export default function MembersPage() {
                     })}
                   </div>
                 </td>
-                {features.custom_groups && (
+                {premium && (
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {(m.groups || []).length === 0 ? <span className="text-gray-400">none</span> :
@@ -225,7 +232,7 @@ export default function MembersPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={features.custom_groups ? 4 : 3} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={premium ? 4 : 3} className="px-3 py-6 text-center text-gray-500">
                   No matches
                 </td>
               </tr>

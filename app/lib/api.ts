@@ -1,5 +1,4 @@
 // app/lib/api.ts
-
 export type Role = {
   guildId: string;
   roleId: string;
@@ -16,7 +15,7 @@ export type Member = {
   groups?: string[];
 };
 
-export type Features = { custom_groups: boolean };
+export type Features = { custom_groups: boolean; premium_members?: boolean };
 
 export type MembersPage = {
   guildId: string;
@@ -24,7 +23,7 @@ export type MembersPage = {
   members: Member[];
 };
 
-// Accept either base like "http://host:3001" or "http://host:3001/api"
+// Accept base like "http://host:3001" or "http://host:3001/api"
 const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const BASE = RAW.replace(/\/+$/, "");
 const HAS_API_SUFFIX = /\/api$/i.test(BASE);
@@ -48,12 +47,19 @@ export function fetchRoles(guildId: string) {
   return j<Role[]>(`/guilds/${guildId}/roles`);
 }
 
-// old full list (kept)
+// legacy
 export function fetchMembers(guildId: string) {
   return j<Member[]>(`/guilds/${guildId}/members`);
 }
 
-// new paged
-export function fetchMembersPaged(guildId: string, limit = 100, after = "0") {
-  return j<MembersPage>(`/guilds/${guildId}/members-paged?limit=${limit}&after=${encodeURIComponent(after)}`);
+// paged
+export function fetchMembersPaged(guildId: string, opts?: { limit?: number; after?: string; q?: string; role?: string; group?: string }) {
+  const { limit = 200, after = "0", q = "", role = "", group = "" } = opts || {};
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("after", after);
+  if (q) params.set("q", q);
+  if (role) params.set("role", role);
+  if (group) params.set("group", group);
+  return j<MembersPage>(`/guilds/${guildId}/members-paged?${params.toString()}`);
 }
