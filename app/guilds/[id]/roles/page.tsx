@@ -28,7 +28,7 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
 
   return (
     <Section
-      title={`Roles — ${guild.name}`}
+      title="Roles"
       right={
         <div className="text-sm text-muted-foreground">
           {roles.length.toLocaleString()} roles
