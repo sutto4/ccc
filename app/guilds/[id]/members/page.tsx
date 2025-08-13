@@ -20,6 +20,8 @@ import { useSession } from "next-auth/react";
 type Row = Member & { rolesExpanded?: boolean; groupsExpanded?: boolean; avatarUrl: string };
 
 export default function MembersPage() {
+  const [selectedUser, setSelectedUser] = useState<Row | null>(null);
+  const [modalRole, setModalRole] = useState<string>("");
   const [view, setView] = useState<'card' | 'table'>('card');
   const params = useParams<{ id: string }>();
   const guildId = params.id;
@@ -29,8 +31,7 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Row[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  // Removed: add role modal state for card view
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [groupFilter, setGroupFilter] = useState<string>("");
@@ -90,25 +91,21 @@ export default function MembersPage() {
     });
   }, [members, search, roleFilter, groupFilter]);
 
-  async function onAdd() {
-    if (!addingFor || !selectedRole) return;
+  async function handleAddRole(userId: string, roleId: string) {
     try {
       const actor = (session?.user as any)?.id || "";
-      await addRole(guildId, addingFor, selectedRole, actor);
+      await addRole(guildId, userId, roleId, actor);
       setMembers((prev) =>
         prev.map((m) =>
-          m.discordUserId === addingFor ? { ...m, roleIds: [...m.roleIds, selectedRole] } : m
+          m.discordUserId === userId ? { ...m, roleIds: [...m.roleIds, roleId] } : m
         )
       );
     } catch (e: any) {
       alert(`Add failed: ${e?.message || "unknown"}`);
-    } finally {
-      setAddingFor(null);
-      setSelectedRole("");
     }
   }
 
-  async function onRemove(userId: string, roleId: string) {
+  async function handleRemoveRole(userId: string, roleId: string) {
     try {
       const actor = (session?.user as any)?.id || "";
       await removeRole(guildId, userId, roleId, actor);
@@ -190,8 +187,11 @@ export default function MembersPage() {
       {view === 'card' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {!loading && filteredMembers.map((m) => (
-            // ...existing card view code...
-            <div key={m.discordUserId} className="bg-card border rounded-xl p-4 flex flex-col items-center shadow-md relative hover:shadow-lg transition-shadow">
+            <div
+              key={m.discordUserId}
+              className="bg-card border rounded-xl p-4 flex flex-col items-center shadow-md relative hover:shadow-lg transition-shadow cursor-pointer hover:bg-primary/10"
+              onClick={() => setSelectedUser(m)}
+            >
               <img
                 src={m.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"}
                 alt={m.username}
@@ -224,16 +224,7 @@ export default function MembersPage() {
                             title={rid}
                           >
                             {name}
-                            {!uneditable && (
-                              <button
-                                onClick={() => onRemove(m.discordUserId, rid)}
-                                className="ml-1 rounded-full border px-1 hover:bg-muted"
-                                aria-label={`Remove ${name}`}
-                                title="Remove role"
-                              >
-                                ×
-                              </button>
-                            )}
+                            {/* Remove button only in modal now */}
                           </span>
                         );
                       })
@@ -246,68 +237,6 @@ export default function MembersPage() {
                     >
                       {m.rolesExpanded ? 'Show less' : `+${m.roleIds.length - 3} more`}
                     </button>
-                  )}
-                  {/* Add Role button (only here, not bold) */}
-                  <button
-                    className="ml-2 text-xs rounded-full border px-2 py-0.5 hover:bg-muted"
-                    onClick={() => setAddingFor(m.discordUserId)}
-                    title="Add role"
-                  >
-                    ＋ Add Role
-                  </button>
-                  {addingFor === m.discordUserId && (
-                    <Dialog open={true} onClose={() => { setAddingFor(null); setSelectedRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
-                      <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setAddingFor(null); setSelectedRole(""); }} />
-                      <div
-                        className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
-                        style={{
-                          background: 'rgba(255,255,255,0.35)',
-                          color: '#111827',
-                          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
-                        }}
-                      >
-                        <Dialog.Title className="text-lg font-semibold mb-2">Add role to user</Dialog.Title>
-                        <input
-                          type="text"
-                          className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
-                          placeholder="Search roles..."
-                          value={selectedRole ? roles.find(r => r.roleId === selectedRole)?.name || '' : ''}
-                          onChange={e => {
-                            // Find first matching role
-                            const val = e.target.value.toLowerCase();
-                            const found = availableRolesFor(m).find(r => r.name.toLowerCase().includes(val));
-                            setSelectedRole(found ? found.roleId : "");
-                          }}
-                          autoFocus
-                        />
-                        <div className="max-h-60 overflow-y-auto mb-3">
-                          {availableRolesFor(m).map(r => (
-                            <div
-                              key={r.roleId}
-                              className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selectedRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                              onClick={() => setSelectedRole(r.roleId)}
-                            >
-                              <span className="truncate text-xs font-medium text-black">{r.name}</span>
-                              <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
-                            </div>
-                          ))}
-                          {availableRolesFor(m).length === 0 && (
-                            <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
-                            disabled={!selectedRole}
-                            onClick={onAdd}
-                          >Add</button>
-                          <button
-                            className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
-                            onClick={() => { setAddingFor(null); setSelectedRole(""); }}
-                          >Cancel</button>
-                        </div>
-                      </div>
-                    </Dialog>
                   )}
                 </div>
               </div>
@@ -361,7 +290,14 @@ export default function MembersPage() {
             </thead>
             <tbody>
               {filteredMembers.map((m) => (
-                <tr key={m.discordUserId} className="border-b last:border-0 hover:bg-muted/40">
+                <tr
+                  key={m.discordUserId}
+                  className={
+                    "border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md " +
+                    (selectedUser?.discordUserId === m.discordUserId ? "ring-2 ring-primary/40" : "")
+                  }
+                  onClick={() => setSelectedUser(m)}
+                >
                   <td className="px-3 py-2">
                     <img
                       src={m.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"}
@@ -390,6 +326,99 @@ export default function MembersPage() {
             </tbody>
           </table>
         </div>
+      )}
+      {/* Modal for add/remove roles */}
+      {selectedUser && (
+        <Dialog open={true} onClose={() => { setSelectedUser(null); setModalRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); }} />
+          <div
+            className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
+            style={{
+              background: 'rgba(255,255,255,0.35)',
+              color: '#111827',
+              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
+            }}
+          >
+            <Dialog.Title className="text-lg font-semibold mb-2">Manage Roles for {selectedUser.username}</Dialog.Title>
+            <div className="mb-2 text-xs text-muted-foreground">Discord ID: {selectedUser.discordUserId}</div>
+            <div className="mb-2">
+              <div className="font-semibold text-sm mb-1">Current Roles</div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {selectedUser.roleIds.length > 0 ? selectedUser.roleIds.map((rid) => {
+                  const r = roleMap.get(rid);
+                  const name = r?.name ?? "unknown";
+                  const color = r?.color || null;
+                  const uneditable =
+                    rid === guildId || (r as any)?.managed === true || (r as any)?.editableByBot === false;
+                  return (
+                    <span
+                      key={rid}
+                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                      style={{ backgroundColor: color ? `${color}20` : undefined, borderColor: color || undefined }}
+                      title={rid}
+                    >
+                      {name}
+                      <button
+                        onClick={async () => {
+                          await handleRemoveRole(selectedUser.discordUserId, rid);
+                          setSelectedUser((prev) => prev ? { ...prev, roleIds: prev.roleIds.filter((r) => r !== rid) } : prev);
+                        }}
+                        className="ml-1 rounded-full border px-1 hover:bg-muted"
+                        aria-label={`Remove ${name}`}
+                        title="Remove role"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                }) : <span className="text-xs text-muted-foreground">none</span>}
+              </div>
+              <div className="font-semibold text-sm mb-1 mt-4">Add Role</div>
+              <input
+                type="text"
+                className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
+                placeholder="Search roles..."
+                value={modalRole ? roles.find(r => r.roleId === modalRole)?.name || '' : ''}
+                onChange={e => {
+                  const val = e.target.value.toLowerCase();
+                  const found = roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).find(r => r.name.toLowerCase().includes(val));
+                  setModalRole(found ? found.roleId : "");
+                }}
+                autoFocus
+              />
+              <div className="max-h-40 overflow-y-auto mb-3">
+                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).map(r => (
+                  <div
+                    key={r.roleId}
+                    className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${modalRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                    onClick={() => setModalRole(r.roleId)}
+                  >
+                    <span className="truncate text-xs font-medium text-black">{r.name}</span>
+                    <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
+                  </div>
+                ))}
+                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).length === 0 && (
+                  <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                  <button
+                    className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
+                    disabled={!modalRole}
+                    onClick={async () => {
+                      await handleAddRole(selectedUser.discordUserId, modalRole);
+                      setSelectedUser((prev) => prev ? { ...prev, roleIds: [...prev.roleIds, modalRole] } : prev);
+                      setModalRole("");
+                    }}
+                  >Add</button>
+                <button
+                  className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
+                  onClick={() => { setSelectedUser(null); setModalRole(""); }}
+                >Cancel</button>
+              </div>
+            </div>
+          </div>
+        </Dialog>
       )}
     </Section>
   );

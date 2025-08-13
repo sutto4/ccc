@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
+import { Dialog } from "@headlessui/react";
 import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
 import {
@@ -41,8 +42,8 @@ export default function UsersPage() {
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedUser, setSelectedUser] = useState<Row | null>(null);
+  const [modalRole, setModalRole] = useState<string>("");
 
   useEffect(() => {
     let alive = true;
@@ -76,8 +77,7 @@ export default function UsersPage() {
     let filtered = members;
     if (search) {
       filtered = filtered.filter((u) =>
-        u.username.toLowerCase().includes(search.toLowerCase()) ||
-        (u.discordUserId && u.discordUserId.toLowerCase().includes(search.toLowerCase()))
+        u.username.toLowerCase().includes(search.toLowerCase())
       );
     }
     if (roleFilter) {
@@ -160,7 +160,7 @@ export default function UsersPage() {
         <input
           type="text"
           className="w-full max-w-xs rounded-md border px-2 py-1 text-xs bg-background"
-          placeholder="Search users by name or Discord ID…"
+          placeholder="Search users…"
           value={search}
           onChange={e => {
             setSearch(e.target.value);
@@ -192,7 +192,14 @@ export default function UsersPage() {
           </thead>
           <tbody>
             {!loading && displayed.map((m) => (
-              <tr key={m.discordUserId} className="border-b last:border-0">
+              <tr
+                key={m.discordUserId}
+                className={
+                  "border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md " +
+                  (selectedUser?.discordUserId === m.discordUserId ? "ring-2 ring-primary/40" : "")
+                }
+                onClick={() => setSelectedUser(m)}
+              >
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <img
@@ -212,8 +219,6 @@ export default function UsersPage() {
                       const r = roleMap.get(rid);
                       const name = r?.name ?? "unknown";
                       const color = r?.color || null;
-                      const uneditable =
-                        rid === guildId || (r as any)?.managed === true || (r as any)?.editableByBot === false;
                       return (
                         <span
                           key={rid}
@@ -225,61 +230,104 @@ export default function UsersPage() {
                           title={rid}
                         >
                           {name}
-                          {!uneditable && (
-                            <button
-                              onClick={() => onRemove(m.discordUserId, rid)}
-                              className="ml-1 rounded-full border px-1 hover:bg-muted"
-                              aria-label={`Remove ${name}`}
-                              title="Remove role"
-                            >
-                              ×
-                            </button>
-                          )}
                         </span>
                       );
                     })}
-                    <button
-                      className="ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-xs hover:bg-muted"
-                      onClick={() => setAddingFor(m.discordUserId)}
-                      title="Add role"
-                    >
-                      ＋
-                    </button>
-                    {addingFor === m.discordUserId && (
-                      <div className="ml-2 inline-flex items-center gap-2">
-                        <select
-                          className="rounded-md border bg-background px-2 py-1 text-xs"
-                          value={selectedRole}
-                          onChange={(e) => setSelectedRole(e.target.value)}
-                        >
-                          <option value="">Select role…</option>
-                          {availableRolesFor(m).map((r) => (
-                            <option key={r.roleId} value={r.roleId}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
-                          onClick={onAdd}
-                        >
-                          Add
-                        </button>
-                        <button
-                          className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
-                          onClick={() => {
-                            setAddingFor(null);
-                            setSelectedRole("");
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </td>
               </tr>
             ))}
+      {/* Modal for add/remove roles */}
+      {selectedUser && (
+        <Dialog open={true} onClose={() => { setSelectedUser(null); setModalRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); }} />
+          <div
+            className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
+            style={{
+              background: 'rgba(255,255,255,0.35)',
+              color: '#111827',
+              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
+            }}
+          >
+            <Dialog.Title className="text-lg font-semibold mb-2">Manage Roles for {selectedUser.username}</Dialog.Title>
+            <div className="mb-2 text-xs text-muted-foreground">Discord ID: {selectedUser.discordUserId}</div>
+            <div className="mb-2">
+              <div className="font-semibold text-sm mb-1">Current Roles</div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {selectedUser.roleIds.length > 0 ? selectedUser.roleIds.map((rid) => {
+                  const r = roleMap.get(rid);
+                  const name = r?.name ?? "unknown";
+                  const color = r?.color || null;
+                  return (
+                    <span
+                      key={rid}
+                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                      style={{ backgroundColor: color ? `${color}20` : undefined, borderColor: color || undefined }}
+                      title={rid}
+                    >
+                      {name}
+                      <button
+                        onClick={async () => {
+                          await onRemove(selectedUser.discordUserId, rid);
+                          setSelectedUser((prev) => prev ? { ...prev, roleIds: prev.roleIds.filter((r) => r !== rid) } : prev);
+                        }}
+                        className="ml-1 rounded-full border px-1 hover:bg-muted"
+                        aria-label={`Remove ${name}`}
+                        title="Remove role"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                }) : <span className="text-xs text-muted-foreground">none</span>}
+              </div>
+              <div className="font-semibold text-sm mb-1 mt-4">Add Role</div>
+              <input
+                type="text"
+                className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
+                placeholder="Search roles..."
+                value={modalRole ? roles.find(r => r.roleId === modalRole)?.name || '' : ''}
+                onChange={e => {
+                  const val = e.target.value.toLowerCase();
+                  const found = roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).find(r => r.name.toLowerCase().includes(val));
+                  setModalRole(found ? found.roleId : "");
+                }}
+                autoFocus
+              />
+              <div className="max-h-40 overflow-y-auto mb-3">
+                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).map(r => (
+                  <div
+                    key={r.roleId}
+                    className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${modalRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                    onClick={() => setModalRole(r.roleId)}
+                  >
+                    <span className="truncate text-xs font-medium text-black">{r.name}</span>
+                    <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
+                  </div>
+                ))}
+                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).length === 0 && (
+                  <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
+                  disabled={!modalRole}
+                  onClick={async () => {
+                    await onAdd(selectedUser.discordUserId, modalRole);
+                    setSelectedUser((prev) => prev ? { ...prev, roleIds: [...prev.roleIds, modalRole] } : prev);
+                    setModalRole("");
+                  }}
+                >Add</button>
+                <button
+                  className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
+                  onClick={() => { setSelectedUser(null); setModalRole(""); }}
+                >Cancel</button>
+              </div>
+            </div>
+          </div>
+        </Dialog>
+      )}
             {!loading && displayed.length === 0 && (
               <tr>
                 <td className="py-6 text-muted-foreground text-center" colSpan={2}>
