@@ -21,6 +21,7 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
   );
 }
 import * as React from "react";
+import PremiumModal from "@/components/premium-modal";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Server, Settings, Shield, Crown } from "lucide-react";
@@ -211,16 +212,46 @@ function NavLeaf({
   // Only use string for title prop
   const titleString = title || (typeof label === "string" ? label : "");
 
+  const [modalOpen, setModalOpen] = React.useState(false);
+  // Show modal for any premium-locked feature, not for "Select a server first"
+  const isPremium = titleString?.toLowerCase().includes("premium");
+  const isSelectServer = titleString?.toLowerCase().includes("select a server");
   if (disabled) {
-    return (
-      <div
-        className={`${base} ${cls} opacity-60 cursor-default pointer-events-none`}
-        title={titleString}
-        aria-disabled="true"
-      >
-        {content}
-      </div>
-    );
+    if (isPremium) {
+      return (
+        <>
+          <div
+            className={`${base} ${cls} opacity-60 cursor-pointer hover:opacity-80`}
+            title={titleString}
+            aria-disabled="true"
+            onClick={() => setModalOpen(true)}
+          >
+            {content}
+          </div>
+          <PremiumModal open={modalOpen} onOpenChange={setModalOpen} />
+        </>
+      );
+    } else if (isSelectServer) {
+      return (
+        <div
+          className={`${base} ${cls} opacity-60 cursor-default pointer-events-none`}
+          title={titleString}
+          aria-disabled="true"
+        >
+          {content}
+        </div>
+      );
+    } else {
+      return (
+        <div
+          className={`${base} ${cls} opacity-60 cursor-default pointer-events-none`}
+          title={titleString}
+          aria-disabled="true"
+        >
+          {content}
+        </div>
+      );
+    }
   }
 
   return (

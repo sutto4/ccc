@@ -8,6 +8,7 @@ import {
   type Guild,
   type Role,
 } from "@/lib/api";
+import RoleExplorer from "@/components/role-explorer";
 
 type Params = { id: string };
 
@@ -27,6 +28,9 @@ export default async function RolesPage({
 
   const roles = await fetchRoles(guildId);
 
+  // Client-side state for expanded role and search
+  // (This is a hybrid page, so we use a client component for interactivity)
+  // We'll use a simple search and expand/collapse for each role
   return (
     <Section
       title={`Roles — ${guild.name}`}
@@ -36,36 +40,9 @@ export default async function RolesPage({
         </div>
       }
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {roles.map((r: Role) => (
-          <div
-            key={r.roleId}
-            className="rounded-xl border p-3 bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))]"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{r.name}</div>
-                <div className="text-xs text-muted-foreground font-mono truncate">
-                  {r.roleId}
-                </div>
-              </div>
-              <div
-                className="h-3 w-3 rounded-full border"
-                title={r.color ?? "no color"}
-                style={{
-                  backgroundColor: r.color || undefined,
-                  borderColor: r.color || undefined,
-                }}
-              />
-            </div>
-          </div>
-        ))}
-        {roles.length === 0 && (
-          <div className="text-sm text-muted-foreground">
-            No roles returned for this guild.
-          </div>
-        )}
-      </div>
+      <RoleExplorer guildId={guildId} roles={roles} />
     </Section>
   );
+
 }
+
