@@ -135,36 +135,36 @@ export default function Sidebar() {
       </nav>
 
       {/* Contextual subnav for a specific guild */}
-      {inGuild && guildId && (
-        <div className="mt-4 px-2">
-          <div className="px-3 pb-1 text-xs uppercase tracking-wide text-[hsl(var(--sidebar-foreground-muted))]">
-            Guild
+        {inGuild && guildId && (
+          <div className="mt-4 px-2">
+            <div className="px-3 pb-1 text-xs uppercase tracking-wide text-[hsl(var(--sidebar-foreground-muted))]">
+              Guild
+            </div>
+            <div className="space-y-1">
+              {/* Users */}
+              <NavLeaf
+                href={`/guilds/${guildId}/users`}
+                label="Users"
+                active={pathname.startsWith(`/guilds/${guildId}/users`)}
+              />
+              {/* Roles */}
+              <NavLeaf
+                href={`/guilds/${guildId}/roles`}
+                label="Roles"
+                active={pathname.startsWith(`/guilds/${guildId}/roles`)}
+              />
+              {/* Custom Groups (always shown, disabled if not premium) */}
+              <NavLeaf
+                href={`/guilds/${guildId}/members`}
+                label="Custom Groups"
+                active={pathname.startsWith(`/guilds/${guildId}/members`)}
+                rightIcon={<Crown className="h-3.5 w-3.5" />}
+                disabled={customGroupsEnabled === false}
+                title={customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups"}
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            {/* Users */}
-            <NavLeaf
-              href={`/guilds/${guildId}/users`}
-              label="Users"
-              active={pathname.startsWith(`/guilds/${guildId}/users`)}
-            />
-            {/* Roles */}
-            <NavLeaf
-              href={`/guilds/${guildId}/roles`}
-              label="Roles"
-              active={pathname.startsWith(`/guilds/${guildId}/roles`)}
-            />
-            {/* Custom Groups (premium indicator on the right) */}
-            <NavLeaf
-              href={`/guilds/${guildId}/members`}
-              label="Custom Groups"
-              active={pathname.startsWith(`/guilds/${guildId}/members`)}
-              rightIcon={<Crown className="h-3.5 w-3.5" />}
-              disabled={customGroupsEnabled === false}
-              title={customGroupsEnabled === false ? "Premium feature" : "Custom Groups"}
-            />
-          </div>
-        </div>
-      )}
+        )}
 
       {/* Footer / Settings */}
       <div className="mt-auto border-t border-[hsl(var(--sidebar-border))] p-2">
