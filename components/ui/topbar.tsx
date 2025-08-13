@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import ThemeToggle from "@/components/theme-toggle";
-import AuthButtons from "@/components/auth-buttons";
+import UserMenu from "@/components/ui/user-menu";
 
 export default function Topbar() {
   return (
@@ -16,7 +16,7 @@ export default function Topbar() {
       </div>
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <AuthButtons />
+        <UserMenu />
       </div>
     </div>
   );

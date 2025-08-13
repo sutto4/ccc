@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { PropsWithChildren } from "react";
 import { notFound, redirect } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -10,7 +9,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { fetchGuilds, fetchFeatures } from "@/lib/api";
+import { fetchGuilds } from "@/lib/api";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -27,20 +26,6 @@ export default async function GuildLayout(
   const guilds = await fetchGuilds(session.accessToken as any);
   const guild = guilds.find((g) => g.id === id);
   if (!guild) return notFound();
-
-  let customGroupsEnabled = false;
-  try {
-    const fx = await fetchFeatures(guild.id);
-    customGroupsEnabled = Boolean(fx?.features?.custom_groups);
-  } catch {
-    customGroupsEnabled = false;
-  }
-
-  const tabs = [
-    { href: `/guilds/${guild.id}/users`, label: "Users" },
-    { href: `/guilds/${guild.id}/roles`, label: "Roles" },
-    ...(customGroupsEnabled ? [{ href: `/guilds/${guild.id}/members`, label: "Members" }] : []),
-  ];
 
   return (
     <div className="mx-auto max-w-7xl px-4 md:px-6 py-6">
@@ -62,18 +47,6 @@ export default async function GuildLayout(
           <h1 className="text-2xl md:text-3xl font-bold truncate">{guild.name}</h1>
           <p className="text-muted-foreground text-sm">Guild ID: {guild.id}</p>
         </div>
-      </div>
-
-      <div className="mt-6">
-        <Tabs defaultValue="users" className="w-full">
-          <TabsList className="w-full justify-start">
-            {tabs.map((t) => (
-              <TabsTrigger key={t.href} value={t.label.toLowerCase()} asChild>
-                <Link href={t.href}>{t.label}</Link>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
       </div>
 
       <div className="mt-6">{props.children}</div>

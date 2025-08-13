@@ -36,12 +36,6 @@ export default async function Page() {
     <div className="mx-auto max-w-7xl px-4 md:px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-        <div className="text-sm text-muted-foreground">
-          Signed in as{" "}
-          <span className="font-mono">
-            {session.user?.name || session.user?.email}
-          </span>
-        </div>
       </div>
 
       <Section title="Your Guilds">
@@ -75,9 +69,7 @@ export default async function Page() {
                   </div>
                   <div className="min-w-0">
                     <div className="font-semibold truncate">{g.name}</div>
-                    <div className="text-xs text-muted-foreground break-words">
-                      ID: {g.id}
-                    </div>
+                    <div className="text-xs text-muted-foreground break-words">ID: {g.id}</div>
                   </div>
                   {premium && (
                     <span className="ml-auto text-[10px] uppercase tracking-wide rounded-full border px-2 py-0.5">
@@ -98,9 +90,7 @@ export default async function Page() {
                 </div>
 
                 <div className="mt-4 text-xs text-muted-foreground">
-                  {g.createdAt
-                    ? `Created ${new Date(g.createdAt).toLocaleDateString()}`
-                    : "Creation date unknown"}
+                  {g.createdAt ? `Created ${new Date(g.createdAt).toLocaleDateString()}` : "Creation date unknown"}
                 </div>
               </Link>
             );
