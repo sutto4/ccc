@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Dialog } from "@headlessui/react";
 import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
 import {
@@ -224,6 +225,68 @@ export default function MembersPage() {
                     {m.rolesExpanded ? 'Show less' : `+${m.roleIds.length - 3} more`}
                   </button>
                 )}
+                {/* Add Role button (only here, not bold) */}
+                <button
+                  className="ml-2 text-xs rounded-full border px-2 py-0.5 hover:bg-muted"
+                  onClick={() => setAddingFor(m.discordUserId)}
+                  title="Add role"
+                >
+                  ＋ Add Role
+                </button>
+                {addingFor === m.discordUserId && (
+                  <Dialog open={true} onClose={() => { setAddingFor(null); setSelectedRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
+                    <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setAddingFor(null); setSelectedRole(""); }} />
+                    <div
+                      className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
+                      style={{
+                        background: 'rgba(255,255,255,0.35)',
+                        color: '#111827',
+                        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
+                      }}
+                    >
+                      <Dialog.Title className="text-lg font-semibold mb-2">Add role to user</Dialog.Title>
+                      <input
+                        type="text"
+                        className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
+                        placeholder="Search roles..."
+                        value={selectedRole ? roles.find(r => r.roleId === selectedRole)?.name || '' : ''}
+                        onChange={e => {
+                          // Find first matching role
+                          const val = e.target.value.toLowerCase();
+                          const found = availableRolesFor(m).find(r => r.name.toLowerCase().includes(val));
+                          setSelectedRole(found ? found.roleId : "");
+                        }}
+                        autoFocus
+                      />
+                      <div className="max-h-60 overflow-y-auto mb-3">
+                        {availableRolesFor(m).map(r => (
+                          <div
+                            key={r.roleId}
+                            className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selectedRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                            onClick={() => setSelectedRole(r.roleId)}
+                          >
+                            <span className="truncate text-xs font-medium text-black">{r.name}</span>
+                            <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
+                          </div>
+                        ))}
+                        {availableRolesFor(m).length === 0 && (
+                          <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
+                          disabled={!selectedRole}
+                          onClick={onAdd}
+                        >Add</button>
+                        <button
+                          className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
+                          onClick={() => { setAddingFor(null); setSelectedRole(""); }}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  </Dialog>
+                )}
               </div>
             </div>
             {/* Divider */}
@@ -254,46 +317,6 @@ export default function MembersPage() {
                 </button>
               )}
             </div>
-            <button
-              className="mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs hover:bg-muted"
-              onClick={() => setAddingFor(m.discordUserId)}
-              title="Add role"
-            >
-              ＋ Add Role
-            </button>
-            {addingFor === m.discordUserId && (
-              <div className="mt-2 flex flex-col items-center gap-2 w-full">
-                <select
-                  className="rounded-md border bg-background px-2 py-1 text-xs w-full"
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                >
-                  <option value="">Select role…</option>
-                  {availableRolesFor(m).map((r) => (
-                    <option key={r.roleId} value={r.roleId}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex gap-2 w-full">
-                  <button
-                    className="rounded-md border px-2 py-1 text-xs hover:bg-muted flex-1"
-                    onClick={onAdd}
-                  >
-                    Add
-                  </button>
-                  <button
-                    className="rounded-md border px-2 py-1 text-xs hover:bg-muted flex-1"
-                    onClick={() => {
-                      setAddingFor(null);
-                      setSelectedRole("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ))}
         {!loading && filteredMembers.length === 0 && (
