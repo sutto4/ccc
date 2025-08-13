@@ -24,9 +24,10 @@ export default function ThemeToggle() {
 
   return (
     <button
+      type="button"
       aria-label="Toggle dark mode"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-muted"
+      className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground bg-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
+      disabled
     >
       {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>

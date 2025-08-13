@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@auth/core": "latest",
+    "@headlessui/react": "^2.2.7",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",

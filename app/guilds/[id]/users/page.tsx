@@ -76,7 +76,8 @@ export default function UsersPage() {
     let filtered = members;
     if (search) {
       filtered = filtered.filter((u) =>
-        u.username.toLowerCase().includes(search.toLowerCase())
+        u.username.toLowerCase().includes(search.toLowerCase()) ||
+        (u.discordUserId && u.discordUserId.toLowerCase().includes(search.toLowerCase()))
       );
     }
     if (roleFilter) {
@@ -159,7 +160,7 @@ export default function UsersPage() {
         <input
           type="text"
           className="w-full max-w-xs rounded-md border px-2 py-1 text-xs bg-background"
-          placeholder="Search users…"
+          placeholder="Search users by name or Discord ID…"
           value={search}
           onChange={e => {
             setSearch(e.target.value);
