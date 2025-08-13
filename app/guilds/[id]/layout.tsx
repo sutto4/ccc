@@ -10,7 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { fetchGuilds } from "@/lib/api";
+import { fetchGuilds, fetchFeatures } from "@/lib/api";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -20,22 +20,26 @@ export default async function GuildLayout(
   props: PropsWithChildren<{ params: Promise<Params> }>
 ) {
   const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/signin");
-  }
+  if (!session) redirect("/signin");
 
-  // Next 15 wants params awaited
   const { id } = await props.params;
 
   const guilds = await fetchGuilds(session.accessToken as any);
   const guild = guilds.find((g) => g.id === id);
   if (!guild) return notFound();
 
+  let customGroupsEnabled = false;
+  try {
+    const fx = await fetchFeatures(guild.id);
+    customGroupsEnabled = Boolean(fx?.features?.custom_groups);
+  } catch {
+    customGroupsEnabled = false;
+  }
+
   const tabs = [
     { href: `/guilds/${guild.id}/users`, label: "Users" },
     { href: `/guilds/${guild.id}/roles`, label: "Roles" },
-    // add this back if you want it visible here:
-    // { href: `/guilds/${guild.id}/members`, label: "Members" },
+    ...(customGroupsEnabled ? [{ href: `/guilds/${guild.id}/members`, label: "Members" }] : []),
   ];
 
   return (

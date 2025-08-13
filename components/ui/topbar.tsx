@@ -14,7 +14,6 @@ export default function Topbar() {
           className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-8 py-2 text-sm outline-none ring-0 focus:border-[hsl(var(--primary))]"
         />
       </div>
-
       <div className="flex items-center gap-2">
         <ThemeToggle />
         <AuthButtons />
