@@ -3,46 +3,52 @@ import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchGuilds, type Guild } from "@/lib/api";
+import Section from "@/components/ui/section";
 
 export default async function Page() {
   const session = await getServerSession(authOptions);
-  const guilds: Guild[] = session ? await fetchGuilds(session.accessToken) : [];
+  const guilds: Guild[] = session ? await fetchGuilds(session.accessToken as any) : [];
 
   if (!session) {
     return (
-      <main className="min-h-[100dvh] bg-background">
-        <div className="mx-auto max-w-6xl px-4 md:px-6 py-12">
-          <h1 className="text-2xl md:text-3xl font-bold">Welcome</h1>
-          <p className="text-muted-foreground mt-2">
-            You need to sign in to see your guilds.
-          </p>
-          <div className="mt-6">
-            <Link
-              className="inline-flex items-center rounded-md border px-4 py-2 text-sm"
-              href="/signin"
-            >
-              Sign in
-            </Link>
+      <div className="mx-auto max-w-7xl px-4 md:px-6 py-10">
+        <Section title="Welcome">
+          <div className="space-y-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Welcome</h1>
+            <p className="text-muted-foreground">
+              You need to sign in to see your guilds.
+            </p>
+            <div>
+              <Link
+                className="inline-flex items-center rounded-md border px-4 py-2 text-sm"
+                href="/signin"
+              >
+                Sign in
+              </Link>
+            </div>
           </div>
-        </div>
-      </main>
+        </Section>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-[100dvh] bg-background">
-      <div className="mx-auto max-w-6xl px-4 md:px-6 py-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-          <div className="text-sm text-muted-foreground">
-            Signed in as <span className="font-mono">{session.user?.name || session.user?.email}</span>
-          </div>
+    <div className="mx-auto max-w-7xl px-4 md:px-6 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+        <div className="text-sm text-muted-foreground">
+          Signed in as{" "}
+          <span className="font-mono">
+            {session.user?.name || session.user?.email}
+          </span>
         </div>
+      </div>
 
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Section title="Your Guilds">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {guilds.map((g) => {
             const memberCount = (g.memberCount ?? 0).toLocaleString();
-            const roleCount = g.roleCount ?? 0; // fixed
+            const roleCount = g.roleCount ?? 0;
             const premium = Boolean(g.premium);
             const iconUrl = g.iconUrl;
 
@@ -50,7 +56,7 @@ export default async function Page() {
               <Link
                 key={g.id}
                 href={`/guilds/${g.id}/users`}
-                className="group rounded-xl border p-4 hover:shadow-sm transition-shadow"
+                className="group rounded-xl border p-4 hover:shadow-sm transition-shadow bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))]"
               >
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
@@ -69,7 +75,9 @@ export default async function Page() {
                   </div>
                   <div className="min-w-0">
                     <div className="font-semibold truncate">{g.name}</div>
-                    <div className="text-xs text-muted-foreground break-words">ID: {g.id}</div>
+                    <div className="text-xs text-muted-foreground break-words">
+                      ID: {g.id}
+                    </div>
                   </div>
                   {premium && (
                     <span className="ml-auto text-[10px] uppercase tracking-wide rounded-full border px-2 py-0.5">
@@ -90,7 +98,9 @@ export default async function Page() {
                 </div>
 
                 <div className="mt-4 text-xs text-muted-foreground">
-                  {g.createdAt ? `Created ${new Date(g.createdAt).toLocaleDateString()}` : "Creation date unknown"}
+                  {g.createdAt
+                    ? `Created ${new Date(g.createdAt).toLocaleDateString()}`
+                    : "Creation date unknown"}
                 </div>
               </Link>
             );
@@ -102,7 +112,7 @@ export default async function Page() {
             No guilds found for your account.
           </div>
         )}
-      </div>
-    </main>
+      </Section>
+    </div>
   );
 }
