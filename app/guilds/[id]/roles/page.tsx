@@ -9,14 +9,11 @@ import {
   type Role,
 } from "@/lib/api";
 import RoleExplorer from "@/components/role-explorer";
+import RoleKanbanWrapper from "@/components/role-kanban-wrapper";
 
 type Params = { id: string };
 
-export default async function RolesPage({
-  params,
-}: {
-  params: Promise<Params>;
-}) {
+export default async function RolesPage({ params }: { params: Promise<Params> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin");
 
@@ -28,9 +25,7 @@ export default async function RolesPage({
 
   const roles = await fetchRoles(guildId);
 
-  // Client-side state for expanded role and search
-  // (This is a hybrid page, so we use a client component for interactivity)
-  // We'll use a simple search and expand/collapse for each role
+
   return (
     <Section
       title={`Roles — ${guild.name}`}
@@ -40,9 +35,11 @@ export default async function RolesPage({
         </div>
       }
     >
-      <RoleExplorer guildId={guildId} roles={roles} />
+      <div>
+        <h2 className="font-semibold text-lg mb-2">Kanban Role Management (Experimental)</h2>
+  <RoleKanbanWrapper guildId={guildId} roles={roles} />
+      </div>
     </Section>
   );
-
 }
 

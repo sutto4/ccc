@@ -27,6 +27,7 @@ export type Member = {
   roleIds: string[]
   accountid?: string | null
   groups?: string[]
+  avatarUrl?: string | null
 }
 
 export type Features = {
@@ -65,12 +66,12 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
   })
   if (!res.ok) {
-     let msg = `${res.status} ${res.statusText}`
-     try {
-       const data = await res.json()
-       if (data?.error) msg = data.error
-     } catch {}
-     throw new Error(msg)
+    let msg = `${res.status} ${res.statusText}`
+    try {
+      const data = await res.json()
+      if (data?.error) msg = data.error
+    } catch {}
+    throw new Error(msg)
   }
   return res.json() as Promise<T>
 }

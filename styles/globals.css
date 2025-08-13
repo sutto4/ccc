@@ -1,3 +1,7 @@
+/* Force .bg-white to always be white in light mode, even if overridden elsewhere */
+.bg-white {
+  background-color: #fff !important;
+}
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
