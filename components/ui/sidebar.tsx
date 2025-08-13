@@ -90,7 +90,7 @@ export default function Sidebar() {
             disabled={!guildId}
           />
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/custom-groups` : "#"}
+            href={guildId ? `/guilds/${guildId}/members` : "#"}
             label="Custom Groups"
             rightIcon={<Crown className="h-3.5 w-3.5" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
