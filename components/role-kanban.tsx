@@ -78,45 +78,51 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   // Users not in this role (for add user modal)
   const usersNotInRole = (roleId: string) => members.filter((m) => !m.roleIds.includes(roleId));
 
-  // For DnD: columns = ["noRole", ...selectedRoleIds]
-  const columns = ["noRole", ...selectedRoleIds];
-  const getColumnUsers = (col: string) =>
-    col === "noRole" ? noRole : roleMap[col] || [];
+  // For DnD: columns = ["noRole", ...selectedRoleIds], sorted by role position
+  const roleIdToPosition: Record<string, number> = {};
+  roles.forEach(r => { roleIdToPosition[r.roleId] = r.position ?? 0; });
+  // Only include columns for roles that exist in the current roles list
+  const validRoleSet = new Set(roles.map(r => r.roleId));
+  const sortedRoleIds = [...selectedRoleIds].filter(id => validRoleSet.has(id)).sort((a, b) => (roleIdToPosition[b] ?? 0) - (roleIdToPosition[a] ?? 0));
+  const columns = ["noRole", ...sortedRoleIds];
+  // For DnD, each user-role instance must be unique
+  const getColumnUserInstances = (col: string) => {
+    if (col === "noRole") {
+      // Users with no roles at all
+      return noRole.map(u => ({ user: u, roleId: null }));
+    }
+    // Users in this role (may also be in other roles)
+    return (roleMap[col] || []).map(u => ({ user: u, roleId: col }));
+  };
 
-  function onDragEnd(result: DropResult) {
+  async function onDragEnd(result: DropResult) {
     if (!result.destination) return;
     const { draggableId, source, destination } = result;
     if (source.droppableId === destination.droppableId) return;
-    const user = members.find((m: any) => m.discordUserId === draggableId);
+    // draggableId is now userId:roleId (or userId:null for noRole)
+    const [userId, fromRoleIdRaw] = draggableId.split(":");
+    const user = members.find((m: any) => m.discordUserId === userId);
     if (!user) return;
-    const fromRole = source.droppableId === "noRole" ? null : source.droppableId;
+    const fromRole = fromRoleIdRaw === "null" ? null : fromRoleIdRaw;
     const toRole = destination.droppableId === "noRole" ? null : destination.droppableId;
     const validRoleIds = roles.map(r => r.roleId);
-    // Only allow valid roles
     if ((fromRole && !validRoleIds.includes(fromRole)) || (toRole && !validRoleIds.includes(toRole))) {
-      alert('Unknown Role: One of the roles involved in this operation does not exist. Please refresh the page.');
+      alert('Unknown Role: One of the roles involved in this operation does not exist. The list will now refresh.');
+      fetchRoles(guildId).then(setRoles);
+      fetchMembersLegacy(guildId).then(setMembers);
       return;
     }
     const actor = (session?.user as any)?.id || undefined;
-    if (fromRole && actor) {
-      removeRole(guildId, user.discordUserId, fromRole, actor);
+    // Remove from old role only if user has it and fromRole is not null
+    if (fromRole && actor && user.roleIds.includes(fromRole)) {
+      await removeRole(guildId, user.discordUserId, fromRole, actor);
     }
-    if (toRole && actor) {
-      addRole(guildId, user.discordUserId, toRole, actor);
+    // Add to new role only if user doesn't already have it and toRole is not null
+    if (toRole && actor && !user.roleIds.includes(toRole)) {
+      await addRole(guildId, user.discordUserId, toRole, actor);
     }
-    setMembers((prev: any[]) =>
-      prev.map((m) =>
-        m.discordUserId === user.discordUserId
-          ? {
-              ...m,
-              roleIds: [
-                ...m.roleIds.filter((rid: string) => rid !== fromRole),
-                ...(toRole ? [toRole] : [])
-              ]
-            }
-          : m
-      )
-    );
+    fetchRoles(guildId).then(setRoles);
+    fetchMembersLegacy(guildId).then(setMembers);
   }
 
   return (
@@ -217,8 +223,8 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                       {col === "noRole" ? "No Role" : roles.find((r) => r.roleId === col)?.name}
                     </div>
                     <div className="space-y-2 min-h-[40px]">
-                      {getColumnUsers(col).map((u, idx) => (
-                        <Draggable draggableId={u.discordUserId} index={idx} key={u.discordUserId}>
+                      {getColumnUserInstances(col).map(({ user, roleId }, idx) => (
+                        <Draggable draggableId={`${user.discordUserId}:${roleId ?? "null"}`} index={idx} key={`${user.discordUserId}:${roleId ?? "null"}`}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
@@ -233,13 +239,13 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                               >
                                 <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><circle cx="4" cy="5" r="1.2" fill="currentColor"/><circle cx="4" cy="8" r="1.2" fill="currentColor"/><circle cx="4" cy="11" r="1.2" fill="currentColor"/><circle cx="8" cy="5" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="11" r="1.2" fill="currentColor"/></svg>
                               </span>
-                              <img src={u.avatarUrl} alt={u.username} className="w-7 h-7 rounded-full border bg-muted object-cover" />
-                              <span className="truncate text-xs font-medium">{u.username}</span>
+                              <img src={user.avatarUrl} alt={user.username} className="w-7 h-7 rounded-full border bg-muted object-cover" />
+                              <span className="truncate text-xs font-medium">{user.username}</span>
                             </div>
                           )}
                         </Draggable>
                       ))}
-                      {getColumnUsers(col).length === 0 && <div className="text-xs text-muted-foreground">None</div>}
+                      {getColumnUserInstances(col).length === 0 && <div className="text-xs text-muted-foreground">None</div>}
                       {provided.placeholder}
                     </div>
                     {/* Add user button (not for 'noRole' column) */}

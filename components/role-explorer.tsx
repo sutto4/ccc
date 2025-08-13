@@ -6,9 +6,12 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [userCounts, setUserCounts] = useState<{ [roleId: string]: number }>({});
-  const filteredRoles = (roles || []).filter((r) =>
-    r.name.toLowerCase().includes(search.toLowerCase()) || r.roleId.includes(search)
-  );
+  // Sort roles by position (descending, like Discord)
+  const filteredRoles = (roles || [])
+    .filter((r) =>
+      r.name.toLowerCase().includes(search.toLowerCase()) || r.roleId.includes(search)
+    )
+    .sort((a, b) => (b.position ?? 0) - (a.position ?? 0));
 
   // Fetch user count for a role when expanded
   useEffect(() => {
@@ -50,7 +53,7 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
                       {userCounts[r.roleId] !== undefined ? `· ${userCounts[r.roleId]} user${userCounts[r.roleId] !== 1 ? 's' : ''}` : ''}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground font-mono truncate">{r.roleId}</div>
+                  <div className="text-xs text-muted-foreground font-mono truncate text-left pl-0 mt-0.5">{r.roleId}</div>
                 </div>
                 <span className={`ml-2 text-lg transition-transform ${expanded === r.roleId ? 'rotate-180' : ''}`}>▼</span>
               </div>

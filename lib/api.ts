@@ -65,15 +65,21 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     },
     cache: 'no-store',
   })
+  const text = await res.text();
   if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`
+    let msg = `${res.status} ${res.statusText}`;
     try {
-      const data = await res.json()
-      if (data?.error) msg = data.error
+      const data = JSON.parse(text, (_key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      );
+      if (data?.error) msg = data.error;
     } catch {}
-    throw new Error(msg)
+    throw new Error(msg);
   }
-  return res.json() as Promise<T>
+  // Custom JSON parse to handle BigInt values as strings
+  return JSON.parse(text, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  ) as T;
 }
 
 // API functions
