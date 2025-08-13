@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Server, Settings } from "lucide-react";
-import Image from "next/image";
 
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
@@ -17,15 +16,10 @@ export default function Sidebar() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Brand */}
-      <div className="flex h-14 items-center gap-2 px-4">
-        <div className="relative h-6 w-6 overflow-hidden rounded">
-          <Image alt="DSM" src="/favicon.ico" fill />
-        </div>
+      <div className="flex h-14 items-center px-4">
         <span className="font-semibold tracking-tight">Discord Server Manager</span>
       </div>
 
-      {/* Nav */}
       <nav className="mt-2 flex-1 space-y-1 px-2">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -47,7 +41,6 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer / Settings */}
       <div className="border-t border-[hsl(var(--sidebar-border))] p-2">
         <Link
           href="/settings"

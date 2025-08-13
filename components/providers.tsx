@@ -2,9 +2,9 @@
 
 import { type PropsWithChildren, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "@/components/ui/toaster";
 
 export default function Providers({ children }: PropsWithChildren) {
   const [client] = useState(() => new QueryClient());
