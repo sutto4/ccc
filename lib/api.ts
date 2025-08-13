@@ -65,21 +65,27 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     },
     cache: 'no-store',
   })
-  const text = await res.text();
+  let text = await res.text();
+  // Pre-process: Replace all unquoted BigInt literals (e.g., 12345678901234567890n) with quoted strings before parsing
+  // Handles both top-level and nested BigInts
+  text = text.replace(/([:\[\s,])(\d{15,})n(?=[,\]\s}])/g, '$1"$2"');
+  let parsed: any;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    if (!res.ok) {
+      let msg = `${res.status} ${res.statusText}`;
+      msg = text;
+      throw new Error(msg);
+    }
+    throw e;
+  }
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
-    try {
-      const data = JSON.parse(text, (_key, value) =>
-        typeof value === 'bigint' ? value.toString() : value
-      );
-      if (data?.error) msg = data.error;
-    } catch {}
+    if (parsed?.error) msg = parsed.error;
     throw new Error(msg);
   }
-  // Custom JSON parse to handle BigInt values as strings
-  return JSON.parse(text, (_key, value) =>
-    typeof value === 'bigint' ? value.toString() : value
-  ) as T;
+  return parsed as T;
 }
 
 // API functions

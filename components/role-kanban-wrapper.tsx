@@ -22,14 +22,14 @@ export default function RoleKanbanWrapper({ guildId, roles = [] }: { guildId: st
           className={`px-4 py-2 rounded font-medium border transition-colors ${view === 'class' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
           onClick={() => setView('class')}
         >
-          Class Role Explorer
+          Role Explorer
         </button>
       </div>
       {view === 'kanban' ? (
         <RoleKanban guildId={guildId} />
       ) : (
         <>
-          <h2 className="text-xl font-semibold mb-4">Classic Role Explorer</h2>
+          <h2 className="text-xl font-semibold mb-4">Role Explorer</h2>
           <RoleExplorer guildId={guildId} roles={roles || []} />
         </>
       )}

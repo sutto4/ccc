@@ -18,14 +18,16 @@ export default function RoleUsersList({ guildId, roleId }: { guildId: string; ro
 	const [adding, setAdding] = useState(false);
 	const { data: session } = useSession();
 
-		useEffect(() => {
-			setLoading(true);
-			fetchMembersPaged(guildId, { role: roleId, q: search, limit: 50 })
-				.then((res) => setUsers(res.members || []))
-				.finally(() => setLoading(false));
-			// Fetch all members for add modal (like Kanban)
-			fetchMembersLegacy(guildId).then(setAllMembers);
-		}, [guildId, roleId, search]);
+			useEffect(() => {
+				setLoading(true);
+				// Fetch all members, then filter client-side for users in the role (like Kanban)
+				fetchMembersLegacy(guildId)
+					.then((members) => {
+						setAllMembers(members);
+						setUsers(members.filter((m) => m.roleIds.includes(roleId) && (search === "" || m.username.toLowerCase().includes(search.toLowerCase()))));
+					})
+					.finally(() => setLoading(false));
+			}, [guildId, roleId, search]);
 
 			useEffect(() => {
 				if (!addModalOpen) {
