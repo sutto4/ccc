@@ -1,5 +1,25 @@
 "use client";
-
+// CollapsibleSection component
+function CollapsibleSection({ title, defaultOpen = true, children }: { title: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className="mb-2">
+      <button
+        className="w-full text-left font-bold px-3 py-2 rounded-md flex items-center justify-between bg-transparent hover:bg-[hsl(var(--sidebar-hover))]"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span>{title}</span>
+        <span className="ml-2">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="pl-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,7 +31,7 @@ type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
 const TOP: Item[] = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/guilds", label: "Guilds", icon: Server },
+  { href: "/guilds", label: "My Servers", icon: Server },
 ];
 
 export default function Sidebar() {
@@ -71,100 +91,92 @@ export default function Sidebar() {
           );
         })}
 
-        {/* Dummy nav items */}
-        <NavLeaf
-          href="#"
-          label="Embeded Message"
-          rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-          title="Premium feature"
-        />
-        <NavLeaf
-          href="#"
-          label="Reaction Roles"
-          rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-          title="Premium feature"
-        />
-        {/* Custom Commands with subnav */}
-        <div>
+        {/* Community section (collapsible) */}
+        <CollapsibleSection title={<span className="font-bold">Community</span>} defaultOpen>
+          <NavLeaf
+            href="/community/users"
+            label="Users"
+            active={pathname.startsWith("/community/users")}
+          />
+          <NavLeaf
+            href="/community/roles"
+            label="Roles"
+            active={pathname.startsWith("/community/roles")}
+          />
+          <NavLeaf
+            href="/community/custom-groups"
+            label="Custom Groups"
+            rightIcon={<Crown className="h-3.5 w-3.5" />}
+            active={pathname.startsWith("/community/custom-groups")}
+            disabled={customGroupsEnabled === false}
+            title={customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups"}
+          />
+        </CollapsibleSection>
+
+        {/* FiveM Frameworks (premium, collapsible) */}
+        <CollapsibleSection title={<span className="font-bold">FiveM <Crown className="h-3.5 w-3.5 text-yellow-400 inline ml-1" /></span>} defaultOpen>
+          <NavLeaf
+            href="/community/esx"
+            label={<span className="flex items-center gap-2">ESX <span className="inline ml-2" style={{width: '16px', height: '16px'}}>{/* ESX SVG */}<svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><circle cx="16" cy="16" r="16" fill="#4A90E2"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#fff" fontFamily="Arial" fontWeight="bold">E</text></svg></span></span>}
+            active={pathname.startsWith("/community/esx")}
+            title="ESX Framework"
+          />
+          <NavLeaf
+            href="/community/qbcore"
+            label={<span className="flex items-center gap-2">QBcore <span className="inline ml-2" style={{width: '16px', height: '16px'}}>{/* QBcore SVG */}<svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><rect width="32" height="32" rx="8" fill="#7ED957"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#222" fontFamily="Arial" fontWeight="bold">Q</text></svg></span></span>}
+            active={pathname.startsWith("/community/qbcore")}
+            title="QBcore Framework"
+          />
+        </CollapsibleSection>
+
+        {/* Dummy nav items (collapsible) */}
+  {/* Custom Commands moved to Tools below */}
+        <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
+          <NavLeaf
+            href="#"
+            label="Embeded Messages"
+            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            title="Premium feature"
+          />
+          <NavLeaf
+            href="#"
+            label="Reaction Roles"
+            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            title="Premium feature"
+          />
           <NavLeaf
             href="#"
             label="Custom Commands"
             rightIcon={<Shield className="h-3.5 w-3.5 text-green-500" />}
             title="Free feature"
           />
-          <div className="ml-6 mt-1">
-            <NavLeaf
-              href="#"
-              label="Prefix"
-              title="Prefix for custom commands"
-            />
-          </div>
-        </div>
+        </CollapsibleSection>
 
-        {/* Socials (premium) */}
-        <div className="mt-2">
+        {/* Socials (premium, collapsible) */}
+        <CollapsibleSection title={<span className="font-bold">Creator Alerts <Crown className="h-3.5 w-3.5 text-yellow-400 inline ml-1" /></span>} defaultOpen>
           <NavLeaf
             href="#"
-            label="Socials"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            title="Premium feature"
+            label={<span className="flex items-center justify-between w-full"><span>Twitch</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><path d="M4.5 2.5L2.5 4.5V11.5L4.5 13.5H11.5L13.5 11.5V4.5L11.5 2.5H4.5Z" stroke="#9146FF" strokeWidth="1.5"/><path d="M5.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M8 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M10.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/></svg></span>}
+            title="Twitch"
           />
-          <div className="ml-6 mt-1 space-y-1">
-            <NavLeaf
-              href="#"
-              label={<span className="flex items-center justify-between w-full"><span>Twitch</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><path d="M4.5 2.5L2.5 4.5V11.5L4.5 13.5H11.5L13.5 11.5V4.5L11.5 2.5H4.5Z" stroke="#9146FF" strokeWidth="1.5"/><path d="M5.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M8 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M10.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/></svg></span>}
-              title="Twitch"
-            />
-            <NavLeaf
-              href="#"
-              label={<span className="flex items-center justify-between w-full"><span>Youtube</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#FF0000"/><polygon points="6,5 11,8 6,11" fill="white"/></svg></span>}
-              title="Youtube"
-            />
-            <NavLeaf
-              href="#"
-              label={<span className="flex items-center justify-between w-full"><span>X</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#000"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="white">X</text></svg></span>}
-              title="X"
-            />
-            <NavLeaf
-              href="#"
-              label={<span className="flex items-center justify-between w-full"><span>Tiktok</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><circle cx="8" cy="8" r="8" fill="#010101"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="#fff">TikTok</text></svg></span>}
-              title="Tiktok"
-            />
-          </div>
-        </div>
+          <NavLeaf
+            href="#"
+            label={<span className="flex items-center justify-between w-full"><span>Youtube</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#FF0000"/><polygon points="6,5 11,8 6,11" fill="white"/></svg></span>}
+            title="Youtube"
+          />
+          <NavLeaf
+            href="#"
+            label={<span className="flex items-center justify-between w-full"><span>X</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#000"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="white">X</text></svg></span>}
+            title="X"
+          />
+          <NavLeaf
+            href="#"
+            label={<span className="flex items-center justify-between w-full"><span>Tiktok</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><circle cx="8" cy="8" r="8" fill="#010101"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="#fff">TikTok</text></svg></span>}
+            title="Tiktok"
+          />
+        </CollapsibleSection>
       </nav>
 
-      {/* Contextual subnav for a specific guild */}
-        {inGuild && guildId && (
-          <div className="mt-4 px-2">
-            <div className="px-3 pb-1 text-xs uppercase tracking-wide text-[hsl(var(--sidebar-foreground-muted))]">
-              Guild
-            </div>
-            <div className="space-y-1">
-              {/* Users */}
-              <NavLeaf
-                href={`/guilds/${guildId}/users`}
-                label="Users"
-                active={pathname.startsWith(`/guilds/${guildId}/users`)}
-              />
-              {/* Roles */}
-              <NavLeaf
-                href={`/guilds/${guildId}/roles`}
-                label="Roles"
-                active={pathname.startsWith(`/guilds/${guildId}/roles`)}
-              />
-              {/* Custom Groups (always shown, disabled if not premium) */}
-              <NavLeaf
-                href={`/guilds/${guildId}/members`}
-                label="Custom Groups"
-                active={pathname.startsWith(`/guilds/${guildId}/members`)}
-                rightIcon={<Crown className="h-3.5 w-3.5" />}
-                disabled={customGroupsEnabled === false}
-                title={customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups"}
-              />
-            </div>
-          </div>
-        )}
 
       {/* Footer / Settings */}
       <div className="mt-auto border-t border-[hsl(var(--sidebar-border))] p-2">
