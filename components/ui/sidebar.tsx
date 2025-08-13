@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Server, Settings, Shield, Crown } from "lucide-react";
@@ -51,15 +52,14 @@ export default function Sidebar() {
       </div>
 
       {/* Top-level nav */}
-      <nav className="mt-2 px-2">
+      <nav className="mt-2 px-2 space-y-1">
         {TOP.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
               href={href}
-              className={[
-                "group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition",
+              className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition",
                 active
                   ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
                   : "text-[hsl(var(--sidebar-foreground-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]",
@@ -70,6 +70,68 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Dummy nav items */}
+        <NavLeaf
+          href="#"
+          label="Embeded Message"
+          rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+          title="Premium feature"
+        />
+        <NavLeaf
+          href="#"
+          label="Reaction Roles"
+          rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+          title="Premium feature"
+        />
+        {/* Custom Commands with subnav */}
+        <div>
+          <NavLeaf
+            href="#"
+            label="Custom Commands"
+            rightIcon={<Shield className="h-3.5 w-3.5 text-green-500" />}
+            title="Free feature"
+          />
+          <div className="ml-6 mt-1">
+            <NavLeaf
+              href="#"
+              label="Prefix"
+              title="Prefix for custom commands"
+            />
+          </div>
+        </div>
+
+        {/* Socials (premium) */}
+        <div className="mt-2">
+          <NavLeaf
+            href="#"
+            label="Socials"
+            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            title="Premium feature"
+          />
+          <div className="ml-6 mt-1 space-y-1">
+            <NavLeaf
+              href="#"
+              label={<span className="flex items-center justify-between w-full"><span>Twitch</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><path d="M4.5 2.5L2.5 4.5V11.5L4.5 13.5H11.5L13.5 11.5V4.5L11.5 2.5H4.5Z" stroke="#9146FF" strokeWidth="1.5"/><path d="M5.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M8 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M10.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/></svg></span>}
+              title="Twitch"
+            />
+            <NavLeaf
+              href="#"
+              label={<span className="flex items-center justify-between w-full"><span>Youtube</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#FF0000"/><polygon points="6,5 11,8 6,11" fill="white"/></svg></span>}
+              title="Youtube"
+            />
+            <NavLeaf
+              href="#"
+              label={<span className="flex items-center justify-between w-full"><span>X</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#000"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="white">X</text></svg></span>}
+              title="X"
+            />
+            <NavLeaf
+              href="#"
+              label={<span className="flex items-center justify-between w-full"><span>Tiktok</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><circle cx="8" cy="8" r="8" fill="#010101"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="#fff">TikTok</text></svg></span>}
+              title="Tiktok"
+            />
+          </div>
+        </div>
       </nav>
 
       {/* Contextual subnav for a specific guild */}
@@ -127,7 +189,7 @@ function NavLeaf({
   title,
 }: {
   href: string;
-  label: string;
+  label: React.ReactNode;
   active?: boolean;
   rightIcon?: React.ReactNode;
   disabled?: boolean;
@@ -138,15 +200,13 @@ function NavLeaf({
   const cls = active
     ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
     : "text-[hsl(var(--sidebar-foreground-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]";
+
   const content = (
     <div className="flex w-full items-center justify-between">
       <div className="truncate">{label}</div>
       {rightIcon && (
         <span
-          className={[
-            "ml-2 inline-flex items-center",
-            active ? "" : "text-[hsl(var(--sidebar-foreground-muted))]",
-          ].join(" ")}
+          className={["ml-2 inline-flex items-center", active ? "" : "text-[hsl(var(--sidebar-foreground-muted))]"].join(" ")}
         >
           {rightIcon}
         </span>
@@ -154,11 +214,14 @@ function NavLeaf({
     </div>
   );
 
+  // Only use string for title prop
+  const titleString = title || (typeof label === "string" ? label : "");
+
   if (disabled) {
     return (
       <div
         className={`${base} ${cls} opacity-60 cursor-not-allowed`}
-        title={title || label}
+        title={titleString}
         aria-disabled="true"
       >
         {content}
@@ -167,7 +230,7 @@ function NavLeaf({
   }
 
   return (
-    <Link href={href} className={`${base} ${cls}`} title={title || label}>
+    <Link href={href} className={`${base} ${cls}`} title={titleString}>
       {content}
     </Link>
   );
