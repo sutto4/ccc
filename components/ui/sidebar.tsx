@@ -93,7 +93,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/custom-groups` : "#"}
             label="Custom Groups"
             rightIcon={<Crown className="h-3.5 w-3.5" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-groups`) : false}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
             disabled={!guildId || customGroupsEnabled === false}
             title={!guildId ? "Select a server first" : (customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups")}
           />
