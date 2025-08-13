@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { RoleChips } from "@/components/ui/role-chips";
+import { GroupChips } from "@/components/ui/group-chips";
+import { UserRolesOnDemand } from "@/components/ui/user-roles-on-demand";
 import { Dialog } from "@headlessui/react";
 import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
@@ -17,6 +20,7 @@ import { useSession } from "next-auth/react";
 type Row = Member & { rolesExpanded?: boolean; groupsExpanded?: boolean; avatarUrl: string };
 
 export default function MembersPage() {
+  const [view, setView] = useState<'card' | 'table'>('card');
   const params = useParams<{ id: string }>();
   const guildId = params.id;
   const { data: session } = useSession();
@@ -124,8 +128,24 @@ export default function MembersPage() {
     <Section
       title="Members"
       right={
-        <div className="text-sm text-muted-foreground">
-          {loading ? "Loading…" : `${members.length.toLocaleString()} members`}
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-muted-foreground">
+            {loading ? "Loading…" : `${members.length.toLocaleString()} members`}
+          </div>
+          <button
+            className={`px-3 py-1 rounded font-medium border text-xs transition-colors ${view === 'card' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+            onClick={() => setView('card')}
+            type="button"
+          >
+            Card View
+          </button>
+          <button
+            className={`px-3 py-1 rounded font-medium border text-xs transition-colors ${view === 'table' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+            onClick={() => setView('table')}
+            type="button"
+          >
+            Table View
+          </button>
         </div>
       }
     >
@@ -167,164 +187,210 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {!loading && filteredMembers.map((m) => (
-          <div key={m.discordUserId} className="bg-card border rounded-xl p-4 flex flex-col items-center shadow-md relative hover:shadow-lg transition-shadow">
-            <img
-              src={m.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"}
-              alt={m.username}
-              width={56}
-              height={56}
-              className="w-14 h-14 rounded-full border bg-muted object-cover mb-2"
-              referrerPolicy="no-referrer"
-            />
-            <div className="font-semibold text-center truncate w-full" title={m.username}>{m.username}</div>
-            <div className="font-mono text-xs text-muted-foreground truncate w-full text-center mb-1" title={m.accountid ?? undefined}>{m.accountid ?? <span className='text-muted-foreground'>—</span>}</div>
-            {/* Discord Roles */}
-            <div className="w-full mb-1">
-              <div className="text-xs font-semibold text-muted-foreground mb-0.5 text-center">Discord Roles</div>
-              <div className="flex flex-wrap items-center gap-1 justify-center">
-                {(m.roleIds.length > 0
-                  ? (m.rolesExpanded ? m.roleIds : m.roleIds.slice(0, 3)).map((rid) => {
-                      const r = roleMap.get(rid);
-                      const name = r?.name ?? "unknown";
-                      const color = r?.color || null;
-                      const uneditable =
-                        rid === guildId || (r as any)?.managed === true || (r as any)?.editableByBot === false;
-                      return (
-                        <span
-                          key={rid}
-                          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-                          style={{
-                            backgroundColor: color ? `${color}20` : undefined,
-                            borderColor: color || undefined,
+      {view === 'card' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {!loading && filteredMembers.map((m) => (
+            // ...existing card view code...
+            <div key={m.discordUserId} className="bg-card border rounded-xl p-4 flex flex-col items-center shadow-md relative hover:shadow-lg transition-shadow">
+              <img
+                src={m.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                alt={m.username}
+                width={56}
+                height={56}
+                className="w-14 h-14 rounded-full border bg-muted object-cover mb-2"
+                referrerPolicy="no-referrer"
+              />
+              <div className="font-semibold text-center truncate w-full" title={m.username}>{m.username}</div>
+              <div className="font-mono text-xs text-muted-foreground truncate w-full text-center mb-1" title={m.accountid ?? undefined}>{m.accountid ?? <span className='text-muted-foreground'>—</span>}</div>
+              {/* Discord Roles */}
+              <div className="w-full mb-1">
+                <div className="text-xs font-semibold text-muted-foreground mb-0.5 text-center">Discord Roles</div>
+                <div className="flex flex-wrap items-center gap-1 justify-center">
+                  {(m.roleIds.length > 0
+                    ? (m.rolesExpanded ? m.roleIds : m.roleIds.slice(0, 3)).map((rid) => {
+                        const r = roleMap.get(rid);
+                        const name = r?.name ?? "unknown";
+                        const color = r?.color || null;
+                        const uneditable =
+                          rid === guildId || (r as any)?.managed === true || (r as any)?.editableByBot === false;
+                        return (
+                          <span
+                            key={rid}
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                            style={{
+                              backgroundColor: color ? `${color}20` : undefined,
+                              borderColor: color || undefined,
+                            }}
+                            title={rid}
+                          >
+                            {name}
+                            {!uneditable && (
+                              <button
+                                onClick={() => onRemove(m.discordUserId, rid)}
+                                className="ml-1 rounded-full border px-1 hover:bg-muted"
+                                aria-label={`Remove ${name}`}
+                                title="Remove role"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })
+                    : <span className="text-xs text-muted-foreground">none</span>
+                  )}
+                  {m.roleIds.length > 3 && (
+                    <button
+                      className="ml-2 text-xs underline text-muted-foreground hover:text-foreground"
+                      onClick={() => setMembers(prev => prev.map(mem => mem.discordUserId === m.discordUserId ? { ...mem, rolesExpanded: !mem.rolesExpanded } : mem))}
+                    >
+                      {m.rolesExpanded ? 'Show less' : `+${m.roleIds.length - 3} more`}
+                    </button>
+                  )}
+                  {/* Add Role button (only here, not bold) */}
+                  <button
+                    className="ml-2 text-xs rounded-full border px-2 py-0.5 hover:bg-muted"
+                    onClick={() => setAddingFor(m.discordUserId)}
+                    title="Add role"
+                  >
+                    ＋ Add Role
+                  </button>
+                  {addingFor === m.discordUserId && (
+                    <Dialog open={true} onClose={() => { setAddingFor(null); setSelectedRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
+                      <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setAddingFor(null); setSelectedRole(""); }} />
+                      <div
+                        className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
+                        style={{
+                          background: 'rgba(255,255,255,0.35)',
+                          color: '#111827',
+                          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
+                        }}
+                      >
+                        <Dialog.Title className="text-lg font-semibold mb-2">Add role to user</Dialog.Title>
+                        <input
+                          type="text"
+                          className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
+                          placeholder="Search roles..."
+                          value={selectedRole ? roles.find(r => r.roleId === selectedRole)?.name || '' : ''}
+                          onChange={e => {
+                            // Find first matching role
+                            const val = e.target.value.toLowerCase();
+                            const found = availableRolesFor(m).find(r => r.name.toLowerCase().includes(val));
+                            setSelectedRole(found ? found.roleId : "");
                           }}
-                          title={rid}
-                        >
-                          {name}
-                          {!uneditable && (
-                            <button
-                              onClick={() => onRemove(m.discordUserId, rid)}
-                              className="ml-1 rounded-full border px-1 hover:bg-muted"
-                              aria-label={`Remove ${name}`}
-                              title="Remove role"
+                          autoFocus
+                        />
+                        <div className="max-h-60 overflow-y-auto mb-3">
+                          {availableRolesFor(m).map(r => (
+                            <div
+                              key={r.roleId}
+                              className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selectedRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                              onClick={() => setSelectedRole(r.roleId)}
                             >
-                              ×
-                            </button>
+                              <span className="truncate text-xs font-medium text-black">{r.name}</span>
+                              <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
+                            </div>
+                          ))}
+                          {availableRolesFor(m).length === 0 && (
+                            <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
                           )}
-                        </span>
-                      );
-                    })
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
+                            disabled={!selectedRole}
+                            onClick={onAdd}
+                          >Add</button>
+                          <button
+                            className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
+                            onClick={() => { setAddingFor(null); setSelectedRole(""); }}
+                          >Cancel</button>
+                        </div>
+                      </div>
+                    </Dialog>
+                  )}
+                </div>
+              </div>
+              {/* Divider */}
+              <div className="w-full flex items-center my-1">
+                <div className="flex-1 border-t border-muted" />
+                <span className="mx-2 text-xs text-muted-foreground">Custom Groups</span>
+                <div className="flex-1 border-t border-muted" />
+              </div>
+              {/* Custom Groups */}
+              <div className="flex flex-wrap items-center gap-1 justify-center w-full mb-1">
+                {((m.groups!.length > 0)
+                  ? (m.groupsExpanded ? m.groups! : m.groups!.slice(0, 3)).map((g) => (
+                      <span
+                        key={g}
+                        className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-foreground border border-muted-foreground/20 max-w-[120px] truncate"
+                      >
+                        {g}
+                      </span>
+                    ))
                   : <span className="text-xs text-muted-foreground">none</span>
                 )}
-                {m.roleIds.length > 3 && (
+                {m.groups!.length > 3 && (
                   <button
                     className="ml-2 text-xs underline text-muted-foreground hover:text-foreground"
-                    onClick={() => setMembers(prev => prev.map(mem => mem.discordUserId === m.discordUserId ? { ...mem, rolesExpanded: !mem.rolesExpanded } : mem))}
+                    onClick={() => setMembers(prev => prev.map(mem => mem.discordUserId === m.discordUserId ? { ...mem, groupsExpanded: !mem.groupsExpanded } : mem))}
                   >
-                    {m.rolesExpanded ? 'Show less' : `+${m.roleIds.length - 3} more`}
+                    {m.groupsExpanded ? 'Show less' : `+${m.groups!.length - 3} more`}
                   </button>
-                )}
-                {/* Add Role button (only here, not bold) */}
-                <button
-                  className="ml-2 text-xs rounded-full border px-2 py-0.5 hover:bg-muted"
-                  onClick={() => setAddingFor(m.discordUserId)}
-                  title="Add role"
-                >
-                  ＋ Add Role
-                </button>
-                {addingFor === m.discordUserId && (
-                  <Dialog open={true} onClose={() => { setAddingFor(null); setSelectedRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
-                    <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setAddingFor(null); setSelectedRole(""); }} />
-                    <div
-                      className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
-                      style={{
-                        background: 'rgba(255,255,255,0.35)',
-                        color: '#111827',
-                        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
-                      }}
-                    >
-                      <Dialog.Title className="text-lg font-semibold mb-2">Add role to user</Dialog.Title>
-                      <input
-                        type="text"
-                        className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
-                        placeholder="Search roles..."
-                        value={selectedRole ? roles.find(r => r.roleId === selectedRole)?.name || '' : ''}
-                        onChange={e => {
-                          // Find first matching role
-                          const val = e.target.value.toLowerCase();
-                          const found = availableRolesFor(m).find(r => r.name.toLowerCase().includes(val));
-                          setSelectedRole(found ? found.roleId : "");
-                        }}
-                        autoFocus
-                      />
-                      <div className="max-h-60 overflow-y-auto mb-3">
-                        {availableRolesFor(m).map(r => (
-                          <div
-                            key={r.roleId}
-                            className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selectedRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                            onClick={() => setSelectedRole(r.roleId)}
-                          >
-                            <span className="truncate text-xs font-medium text-black">{r.name}</span>
-                            <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
-                          </div>
-                        ))}
-                        {availableRolesFor(m).length === 0 && (
-                          <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
-                          disabled={!selectedRole}
-                          onClick={onAdd}
-                        >Add</button>
-                        <button
-                          className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
-                          onClick={() => { setAddingFor(null); setSelectedRole(""); }}
-                        >Cancel</button>
-                      </div>
-                    </div>
-                  </Dialog>
                 )}
               </div>
             </div>
-            {/* Divider */}
-            <div className="w-full flex items-center my-1">
-              <div className="flex-1 border-t border-muted" />
-              <span className="mx-2 text-xs text-muted-foreground">Custom Groups</span>
-              <div className="flex-1 border-t border-muted" />
+          ))}
+          {!loading && filteredMembers.length === 0 && (
+            <div className="py-6 text-muted-foreground col-span-full text-center">
+              No members.
             </div>
-            {/* Custom Groups */}
-            <div className="flex flex-wrap items-center gap-1 justify-center w-full mb-1">
-              {((m.groups!.length > 0)
-                ? (m.groupsExpanded ? m.groups! : m.groups!.slice(0, 3)).map((g) => (
-                    <span
-                      key={g}
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs bg-muted/50"
-                    >
-                      {g}
-                    </span>
-                  ))
-                : <span className="text-xs text-muted-foreground">none</span>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full border rounded-xl bg-card">
+            <thead>
+              <tr className="bg-muted">
+                <th className="px-3 py-2 text-left text-xs font-semibold">Avatar</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold">Username</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold">Account ID</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold">Discord Roles</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold">Custom Groups</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMembers.map((m) => (
+                <tr key={m.discordUserId} className="border-b last:border-0 hover:bg-muted/40">
+                  <td className="px-3 py-2">
+                    <img
+                      src={m.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                      alt={m.username}
+                      width={32}
+                      height={32}
+                      className="w-8 h-8 rounded-full border bg-muted object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-medium">{m.username}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{m.accountid ?? <span className='text-muted-foreground'>—</span>}</td>
+                  <td className="px-3 py-2 text-xs min-w-[160px]">
+                    <RoleChips roleIds={m.roleIds} roleMap={roleMap} max={3} />
+                  </td>
+                  <td className="px-3 py-2 text-xs min-w-[120px]">
+                    <GroupChips groups={m.groups} max={3} />
+                  </td>
+                </tr>
+              ))}
+              {filteredMembers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-sm text-muted-foreground text-center py-4">No members found.</td>
+                </tr>
               )}
-              {m.groups!.length > 3 && (
-                <button
-                  className="ml-2 text-xs underline text-muted-foreground hover:text-foreground"
-                  onClick={() => setMembers(prev => prev.map(mem => mem.discordUserId === m.discordUserId ? { ...mem, groupsExpanded: !mem.groupsExpanded } : mem))}
-                >
-                  {m.groupsExpanded ? 'Show less' : `+${m.groups!.length - 3} more`}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        {!loading && filteredMembers.length === 0 && (
-          <div className="py-6 text-muted-foreground col-span-full text-center">
-            No members.
-          </div>
-        )}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }
