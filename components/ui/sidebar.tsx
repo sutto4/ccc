@@ -37,7 +37,7 @@ const TOP: Item[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [customGroupsEnabled, setCustomGroupsEnabled] = useState<boolean | null>(null);
+  const [features, setFeatures] = useState<Record<string, boolean> | null>(null);
 
   // detect if we're inside a guild route
   const parts = pathname.split("/").filter(Boolean);
@@ -48,16 +48,16 @@ export default function Sidebar() {
     let alive = true;
     (async () => {
       if (!guildId) {
-        setCustomGroupsEnabled(null);
+        setFeatures(null);
         return;
       }
       try {
         const fx: FeaturesResponse = await fetchFeatures(guildId);
         if (!alive) return;
-        setCustomGroupsEnabled(Boolean(fx?.features?.custom_groups));
+        setFeatures(fx?.features || {});
       } catch {
         if (!alive) return;
-        setCustomGroupsEnabled(false);
+        setFeatures({});
       }
     })();
     return () => {
@@ -83,20 +83,23 @@ export default function Sidebar() {
             label="Users"
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/users`) : false}
             disabled={!guildId}
+            guildId={guildId}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/roles` : "#"}
             label="Roles"
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/roles`) : false}
             disabled={!guildId}
+            guildId={guildId}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/members` : "#"}
             label="Custom Groups"
             rightIcon={<Crown className="h-3.5 w-3.5" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
-            disabled={!guildId || customGroupsEnabled === false}
-            title={!guildId ? "Select a server first" : (customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups")}
+            disabled={!guildId || features?.custom_groups === false}
+            title={!guildId ? "Premium feature" : (features?.custom_groups === false ? "Premium feature" : "Custom Groups")}
+            guildId={guildId}
           />
         </CollapsibleSection>
         {/* FiveM Frameworks (premium, collapsible) */}
@@ -122,42 +125,56 @@ export default function Sidebar() {
             href="#"
             label="Embeded Messages"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            title="Premium feature"
+            disabled={!guildId || features?.embeded_messages === false}
+            title={!guildId ? "Premium feature" : (features?.embeded_messages === false ? "Premium feature" : "Embeded Messages")}
+            guildId={guildId}
           />
           <NavLeaf
             href="#"
             label="Reaction Roles"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            title="Premium feature"
+            disabled={!guildId || features?.reaction_roles === false}
+            title={!guildId ? "Premium feature" : (features?.reaction_roles === false ? "Premium feature" : "Reaction Roles")}
+            guildId={guildId}
           />
           <NavLeaf
             href="#"
             label="Custom Commands"
             rightIcon={<Shield className="h-3.5 w-3.5 text-green-500" />}
-            title="Free feature"
+            disabled={!guildId || features?.custom_commands === false}
+            title={!guildId ? "Premium feature" : (features?.custom_commands === false ? "Premium feature" : "Custom Commands")}
+            guildId={guildId}
           />
         </CollapsibleSection>
-        {/* Socials (premium, collapsible) */}
+  {/* Socials (premium, collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Creator Alerts <Crown className="h-3.5 w-3.5 text-yellow-400 inline ml-1" /></span>} defaultOpen>
           <NavLeaf
             href="#"
             label={<span className="flex items-center justify-between w-full"><span>Twitch</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><path d="M4.5 2.5L2.5 4.5V11.5L4.5 13.5H11.5L13.5 11.5V4.5L11.5 2.5H4.5Z" stroke="#9146FF" strokeWidth="1.5"/><path d="M5.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M8 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/><path d="M10.5 6.5V9.5" stroke="#9146FF" strokeWidth="1.5"/></svg></span>}
-            title="Twitch"
+            disabled={!guildId || features?.creator_alerts === false}
+            title={!guildId ? "Premium feature" : (features?.creator_alerts === false ? "Premium feature" : "Twitch")}
+            guildId={guildId}
           />
           <NavLeaf
             href="#"
             label={<span className="flex items-center justify-between w-full"><span>Youtube</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#FF0000"/><polygon points="6,5 11,8 6,11" fill="white"/></svg></span>}
-            title="Youtube"
+            disabled={!guildId || features?.creator_alerts === false}
+            title={!guildId ? "Premium feature" : (features?.creator_alerts === false ? "Premium feature" : "Youtube")}
+            guildId={guildId}
           />
           <NavLeaf
             href="#"
             label={<span className="flex items-center justify-between w-full"><span>X</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><rect width="16" height="16" rx="3" fill="#000"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="white">X</text></svg></span>}
-            title="X"
+            disabled={!guildId || features?.creator_alerts === false}
+            title={!guildId ? "Premium feature" : (features?.creator_alerts === false ? "Premium feature" : "X")}
+            guildId={guildId}
           />
           <NavLeaf
             href="#"
             label={<span className="flex items-center justify-between w-full"><span>Tiktok</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="inline ml-2" style={{filter: 'grayscale(1)'}}><circle cx="8" cy="8" r="8" fill="#010101"/><text x="8" y="11" textAnchor="middle" fontSize="8" fill="#fff">TikTok</text></svg></span>}
-            title="Tiktok"
+            disabled={!guildId || features?.creator_alerts === false}
+            title={!guildId ? "Premium feature" : (features?.creator_alerts === false ? "Premium feature" : "Tiktok")}
+            guildId={guildId}
           />
         </CollapsibleSection>
       </nav>
@@ -175,6 +192,16 @@ export default function Sidebar() {
   );
 }
 
+type NavLeafProps = {
+  href: string;
+  label: React.ReactNode;
+  active?: boolean;
+  rightIcon?: React.ReactNode;
+  disabled?: boolean;
+  title?: string;
+  guildId?: string | null;
+};
+
 function NavLeaf({
   href,
   label,
@@ -182,14 +209,8 @@ function NavLeaf({
   rightIcon,
   disabled,
   title,
-}: {
-  href: string;
-  label: React.ReactNode;
-  active?: boolean;
-  rightIcon?: React.ReactNode;
-  disabled?: boolean;
-  title?: string;
-}) {
+  guildId,
+}: NavLeafProps) {
   const base =
     "group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition";
   const cls = active
@@ -218,6 +239,7 @@ function NavLeaf({
   const isSelectServer = titleString?.toLowerCase().includes("select a server");
   if (disabled) {
     if (isPremium) {
+      // Always allow modal for premium disables, even if no guild is selected
       return (
         <>
           <div
