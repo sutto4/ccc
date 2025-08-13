@@ -65,72 +65,57 @@ export default function Sidebar() {
   }, [guildId]);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Brand */}
-      <div className="flex h-14 items-center px-4">
-        <span className="font-semibold tracking-tight">Discord Server Manager</span>
-      </div>
-
-      {/* Top-level nav */}
-      <nav className="mt-2 px-2 space-y-1">
-        {TOP.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition",
-                active
-                  ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
-                  : "text-[hsl(var(--sidebar-foreground-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]",
-              ].join(" ")}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="truncate">{label}</span>
-            </Link>
-          );
-        })}
-
+    <div className="flex h-full flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-64 min-w-64 max-w-64 border-r border-[hsl(var(--sidebar-border))]">
+      <nav className="flex-1 overflow-y-auto p-2">
+        {TOP.map(({ href, label, icon: Icon }) => (
+          <NavLeaf
+            key={href}
+            href={href}
+            label={<span className="flex items-center gap-2"><Icon className="h-4 w-4" /><span className="truncate">{label}</span></span>}
+            active={pathname === href}
+          />
+        ))}
         {/* Community section (collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Community</span>} defaultOpen>
           <NavLeaf
-            href="/community/users"
+            href={guildId ? `/guilds/${guildId}/users` : "#"}
             label="Users"
-            active={pathname.startsWith("/community/users")}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/users`) : false}
+            disabled={!guildId}
           />
           <NavLeaf
-            href="/community/roles"
+            href={guildId ? `/guilds/${guildId}/roles` : "#"}
             label="Roles"
-            active={pathname.startsWith("/community/roles")}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/roles`) : false}
+            disabled={!guildId}
           />
           <NavLeaf
-            href="/community/custom-groups"
+            href={guildId ? `/guilds/${guildId}/custom-groups` : "#"}
             label="Custom Groups"
             rightIcon={<Crown className="h-3.5 w-3.5" />}
-            active={pathname.startsWith("/community/custom-groups")}
-            disabled={customGroupsEnabled === false}
-            title={customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups"}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-groups`) : false}
+            disabled={!guildId || customGroupsEnabled === false}
+            title={!guildId ? "Select a server first" : (customGroupsEnabled === false ? "Premium feature (not usable)" : "Custom Groups")}
           />
         </CollapsibleSection>
-
         {/* FiveM Frameworks (premium, collapsible) */}
         <CollapsibleSection title={<span className="font-bold">FiveM <Crown className="h-3.5 w-3.5 text-yellow-400 inline ml-1" /></span>} defaultOpen>
           <NavLeaf
-            href="/community/esx"
-            label={<span className="flex items-center gap-2">ESX <span className="inline ml-2" style={{width: '16px', height: '16px'}}>{/* ESX SVG */}<svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><circle cx="16" cy="16" r="16" fill="#4A90E2"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#fff" fontFamily="Arial" fontWeight="bold">E</text></svg></span></span>}
-            active={pathname.startsWith("/community/esx")}
-            title="ESX Framework"
+            href={guildId ? `/guilds/${guildId}/esx` : "#"}
+            label={<span className="flex items-center gap-2">ESX <span className="inline ml-2" style={{width: '16px', height: '16px'}}><svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><circle cx="16" cy="16" r="16" fill="#4A90E2"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#fff" fontFamily="Arial" fontWeight="bold">E</text></svg></span></span>}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/esx`) : false}
+            disabled={!guildId}
+            title={!guildId ? "Select a server first" : "ESX Framework"}
           />
           <NavLeaf
-            href="/community/qbcore"
-            label={<span className="flex items-center gap-2">QBcore <span className="inline ml-2" style={{width: '16px', height: '16px'}}>{/* QBcore SVG */}<svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><rect width="32" height="32" rx="8" fill="#7ED957"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#222" fontFamily="Arial" fontWeight="bold">Q</text></svg></span></span>}
-            active={pathname.startsWith("/community/qbcore")}
-            title="QBcore Framework"
+            href={guildId ? `/guilds/${guildId}/qbcore` : "#"}
+            label={<span className="flex items-center gap-2">QBcore <span className="inline ml-2" style={{width: '16px', height: '16px'}}><svg width="16" height="16" viewBox="0 0 32 32" style={{filter: 'grayscale(1)'}}><rect width="32" height="32" rx="8" fill="#7ED957"/><text x="16" y="22" textAnchor="middle" fontSize="16" fill="#222" fontFamily="Arial" fontWeight="bold">Q</text></svg></span></span>}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/qbcore`) : false}
+            disabled={!guildId}
+            title={!guildId ? "Select a server first" : "QBcore Framework"}
           />
         </CollapsibleSection>
-
         {/* Dummy nav items (collapsible) */}
-  {/* Custom Commands moved to Tools below */}
         <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
           <NavLeaf
             href="#"
@@ -151,7 +136,6 @@ export default function Sidebar() {
             title="Free feature"
           />
         </CollapsibleSection>
-
         {/* Socials (premium, collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Creator Alerts <Crown className="h-3.5 w-3.5 text-yellow-400 inline ml-1" /></span>} defaultOpen>
           <NavLeaf
@@ -176,8 +160,6 @@ export default function Sidebar() {
           />
         </CollapsibleSection>
       </nav>
-
-
       {/* Footer / Settings */}
       <div className="mt-auto border-t border-[hsl(var(--sidebar-border))] p-2">
         <Link
@@ -232,7 +214,7 @@ function NavLeaf({
   if (disabled) {
     return (
       <div
-        className={`${base} ${cls} opacity-60 cursor-not-allowed`}
+        className={`${base} ${cls} opacity-60 cursor-default pointer-events-none`}
         title={titleString}
         aria-disabled="true"
       >
