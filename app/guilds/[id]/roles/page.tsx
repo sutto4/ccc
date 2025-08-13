@@ -2,14 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Section from "@/components/ui/section";
-import {
-  fetchGuilds,
-  fetchRoles,
-  type Guild,
-  type Role,
-} from "@/lib/api";
+import { fetchGuilds, fetchRoles, type Guild, type Role } from "@/lib/api";
 import RoleExplorer from "@/components/role-explorer";
 import RoleKanbanWrapper from "@/components/role-kanban-wrapper";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import dynamic from "next/dynamic";
+import MassRoleAssign from "./mass-role-assign";
 
 type Params = { id: string };
 
@@ -35,10 +33,25 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
         </div>
       }
     >
-      <div>
-        <h2 className="font-semibold text-lg mb-2">Kanban Role Management (Experimental)</h2>
-        <RoleKanbanWrapper guildId={guildId} roles={roles} />
-      </div>
+      <Tabs defaultValue="kanban" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          <TabsTrigger value="explorer">Role Explorer</TabsTrigger>
+          <TabsTrigger value="mass">Mass Role Assign</TabsTrigger>
+        </TabsList>
+        <TabsContent value="kanban">
+          <h2 className="font-semibold text-lg mb-2">Kanban Role Management (Experimental)</h2>
+          <RoleKanbanWrapper guildId={guildId} roles={roles} />
+        </TabsContent>
+        <TabsContent value="explorer">
+          <h2 className="text-xl font-semibold mb-4">Role Explorer</h2>
+          <RoleExplorer guildId={guildId} roles={roles} />
+        </TabsContent>
+        <TabsContent value="mass">
+          <h2 className="text-xl font-semibold mb-4">Mass Role Assign</h2>
+          <MassRoleAssign guildId={guildId} roles={roles} />
+        </TabsContent>
+      </Tabs>
     </Section>
   );
 }

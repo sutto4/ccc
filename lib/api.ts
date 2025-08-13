@@ -80,10 +80,45 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw e;
   }
+  // Recursively convert all BigInts to strings (for all keys, not just ids)
+  function convertBigIntsToStrings(obj: any): any {
+    if (Array.isArray(obj)) return obj.map(convertBigIntsToStrings);
+    if (obj && typeof obj === 'object') {
+      const out: any = {};
+      for (const k in obj) {
+        if (typeof obj[k] === 'bigint') {
+          out[k] = obj[k].toString();
+        } else {
+          out[k] = convertBigIntsToStrings(obj[k]);
+        }
+      }
+      return out;
+    }
+    return obj;
+  }
+  parsed = convertBigIntsToStrings(parsed);
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
-    if (parsed?.error) msg = parsed.error;
-    throw new Error(msg);
+    if (parsed?.error) {
+      // Safely stringify error, converting BigInts to strings
+      try {
+        msg = typeof parsed.error === 'object'
+          ? JSON.stringify(parsed.error, (key, value) =>
+              typeof value === 'bigint' ? value.toString() : value
+            )
+          : String(parsed.error);
+      } catch {
+        msg = String(parsed.error);
+      }
+    }
+    // Always stringify msg to avoid BigInt errors
+    let safeMsg: string;
+    try {
+      safeMsg = typeof msg === 'string' ? msg : JSON.stringify(msg, (key, value) => typeof value === 'bigint' ? value.toString() : value);
+    } catch {
+      safeMsg = String(msg);
+    }
+    throw new Error(safeMsg);
   }
   return parsed as T;
 }
