@@ -65,7 +65,7 @@ export default function Sidebar() {
   }, [guildId]);
 
   return (
-    <div className="flex h-full flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-64 min-w-64 max-w-64 border-r border-[hsl(var(--sidebar-border))]">
+    <div className="flex h-full flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-[240px] min-w-[240px] max-w-[240px] border-r border-[hsl(var(--sidebar-border))]">
       <nav className="flex-1 overflow-y-auto p-2">
         {TOP.map(({ href, label, icon: Icon }) => (
           <NavLeaf
