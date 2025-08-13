@@ -91,6 +91,12 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     if (!user) return;
     const fromRole = source.droppableId === "noRole" ? null : source.droppableId;
     const toRole = destination.droppableId === "noRole" ? null : destination.droppableId;
+    const validRoleIds = roles.map(r => r.roleId);
+    // Only allow valid roles
+    if ((fromRole && !validRoleIds.includes(fromRole)) || (toRole && !validRoleIds.includes(toRole))) {
+      alert('Unknown Role: One of the roles involved in this operation does not exist. Please refresh the page.');
+      return;
+    }
     const actor = (session?.user as any)?.id || undefined;
     if (fromRole && actor) {
       removeRole(guildId, user.discordUserId, fromRole, actor);
@@ -217,9 +223,16 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              {...provided.dragHandleProps}
                               className={`bg-card rounded-lg p-2 flex items-center gap-2 shadow-sm transition ${snapshot.isDragging ? 'ring-2 ring-primary/60' : ''}`}
                             >
+                              <span
+                                {...provided.dragHandleProps}
+                                className="cursor-grab active:cursor-grabbing mr-2 flex items-center justify-center text-gray-400 hover:text-primary"
+                                title="Drag user"
+                                style={{ fontSize: 16 }}
+                              >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><circle cx="4" cy="5" r="1.2" fill="currentColor"/><circle cx="4" cy="8" r="1.2" fill="currentColor"/><circle cx="4" cy="11" r="1.2" fill="currentColor"/><circle cx="8" cy="5" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="11" r="1.2" fill="currentColor"/></svg>
+                              </span>
                               <img src={u.avatarUrl} alt={u.username} className="w-7 h-7 rounded-full border bg-muted object-cover" />
                               <span className="truncate text-xs font-medium">{u.username}</span>
                             </div>
