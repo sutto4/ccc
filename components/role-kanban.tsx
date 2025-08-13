@@ -219,7 +219,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                     {...provided.droppableProps}
                     className={`w-64 bg-muted/40 rounded-xl p-3 flex-shrink-0 transition-shadow ${snapshot.isDraggingOver ? 'ring-2 ring-primary/40' : ''}`}
                   >
-                    <div className="font-semibold mb-2">
+                    <div className="font-semibold mb-2 rounded-md px-2 py-1 bg-accent border border-border">
                       {col === "noRole" ? "No Role" : roles.find((r) => r.roleId === col)?.name}
                     </div>
                     <div className="space-y-2 min-h-[40px]">
