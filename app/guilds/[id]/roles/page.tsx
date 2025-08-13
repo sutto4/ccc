@@ -37,7 +37,7 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
     >
       <div>
         <h2 className="font-semibold text-lg mb-2">Kanban Role Management (Experimental)</h2>
-  <RoleKanbanWrapper guildId={guildId} roles={roles} />
+        <RoleKanbanWrapper guildId={guildId} roles={roles} />
       </div>
     </Section>
   );

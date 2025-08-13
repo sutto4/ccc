@@ -25,9 +25,6 @@ export default function SiteHeader() {
             Discord Server Manager
           </Link>
           <nav className="hidden md:flex items-center gap-3 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-foreground">
-              Dashboard
-            </Link>
             <Link
               href="https://docs.example.com"
               className="hover:text-foreground"

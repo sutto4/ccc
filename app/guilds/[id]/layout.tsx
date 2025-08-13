@@ -28,28 +28,14 @@ export default async function GuildLayout(
   if (!guild) return notFound();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 md:px-6 py-6">
+    <div className="mx-auto max-w-7xl">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link href="/">Dashboard</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{guild.name}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
           <h1 className="text-2xl md:text-3xl font-bold truncate">{guild.name}</h1>
           <p className="text-muted-foreground text-sm">Guild ID: {guild.id}</p>
         </div>
       </div>
-
-      <div className="mt-6">{props.children}</div>
+      <div>{props.children}</div>
     </div>
   );
 }
