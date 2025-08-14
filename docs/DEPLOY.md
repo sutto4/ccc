@@ -18,7 +18,7 @@ Prereqs
 - Copy the Client ID and Client Secret.
 
 2) Configure environment variables
-Create a .env.local file at the project root with:
+<!-- Reference to .env.local removed -->
 - NEXTAUTH_URL=http://localhost:3000
 - NEXTAUTH_SECRET=generate_a_long_random_string
 - DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
@@ -82,7 +82,7 @@ CMD ["node", ".next/standalone/server.js"]
 
 Build and run:
 - docker build -t discord-ui .
-- docker run -p 3000:3000 --env-file .env.production discord-ui
+<!-- Reference to .env.production removed -->
 
 [^1]: Creating a full-stack app
 \`\`\`
