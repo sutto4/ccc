@@ -23,6 +23,13 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
 import * as React from "react";
 import PremiumModal from "@/components/premium-modal";
 import Link from "next/link";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
 import { Home, Server, Settings, Shield, Crown } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -66,7 +73,7 @@ export default function Sidebar() {
   }, [guildId]);
 
   return (
-    <div className="flex h-full flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-[240px] min-w-[240px] max-w-[240px] border-r border-[hsl(var(--sidebar-border))]">
+    <div className="fixed left-0 top-0 h-screen flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-[240px] min-w-[240px] max-w-[240px] border-r border-[hsl(var(--sidebar-border))] z-30">
       <nav className="flex-1 overflow-y-auto p-2">
         {TOP.map(({ href, label, icon: Icon }) => (
           <Link
@@ -179,14 +186,27 @@ export default function Sidebar() {
         </CollapsibleSection>
       </nav>
       {/* Footer / Settings */}
-      <div className="mt-auto border-t border-[hsl(var(--sidebar-border))] p-2">
-        <Link
-          href="/settings"
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--sidebar-foreground-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </Link>
+  <div className="p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--sidebar-foreground-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] w-full">
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="z-[100] bg-popover border shadow-lg">
+            <DropdownMenuItem>Profile</DropdownMenuItem>
+            <DropdownMenuItem>Preferences</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <Link href={guildId ? `/guilds/${guildId}/settings/logs` : "/guilds"} passHref legacyBehavior>
+              <DropdownMenuItem asChild>
+                <a>View Logs</a>
+              </DropdownMenuItem>
+            </Link>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>Logout</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

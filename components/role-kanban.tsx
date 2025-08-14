@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Dialog } from "@headlessui/react";
 import { fetchRoles, fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useSession } from "next-auth/react";
 
@@ -115,14 +116,41 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
       fetchMembersLegacy(guildId).then(setMembers);
       return;
     }
-    const actor = (session?.user as any)?.id || undefined;
+  const actor = (session?.user as any)?.id || undefined;
+  const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || undefined;
     // Remove from old role only if user has it and fromRole is not null
     if (fromRole && actor && user.roleIds.includes(fromRole)) {
       await removeRole(guildId, user.discordUserId, fromRole, actor);
+      const roleObj = roles.find(r => r.roleId === fromRole);
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.remove",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: user.discordUserId,
+          targetUsername: user.username,
+          role: fromRole,
+          roleName: roleObj?.name || fromRole
+        }
+      });
     }
     // Add to new role only if user doesn't already have it and toRole is not null
     if (toRole && actor && !user.roleIds.includes(toRole)) {
       await addRole(guildId, user.discordUserId, toRole, actor);
+      const roleObj = roles.find(r => r.roleId === toRole);
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.add",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: user.discordUserId,
+          targetUsername: user.username,
+          role: toRole,
+          roleName: roleObj?.name || toRole
+        }
+      });
     }
     fetchRoles(guildId).then(setRoles);
     fetchMembersLegacy(guildId).then(setMembers);
