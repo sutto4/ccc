@@ -1,4 +1,5 @@
 "use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Section from "@/components/ui/section";
@@ -90,6 +91,9 @@ export default function AdminGuildsPage() {
                 className="w-16 h-16 rounded-full object-cover border"
               />
               <div className="font-semibold text-base truncate whitespace-nowrap w-full text-center group-hover:underline">{g.guild_name || <span className="italic text-muted-foreground">Unnamed</span>}</div>
+              {g.owner_name && (
+                <div className="text-xs text-muted-foreground mt-1">👑 Owner: {g.owner_name}</div>
+              )}
               <div className="text-xs text-muted-foreground font-mono">ID: {g.guild_id}</div>
               <div className="text-xs">Users: <span className="font-mono">{(typeof g.member_count === 'number' && g.member_count > 0) ? g.member_count : (g.approximate_member_count ?? "—")}</span></div>
               <div className="text-xs">Roles: <span className="font-mono">{typeof g.role_count === 'number' && g.role_count >= 0 ? g.role_count : "—"}</span></div>
@@ -103,6 +107,7 @@ export default function AdminGuildsPage() {
             <thead>
               <tr>
                 <th className="px-3 py-2 text-left font-semibold">Guild Name</th>
+                <th className="px-3 py-2 text-left font-semibold">Owner</th>
                 <th className="px-3 py-2 text-left font-semibold">Guild ID</th>
                 <th className="px-3 py-2 text-left font-semibold">Users</th>
                 <th className="px-3 py-2 text-left font-semibold">Roles</th>
@@ -112,13 +117,13 @@ export default function AdminGuildsPage() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="py-6 text-muted-foreground text-center">Loading...</td></tr>
+                <tr><td colSpan={7} className="py-6 text-muted-foreground text-center">Loading...</td></tr>
               )}
               {error && (
-                <tr><td colSpan={6} className="py-6 text-red-600 text-center">{error}</td></tr>
+                <tr><td colSpan={7} className="py-6 text-red-600 text-center">{error}</td></tr>
               )}
               {!loading && !error && filtered.length === 0 && (
-                <tr><td colSpan={6} className="py-6 text-muted-foreground text-center">No guilds found.</td></tr>
+                <tr><td colSpan={7} className="py-6 text-muted-foreground text-center">No guilds found.</td></tr>
               )}
               {!loading && !error && filtered.map(g => (
                 <tr
@@ -138,6 +143,7 @@ export default function AdminGuildsPage() {
                   aria-label={`View and edit features for ${g.guild_name}`}
                 >
                   <td className="px-3 py-2 font-semibold truncate whitespace-nowrap max-w-[180px] group-hover:underline">{g.guild_name}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{g.owner_name ? `👑 ${g.owner_name}` : <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-3 py-2 font-mono">{g.guild_id}</td>
                   <td className="px-3 py-2 font-mono">{(typeof g.member_count === 'number' && g.member_count > 0) ? g.member_count : (g.approximate_member_count ?? "—")}</td>
                   <td className="px-3 py-2 font-mono">{typeof g.role_count === 'number' && g.role_count >= 0 ? g.role_count : "—"}</td>
