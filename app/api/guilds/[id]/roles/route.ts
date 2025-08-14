@@ -1,9 +1,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 
 export async function GET(req: NextRequest, context: { params: { id: string } }) {
   const guildId = context.params.id;
-  const botToken = process.env.DISCORD_BOT_TOKEN;
+  const botToken = env.DISCORD_BOT_TOKEN;
   if (!botToken) {
     return NextResponse.json({ error: "Missing bot token" }, { status: 500 });
   }
