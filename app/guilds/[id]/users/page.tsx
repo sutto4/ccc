@@ -20,6 +20,7 @@ type Member = {
   roleIds: string[];
   accountid: string | null;
   groups?: string[];
+  joinedAt?: string | null;
 };
 import { useSession } from "next-auth/react";
 
@@ -109,23 +110,19 @@ export default function UsersPage() {
         (r as any).editableByBot !== false
     );
 
-  async function onAdd() {
-    if (!addingFor || !selectedRole) return;
+  async function handleAddRole(userId: string, roleId: string) {
     try {
       const actor = (session?.user as any)?.id || "";
-      await addRole(guildId, addingFor, selectedRole, actor);
+      await addRole(guildId, userId, roleId, actor);
       setMembers((prev) =>
         prev.map((m) =>
-          m.discordUserId === addingFor
-            ? { ...m, roleIds: [...m.roleIds, selectedRole] }
+          m.discordUserId === userId
+            ? { ...m, roleIds: [...m.roleIds, roleId] }
             : m
         )
       );
     } catch (e: any) {
       alert(`Add failed: ${e?.message || "unknown"}`);
-    } finally {
-      setAddingFor(null);
-      setSelectedRole("");
     }
   }
 
@@ -187,6 +184,7 @@ export default function UsersPage() {
           <thead>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">User</th>
+              <th className="px-3 py-2 text-left font-semibold">Date Joined</th>
               <th className="px-3 py-2 text-left font-semibold">Roles</th>
             </tr>
           </thead>
@@ -209,6 +207,9 @@ export default function UsersPage() {
                     />
                     <span className="font-medium truncate" title={m.username}>{m.username}</span>
                   </div>
+                </td>
+                <td className="px-3 py-2 font-mono text-xs">
+                  {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : <span className="text-muted-foreground">—</span>}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center gap-1">
@@ -311,7 +312,7 @@ export default function UsersPage() {
                   className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
                   disabled={!modalRole}
                   onClick={async () => {
-                    await onAdd(selectedUser.discordUserId, modalRole);
+                    await handleAddRole(selectedUser.discordUserId, modalRole);
                     setSelectedUser((prev) => prev ? { ...prev, roleIds: [...prev.roleIds, modalRole] } : prev);
                     setModalRole("");
                   }}
