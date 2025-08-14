@@ -1,23 +1,25 @@
 "use client";
 import { useState, useEffect } from "react";
+
 import RoleUsersList from "@/components/role-users-list";
 import { UserChips } from "@/components/ui/user-chips";
 import { RoleUserChipsOnDemand } from "@/components/ui/role-user-chips-on-demand";
+import { RoleUserModal } from "@/components/ui/role-user-modal";
+import { fetchMembersLegacy } from "@/lib/api";
 
 export default function RoleExplorer({ guildId, roles = [] }: { guildId: string; roles?: any[] }) {
-  const [allMembers, setAllMembers] = useState<any[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
-  useEffect(() => {
-    setMembersLoading(true);
-    fetch(`/api/guilds/${guildId}/members`)
-      .then((res) => res.json())
-      .then((data) => setAllMembers(data))
-      .finally(() => setMembersLoading(false));
-  }, [guildId]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [userCounts, setUserCounts] = useState<{ [roleId: string]: number }>({});
   const [view, setView] = useState<'card' | 'table'>('card');
+  const [modalRole, setModalRole] = useState<any | null>(null);
+  const [modalRoleUserIds, setModalRoleUserIds] = useState<string[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+
+  // Always fetch all members when Role Explorer mounts (for modal accuracy)
+  useEffect(() => {
+    fetchMembersLegacy(guildId).then(setMembers).catch(() => setMembers([]));
+  }, [guildId]);
   // Sort roles by position (descending, like Discord)
   const filteredRoles = (roles || [])
     .filter((r: any) =>
@@ -114,7 +116,15 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
             <tbody>
               {filteredRoles.map((r) => {
                 return (
-                  <tr key={r.roleId} className="border-b last:border-0 hover:bg-muted/40">
+                  <tr
+                    key={r.roleId}
+                    className="border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md"
+                    onClick={() => {
+                      setModalRole(r);
+                      // Compute user IDs for this role from latest members
+                      setModalRoleUserIds(members.filter(m => m.roleIds.includes(r.roleId)).map(m => m.discordUserId));
+                    }}
+                  >
                     <td className="px-3 py-2 font-medium">{r.name}</td>
                     <td className="px-3 py-2 font-mono text-xs">{r.roleId}</td>
                     <td className="px-3 py-2">
@@ -138,6 +148,15 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
             </tbody>
           </table>
         </div>
+      )}
+      {modalRole && (
+        <RoleUserModal
+          open={!!modalRole}
+          onClose={() => setModalRole(null)}
+          guildId={guildId}
+          role={modalRole}
+          roleUserIds={modalRoleUserIds}
+        />
       )}
     </div>
   );

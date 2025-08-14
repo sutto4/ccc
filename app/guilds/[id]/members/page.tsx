@@ -292,10 +292,7 @@ export default function MembersPage() {
               {filteredMembers.map((m) => (
                 <tr
                   key={m.discordUserId}
-                  className={
-                    "border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md " +
-                    (selectedUser?.discordUserId === m.discordUserId ? "ring-2 ring-primary/40" : "")
-                  }
+                  className="border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md"
                   onClick={() => setSelectedUser(m)}
                 >
                   <td className="px-3 py-2">
