@@ -3,23 +3,22 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-type Props = React.ComponentProps<typeof Button>;
+type Props = React.ComponentProps<typeof Button> & { children?: React.ReactNode };
 
 export default function InviteBotButton(props: Props) {
+  const { children, ...rest } = props;
   const clientId =
     process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID ||
     process.env.NEXT_PUBLIC_CLIENT_ID;
-
-  const href = clientId
-    ? `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=268437568&scope=bot%20applications.commands`
+  const perms = "8";
+  const url = clientId
+    ? `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${perms}&scope=bot%20applications.commands`
     : "#";
-
-  const disabled = !clientId || props.disabled;
-
+  const disabled = !clientId || rest.disabled;
   return (
-    <Button asChild disabled={disabled} {...props}>
-      <Link href={href} target="_blank" rel="noopener noreferrer">
-        Invite Bot
+    <Button asChild disabled={disabled} {...rest}>
+      <Link href={url} target="_blank" rel="noopener noreferrer">
+        {children ?? "Invite Bot"}
       </Link>
     </Button>
   );

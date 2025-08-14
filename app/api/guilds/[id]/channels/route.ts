@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
 
 export async function GET(req: Request, context: any) {
   // Next.js may pass params as a Promise in some dynamic API contexts
@@ -9,7 +10,7 @@ export async function GET(req: Request, context: any) {
   } else {
     guildId = context.params?.id;
   }
-  const discordBotToken = process.env.DISCORD_BOT_TOKEN;
+  const discordBotToken = env.DISCORD_BOT_TOKEN;
   try {
     const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
       headers: {

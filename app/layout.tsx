@@ -11,9 +11,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const csp = "default-src 'self'; img-src 'self' data: https://cdn.discordapp.com https://images.unsplash.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'";
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta httpEquiv="Content-Security-Policy" content={csp} />
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};
