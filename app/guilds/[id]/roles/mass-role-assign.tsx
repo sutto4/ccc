@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import UserTransferPicker from "@/components/ui/user-transfer-picker";
 import RoleMultiPicker from "@/components/ui/role-multi-picker";
 import { addRole, removeRole, type Member, type Role } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 export default function MassRoleAssign({ guildId, roles }: { guildId: string; roles: Role[] }) {
   const [selectedUsers, setSelectedUsers] = useState<Member[]>([]);
@@ -17,12 +18,25 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     if (!selectedUsers.length || !selectedRoles.length) return;
     startSaving(async () => {
       try {
-        // For each user, assign all selected roles
+        // For each user, assign all selected roles and log each action
         await Promise.all(
           selectedUsers.flatMap((user) =>
-            selectedRoles.map((role) =>
-              addRole(guildId, user.discordUserId, role.roleId, user.discordUserId)
-            )
+            selectedRoles.map(async (role) => {
+              await addRole(guildId, user.discordUserId, role.roleId, user.discordUserId);
+              await logAction({
+                guildId,
+                userId: user.discordUserId,
+                actionType: "role.add",
+                user: { id: user.discordUserId, username: user.username },
+                actionData: {
+                  targetUser: user.discordUserId,
+                  targetUsername: user.username,
+                  role: role.roleId,
+                  roleName: role.name,
+                  source: "mass-role-assign"
+                }
+              });
+            })
           )
         );
         setSuccess("Roles assigned successfully!");
@@ -40,12 +54,25 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     if (!selectedUsers.length || !selectedRoles.length) return;
     startSaving(async () => {
       try {
-        // For each user, remove all selected roles
+        // For each user, remove all selected roles and log each action
         await Promise.all(
           selectedUsers.flatMap((user) =>
-            selectedRoles.map((role) =>
-              removeRole(guildId, user.discordUserId, role.roleId, user.discordUserId)
-            )
+            selectedRoles.map(async (role) => {
+              await removeRole(guildId, user.discordUserId, role.roleId, user.discordUserId);
+              await logAction({
+                guildId,
+                userId: user.discordUserId,
+                actionType: "role.remove",
+                user: { id: user.discordUserId, username: user.username },
+                actionData: {
+                  targetUser: user.discordUserId,
+                  targetUsername: user.username,
+                  role: role.roleId,
+                  roleName: role.name,
+                  source: "mass-role-assign"
+                }
+              });
+            })
           )
         );
         setSuccess("Roles removed successfully!");

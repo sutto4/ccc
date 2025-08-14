@@ -31,7 +31,7 @@ const actionTypes = [
 ];
 
 function exportToCSV(rows: any[], filename = "logs.csv") {
-  const header = ["Time", "User", "Action", "Details", "IP"];
+  const header = ["Time", "User", "Action", "Details", "Source", "IP"];
   const csvRows = [header.join(",")];
   for (const log of rows) {
     const details = log.actionType === "role.add"
@@ -39,11 +39,13 @@ function exportToCSV(rows: any[], filename = "logs.csv") {
       : log.actionType === "role.remove"
       ? `Removed ${log.actionData.role} from ${log.actionData.targetUser}`
       : "";
+    const source = log.actionData?.source || "-";
     csvRows.push([
       new Date(log.timestamp).toLocaleString(),
-      log.user.username,
+      log.user?.username || log.userId || "-",
       log.actionType,
       details,
+      source,
       log.ip
     ].map(x => `"${String(x).replace(/"/g, '""')}"`).join(","));
   }
@@ -58,21 +60,23 @@ function exportToCSV(rows: any[], filename = "logs.csv") {
 
 
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (dateFrom && new Date(log.timestamp) < new Date(dateFrom)) return false;
-      if (dateTo && new Date(log.timestamp) > new Date(dateTo)) return false;
-      if (user && !(log.user?.username || log.userId || "").toLowerCase().includes(user.toLowerCase())) return false;
-      if (actionType && log.actionType !== actionType) return false;
-      if (search) {
-        const details = log.actionType === "role.add"
-          ? `Added ${log.actionData?.role} to ${log.actionData?.targetUser}`
-          : log.actionType === "role.remove"
-          ? `Removed ${log.actionData?.role} from ${log.actionData?.targetUser}`
-          : "";
-        if (!details.toLowerCase().includes(search.toLowerCase())) return false;
-      }
-      return true;
-    });
+    return logs
+      .filter((log) => {
+        if (dateFrom && new Date(log.timestamp) < new Date(dateFrom)) return false;
+        if (dateTo && new Date(log.timestamp) > new Date(dateTo)) return false;
+        if (user && !(log.user?.username || log.userId || "").toLowerCase().includes(user.toLowerCase())) return false;
+        if (actionType && log.actionType !== actionType) return false;
+        if (search) {
+          const details = log.actionType === "role.add"
+            ? `Added ${log.actionData?.role} to ${log.actionData?.targetUser}`
+            : log.actionType === "role.remove"
+            ? `Removed ${log.actionData?.role} from ${log.actionData?.targetUser}`
+            : "";
+          if (!details.toLowerCase().includes(search.toLowerCase())) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [logs, search, user, actionType, dateFrom, dateTo]);
 
   return (
@@ -121,6 +125,7 @@ function exportToCSV(rows: any[], filename = "logs.csv") {
                 <th className="px-3 py-2 text-left">User</th>
                 <th className="px-3 py-2 text-left">Action</th>
                 <th className="px-3 py-2 text-left">Details</th>
+                <th className="px-3 py-2 text-left">Source</th>
                 <th className="px-3 py-2 text-left">IP</th>
               </tr>
             </thead>
@@ -153,12 +158,13 @@ function exportToCSV(rows: any[], filename = "logs.csv") {
                     )}
                     {/* Add more action renderers as needed */}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap">{log.actionData?.source || "-"}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{log.ip || "-"}</td>
                 </tr>
               ))}
               {filteredLogs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-muted-foreground py-8">No logs found.</td>
+                  <td colSpan={6} className="text-center text-muted-foreground py-8">No logs found.</td>
                 </tr>
               )}
             </tbody>

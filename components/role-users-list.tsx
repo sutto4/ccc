@@ -3,12 +3,13 @@ import { useState, useEffect } from "react";
 import { Dialog } from "@headlessui/react";
 import { useSession } from "next-auth/react";
 import { fetchMembersPaged, fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 const DEFAULT_AVATAR = "/placeholder-user.jpg";
 
-export default function RoleUsersList({ guildId, roleId }: { guildId: string; roleId: string }) {
-		const [users, setUsers] = useState<any[]>([]);
-		const [allMembers, setAllMembers] = useState<any[]>([]);
+export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: string; roleId: string; roleName?: string }) {
+	const [users, setUsers] = useState<any[]>([]);
+	const [allMembers, setAllMembers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
 	const [addModalOpen, setAddModalOpen] = useState(false);
@@ -40,29 +41,66 @@ export default function RoleUsersList({ guildId, roleId }: { guildId: string; ro
 			}, [addModalOpen, allMembers, users]);
 
 	async function handleAdd(userId: string) {
-		if (!session?.user?.id) return;
-		setAdding(true);
-		try {
-			await addRole(guildId, userId, roleId, session.user.id);
-			setUsers((prev) => [...prev, addResults.find((u) => u.discordUserId === userId)]);
-			setAddModalOpen(false);
-			setUserSearch("");
-			setAddResults([]);
-			setSelectedUserId("");
-		} finally {
-			setAdding(false);
-		}
+		   if (!session?.user?.id) return;
+		   setAdding(true);
+		   try {
+			   await addRole(guildId, userId, roleId, session.user.id);
+			   setUsers((prev) => [...prev, addResults.find((u) => u.discordUserId === userId)]);
+			   setAddModalOpen(false);
+			   setUserSearch("");
+			   setAddResults([]);
+			   setSelectedUserId("");
+			   // Logging
+			   const actor = session.user.id;
+			   // Some session.user may not have username, fallback to name or id
+			   const actorUsername = session.user.name || (session.user as any).username || session.user.id;
+			   const targetUser = addResults.find((u) => u.discordUserId === userId) || {};
+			  logAction({
+				  guildId,
+				  userId: actor,
+				  actionType: "role.add",
+				  user: { id: actor, username: actorUsername },
+				  actionData: {
+					  targetUser: userId,
+					  targetUsername: targetUser.username,
+					  role: roleId,
+					  roleName: roleName,
+					  source: "role-users-list"
+				  }
+			  });
+		   } finally {
+			   setAdding(false);
+		   }
 	}
 
 	async function handleRemove(userId: string) {
-		if (!session?.user?.id) return;
-		setAdding(true);
-		try {
-			await removeRole(guildId, userId, roleId, session.user.id);
-			setUsers((prev) => prev.filter((u) => u.discordUserId !== userId));
-		} finally {
-			setAdding(false);
-		}
+		   if (!session?.user?.id) return;
+		   setAdding(true);
+		   try {
+			   // Capture user before removing from state
+			   const targetUser = users.find((u) => u.discordUserId === userId) || {};
+			   await removeRole(guildId, userId, roleId, session.user.id);
+			   setUsers((prev) => prev.filter((u) => u.discordUserId !== userId));
+			   // Logging
+			   const actor = session.user.id;
+			   // Some session.user may not have username, fallback to name or id
+			   const actorUsername = session.user.name || (session.user as any).username || session.user.id;
+			  logAction({
+				  guildId,
+				  userId: actor,
+				  actionType: "role.remove",
+				  user: { id: actor, username: actorUsername },
+				  actionData: {
+					  targetUser: userId,
+					  targetUsername: targetUser.username,
+					  role: roleId,
+					  roleName: roleName,
+					  source: "role-users-list"
+				  }
+			  });
+		   } finally {
+			   setAdding(false);
+		   }
 	}
 
 	return (

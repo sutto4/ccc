@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog } from "@headlessui/react";
 import { fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 export function RoleUserModal({
   open,
@@ -43,6 +44,23 @@ export function RoleUserModal({
       await addRole(guildId, userId, role.roleId, "");
       setReloadKey(k => k + 1);
       setSearch("");
+      // Logging
+      const actor = ""; // If you have session/user context, use it here
+      const actorUsername = undefined; // If you have session/user context, use it here
+      const targetUser = members.find((u) => u.discordUserId === userId) || {};
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.add",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: userId,
+          targetUsername: targetUser.username,
+          role: role.roleId,
+          roleName: role.name,
+          source: "role-user-modal"
+        }
+      });
     } catch (e: any) {
       setError(e?.message || "Failed to add user");
     } finally {
@@ -56,6 +74,23 @@ export function RoleUserModal({
       await removeRole(guildId, userId, role.roleId, "");
       setReloadKey(k => k + 1);
       setSearch("");
+      // Logging
+      const actor = ""; // If you have session/user context, use it here
+      const actorUsername = undefined; // If you have session/user context, use it here
+      const targetUser = members.find((u) => u.discordUserId === userId) || {};
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.remove",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: userId,
+          targetUsername: targetUser.username,
+          role: role.roleId,
+          roleName: role.name,
+          source: "role-user-modal"
+        }
+      });
     } catch (e: any) {
       setError(e?.message || "Failed to remove user");
     } finally {

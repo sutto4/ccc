@@ -11,6 +11,7 @@ import {
   removeRole,
   type Role,
 } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 type Member = {
   guildId: string;
@@ -45,6 +46,8 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<Row | null>(null);
   const [modalRole, setModalRole] = useState<string>("");
+  // Add state for searchRole (role search in modal)
+  const [searchRole, setSearchRole] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -113,6 +116,10 @@ export default function UsersPage() {
   async function handleAddRole(userId: string, roleId: string) {
     try {
       const actor = (session?.user as any)?.id || "";
+      const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
+      // Find user and role before addition
+      const targetUser = members.find((m) => m.discordUserId === userId);
+      const roleObj = roles.find((r) => r.roleId === roleId);
       await addRole(guildId, userId, roleId, actor);
       setMembers((prev) =>
         prev.map((m) =>
@@ -121,6 +128,20 @@ export default function UsersPage() {
             : m
         )
       );
+      // Logging
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.add",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: userId,
+          targetUsername: targetUser?.username,
+          role: roleId,
+          roleName: roleObj?.name || roleId,
+          source: "users-page"
+        }
+      });
     } catch (e: any) {
       alert(`Add failed: ${e?.message || "unknown"}`);
     }
@@ -129,6 +150,10 @@ export default function UsersPage() {
   async function onRemove(userId: string, roleId: string) {
     try {
       const actor = (session?.user as any)?.id || "";
+      const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
+      // Find user and role before removal
+      const targetUser = members.find((m) => m.discordUserId === userId);
+      const roleObj = roles.find((r) => r.roleId === roleId);
       await removeRole(guildId, userId, roleId, actor);
       setMembers((prev) =>
         prev.map((m) =>
@@ -137,6 +162,20 @@ export default function UsersPage() {
             : m
         )
       );
+      // Logging
+      logAction({
+        guildId,
+        userId: actor,
+        actionType: "role.remove",
+        user: { id: actor, username: actorUsername },
+        actionData: {
+          targetUser: userId,
+          targetUsername: targetUser?.username,
+          role: roleId,
+          roleName: roleObj?.name || roleId,
+          source: "users-page"
+        }
+      });
     } catch (e: any) {
       alert(`Remove failed: ${e?.message || "unknown"}`);
     }
@@ -277,23 +316,25 @@ export default function UsersPage() {
                       </button>
                     </span>
                   );
-                }) : <span className="text-xs text-muted-foreground">none</span>}
+                }) : <span className="text-xs text-muted-foreground" style={{display:'inline-block',padding:'2px 0'}}>none</span>}
               </div>
               <div className="font-semibold text-sm mb-1 mt-4">Add Role</div>
               <input
                 type="text"
                 className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
                 placeholder="Search roles..."
-                value={modalRole ? roles.find(r => r.roleId === modalRole)?.name || '' : ''}
+                value={typeof modalRole === 'string' && modalRole ? (roles.find(r => r.roleId === modalRole)?.name || searchRole) : searchRole}
                 onChange={e => {
-                  const val = e.target.value.toLowerCase();
-                  const found = roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).find(r => r.name.toLowerCase().includes(val));
-                  setModalRole(found ? found.roleId : "");
+                  setSearchRole(e.target.value);
+                  setModalRole("");
                 }}
                 autoFocus
               />
               <div className="max-h-40 overflow-y-auto mb-3">
-                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).map(r => (
+                {roles.filter(r =>
+                  !selectedUser.roleIds.includes(r.roleId) &&
+                  (searchRole === '' || r.name.toLowerCase().includes(searchRole.toLowerCase()) || r.roleId.toLowerCase().includes(searchRole.toLowerCase()))
+                ).map(r => (
                   <div
                     key={r.roleId}
                     className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${modalRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
@@ -303,7 +344,10 @@ export default function UsersPage() {
                     <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
                   </div>
                 ))}
-                {roles.filter(r => !selectedUser.roleIds.includes(r.roleId)).length === 0 && (
+                {roles.filter(r =>
+                  !selectedUser.roleIds.includes(r.roleId) &&
+                  (searchRole === '' || r.name.toLowerCase().includes(searchRole.toLowerCase()) || r.roleId.toLowerCase().includes(searchRole.toLowerCase()))
+                ).length === 0 && (
                   <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
                 )}
               </div>
@@ -328,7 +372,7 @@ export default function UsersPage() {
       )}
             {!loading && displayed.length === 0 && (
               <tr>
-                <td className="py-6 text-muted-foreground text-center" colSpan={2}>
+                <td className="py-6 text-muted-foreground text-center" colSpan={3}>
                   No users.
                 </td>
               </tr>

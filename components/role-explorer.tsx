@@ -93,7 +93,7 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
               </button>
               {expanded === r.roleId && (
                 <div className="p-2 pt-0">
-                  <RoleUsersList guildId={guildId} roleId={r.roleId} />
+                  <RoleUsersList guildId={guildId} roleId={r.roleId} roleName={r.name} />
                 </div>
               )}
             </div>

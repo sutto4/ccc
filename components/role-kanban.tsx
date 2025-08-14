@@ -118,9 +118,29 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     }
   const actor = (session?.user as any)?.id || undefined;
   const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || undefined;
-    // Remove from old role only if user has it and fromRole is not null
+    let updatedUser = { ...user };
+    let changed = false;
+    // Optimistically update UI first
+    if (fromRole && user.roleIds.includes(fromRole)) {
+      updatedUser = {
+        ...updatedUser,
+        roleIds: updatedUser.roleIds.filter((rid: string) => rid !== fromRole)
+      };
+      changed = true;
+    }
+    if (toRole && !user.roleIds.includes(toRole)) {
+      updatedUser = {
+        ...updatedUser,
+        roleIds: [...updatedUser.roleIds, toRole]
+      };
+      changed = true;
+    }
+    if (changed) {
+      setMembers(prev => prev.map(m => m.discordUserId === updatedUser.discordUserId ? updatedUser : m));
+    }
+    // Now perform API calls and logging in background
     if (fromRole && actor && user.roleIds.includes(fromRole)) {
-      await removeRole(guildId, user.discordUserId, fromRole, actor);
+      removeRole(guildId, user.discordUserId, fromRole, actor);
       const roleObj = roles.find(r => r.roleId === fromRole);
       logAction({
         guildId,
@@ -131,13 +151,13 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
           targetUser: user.discordUserId,
           targetUsername: user.username,
           role: fromRole,
-          roleName: roleObj?.name || fromRole
+          roleName: roleObj?.name || fromRole,
+          source: "kanban-dnd"
         }
       });
     }
-    // Add to new role only if user doesn't already have it and toRole is not null
     if (toRole && actor && !user.roleIds.includes(toRole)) {
-      await addRole(guildId, user.discordUserId, toRole, actor);
+      addRole(guildId, user.discordUserId, toRole, actor);
       const roleObj = roles.find(r => r.roleId === toRole);
       logAction({
         guildId,
@@ -148,12 +168,11 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
           targetUser: user.discordUserId,
           targetUsername: user.username,
           role: toRole,
-          roleName: roleObj?.name || toRole
+          roleName: roleObj?.name || toRole,
+          source: "kanban-dnd"
         }
       });
     }
-    fetchRoles(guildId).then(setRoles);
-    fetchMembersLegacy(guildId).then(setMembers);
   }
 
   return (
@@ -362,8 +381,25 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                 setAddingUser(true);
                 try {
                   const actor = (session?.user as any)?.id || undefined;
+                  const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || undefined;
                   await addRole(guildId, selectedUserId, addUserRoleId, actor);
                   setMembers(prev => prev.map(m => m.discordUserId === selectedUserId ? { ...m, roleIds: [...m.roleIds, addUserRoleId] } : m));
+                  // Logging
+                  const userObj = members.find(m => m.discordUserId === selectedUserId);
+                  const roleObj = roles.find(r => r.roleId === addUserRoleId);
+                  logAction({
+                    guildId,
+                    userId: actor,
+                    actionType: "role.add",
+                    user: { id: actor, username: actorUsername },
+                    actionData: {
+                      targetUser: selectedUserId,
+                      targetUsername: userObj?.username,
+                      role: addUserRoleId,
+                      roleName: roleObj?.name || addUserRoleId,
+                      source: "kanban-modal"
+                    }
+                  });
                   setAddUserRoleId(null);
                 } catch (e: any) {
                   alert('Failed to add user: ' + (e?.message || String(e)));
