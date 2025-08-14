@@ -139,7 +139,7 @@ export default function Sidebar() {
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/reaction-roles` : "#"}
             label="Reaction Roles"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.reaction_roles)}
