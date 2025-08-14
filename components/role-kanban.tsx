@@ -78,12 +78,15 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   // Users not in this role (for add user modal)
   const usersNotInRole = (roleId: string) => members.filter((m) => !m.roleIds.includes(roleId));
 
-  // For DnD: columns = ["noRole", ...selectedRoleIds], sorted by role position
+  // For DnD: columns = ["noRole", ...selectedRoleIds], sorted by role hierarchy (highest position on the left)
   const roleIdToPosition: Record<string, number> = {};
   roles.forEach(r => { roleIdToPosition[r.roleId] = r.position ?? 0; });
   // Only include columns for roles that exist in the current roles list
   const validRoleSet = new Set(roles.map(r => r.roleId));
-  const sortedRoleIds = [...selectedRoleIds].filter(id => validRoleSet.has(id)).sort((a, b) => (roleIdToPosition[b] ?? 0) - (roleIdToPosition[a] ?? 0));
+  // Sort descending: highest position (top of Discord hierarchy) is leftmost
+  const sortedRoleIds = [...selectedRoleIds]
+    .filter(id => validRoleSet.has(id))
+    .sort((a, b) => (roleIdToPosition[a] ?? 0) - (roleIdToPosition[b] ?? 0));
   const columns = ["noRole", ...sortedRoleIds];
   // For DnD, each user-role instance must be unique
   const getColumnUserInstances = (col: string) => {
@@ -209,7 +212,19 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
         </div>
       </div>
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto relative" style={{ maxHeight: 600, overflowY: 'auto' }}>
+          {/* Sticky header row for all columns */}
+          <div className="flex gap-4 min-w-max sticky top-0 z-20" style={{ backdropFilter: 'blur(2px)' }}>
+            {columns.map((col) => (
+              <div
+                key={col}
+                className="w-64 font-semibold rounded-md px-2 py-1 bg-accent border border-border text-center"
+                style={{ marginBottom: 8, background: 'var(--accent, #f3f4f6)' }}
+              >
+                {col === "noRole" ? "No Role" : roles.find((r) => r.roleId === col)?.name}
+              </div>
+            ))}
+          </div>
           <div className="flex gap-4 min-w-max">
             {columns.map((col) => (
               <Droppable droppableId={col} key={col}>
@@ -217,12 +232,11 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`w-64 bg-muted/40 rounded-xl p-3 flex-shrink-0 transition-shadow ${snapshot.isDraggingOver ? 'ring-2 ring-primary/40' : ''}`}
+                    className={`w-64 bg-muted/40 rounded-xl flex-shrink-0 transition-shadow flex flex-col ${snapshot.isDraggingOver ? 'ring-2 ring-primary/40' : ''}`}
+                    style={{ maxHeight: 600 }}
                   >
-                    <div className="font-semibold mb-2 rounded-md px-2 py-1 bg-accent border border-border">
-                      {col === "noRole" ? "No Role" : roles.find((r) => r.roleId === col)?.name}
-                    </div>
-                    <div className="space-y-2 min-h-[40px]">
+                    {/* Remove per-column header, now handled by sticky header row above */}
+                    <div className="space-y-2 min-h-[40px]" style={{ flex: 1 }}>
                       {getColumnUserInstances(col).map(({ user, roleId }, idx) => (
                         <Draggable draggableId={`${user.discordUserId}:${roleId ?? "null"}`} index={idx} key={`${user.discordUserId}:${roleId ?? "null"}`}>
                           {(provided, snapshot) => (
