@@ -85,43 +85,73 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
   }
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm flex flex-col gap-4 max-w-2xl mx-auto">
-      <div className="font-medium mb-2">Select users to assign roles to:</div>
-      <div className="mb-4">
-        <UserTransferPicker
-          guildId={guildId}
-          value={selectedUsers}
-          onChange={setSelectedUsers}
-          disabled={saving}
-        />
+    <div className="flex flex-col gap-4">
+      {/* Summary / Toolbar */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-3">
+          <span>
+            <span className="font-semibold text-foreground">{selectedUsers.length.toLocaleString()}</span> users selected
+          </span>
+          <span>•</span>
+          <span>
+            <span className="font-semibold text-foreground">{selectedRoles.length.toLocaleString()}</span> roles selected
+          </span>
+          {(selectedUsers.length > 0 || selectedRoles.length > 0) && (
+            <button
+              className="text-xs underline underline-offset-4 hover:text-foreground"
+              onClick={() => { setSelectedUsers([]); setSelectedRoles([]); }}
+              disabled={saving}
+            >
+              Clear selection
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            className="rounded bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold shadow hover:bg-primary/90 transition disabled:opacity-50"
+            onClick={handleSave}
+            disabled={saving || !selectedUsers.length || !selectedRoles.length}
+          >
+            {saving ? "Saving..." : "Assign Roles"}
+          </button>
+          <button
+            className="rounded bg-red-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-red-700 transition disabled:opacity-50"
+            onClick={handleRemove}
+            disabled={saving || !selectedUsers.length || !selectedRoles.length}
+          >
+            {saving ? "Saving..." : "Remove Roles"}
+          </button>
+        </div>
       </div>
-      <div className="font-medium mb-2">Select roles to assign:</div>
-      <div className="mb-4">
-        <RoleMultiPicker
-          roles={roles}
-          value={selectedRoles}
-          onChange={setSelectedRoles}
-          disabled={saving}
-        />
+
+      {/* Two-column workspace */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {/* Users column */}
+        <div className="md:col-span-3 rounded-xl border bg-card p-4 shadow-sm h-[60vh] flex flex-col">
+          <div className="font-medium mb-3">Select users</div>
+          <UserTransferPicker
+            guildId={guildId}
+            value={selectedUsers}
+            onChange={setSelectedUsers}
+            disabled={saving}
+          />
+        </div>
+
+        {/* Roles column */}
+        <div className="md:col-span-2 rounded-xl border bg-card p-4 shadow-sm h-[60vh] flex flex-col">
+          <div className="font-medium mb-3">Select roles</div>
+          <RoleMultiPicker
+            roles={roles}
+            value={selectedRoles}
+            onChange={setSelectedRoles}
+            disabled={saving}
+          />
+        </div>
       </div>
-      <div className="flex gap-2 w-full max-w-xs mx-auto">
-        <button
-          className="flex-1 rounded bg-primary text-primary-foreground px-4 py-2 font-semibold shadow hover:bg-primary/90 transition disabled:opacity-50"
-          onClick={handleSave}
-          disabled={saving || !selectedUsers.length || !selectedRoles.length}
-        >
-          {saving ? "Saving..." : "Assign Roles"}
-        </button>
-        <button
-          className="flex-1 rounded bg-red-600 text-white px-4 py-2 font-semibold shadow hover:bg-red-700 transition disabled:opacity-50"
-          onClick={handleRemove}
-          disabled={saving || !selectedUsers.length || !selectedRoles.length}
-        >
-          {saving ? "Saving..." : "Remove Roles"}
-        </button>
-      </div>
-      {success && <div className="text-green-600 text-sm text-center">{success}</div>}
-      {error && <div className="text-red-600 text-sm text-center">{error}</div>}
+
+      {/* Feedback */}
+      {success && <div className="text-green-600 text-sm">{success}</div>}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
     </div>
   );
 }

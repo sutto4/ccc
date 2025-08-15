@@ -31,9 +31,9 @@ export default function UserTransferPicker({
   );
 
   return (
-    <div className="flex gap-4 w-full">
+    <div className="flex gap-4 w-full flex-1 min-h-0">
       {/* Available users */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="mb-2 font-medium">Available Users</div>
         <input
           className="w-full rounded border px-3 py-2 text-sm mb-2"
@@ -42,7 +42,7 @@ export default function UserTransferPicker({
           onChange={(e) => setSearch(e.target.value)}
           disabled={disabled}
         />
-        <div className="max-h-40 overflow-y-auto rounded border bg-card text-foreground">
+        <div className="flex-1 min-h-0 overflow-y-auto rounded border bg-card text-foreground">
           {loading ? (
             <div className="text-xs text-muted-foreground px-2 py-2">Loading...</div>
           ) : available.length === 0 ? (
@@ -64,9 +64,9 @@ export default function UserTransferPicker({
         </div>
       </div>
       {/* Selected users */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="mb-2 font-medium">Selected Users</div>
-        <div className="max-h-48 overflow-y-auto rounded border bg-card text-foreground">
+        <div className="flex-1 min-h-0 overflow-y-auto rounded border bg-card text-foreground">
           {value.length === 0 ? (
             <div className="text-xs text-muted-foreground px-2 py-2">No users selected</div>
           ) : (

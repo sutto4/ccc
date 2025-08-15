@@ -30,7 +30,29 @@ export default function RoleMultiPicker({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 min-h-0 flex-1">
+      <div className="flex items-center gap-2">
+        {value.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {value.map((r) => (
+              <span
+                key={r.roleId}
+                className="inline-flex items-center gap-1 rounded bg-primary/10 text-primary px-2 py-1 text-xs border border-primary/20"
+              >
+                {r.name}
+                <button
+                  type="button"
+                  className="ml-1 text-xs text-red-400 hover:text-red-600"
+                  onClick={() => toggleRole(r)}
+                  tabIndex={-1}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <input
         className="w-full rounded border px-3 py-2 text-sm"
         placeholder="Search roles by name or ID..."
@@ -38,7 +60,7 @@ export default function RoleMultiPicker({
         onChange={(e) => setQuery(e.target.value)}
         disabled={disabled}
       />
-  <div className="max-h-80 overflow-y-auto rounded border bg-card text-foreground">
+      <div className="flex-1 min-h-0 overflow-y-auto rounded border bg-card text-foreground">
         {filtered.map((r) => (
           <div
             key={r.roleId}
@@ -64,26 +86,6 @@ export default function RoleMultiPicker({
           <div className="text-xs text-muted-foreground px-2 py-2">No roles found</div>
         )}
       </div>
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-2">
-          {value.map((r) => (
-            <span
-              key={r.roleId}
-              className="inline-flex items-center gap-1 rounded bg-primary/10 text-primary px-2 py-1 text-xs border border-primary/20"
-            >
-              {r.name}
-              <button
-                type="button"
-                className="ml-1 text-xs text-red-400 hover:text-red-600"
-                onClick={() => toggleRole(r)}
-                tabIndex={-1}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

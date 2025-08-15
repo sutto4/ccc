@@ -4,10 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { fetchGuilds, type Guild } from "@/lib/api";
 import Section from "@/components/ui/section";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
-import GuildSelectedBadge from "@/components/guild-selected-badge";
+
 import { Bot, Shield, Users, Zap, Star } from "lucide-react";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 
 export default async function GuildsPage() {
   const session = await getServerSession(authOptions);
@@ -99,47 +99,52 @@ export default async function GuildsPage() {
       <Section title="My Servers">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {guilds.map((guild) => (
-            <div key={guild.id} className="group relative rounded-lg border bg-card p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  {guild.iconUrl ? (
-                    <Image
-                      src={guild.iconUrl}
-                      alt={guild.name}
-                      width={48}
-                      height={48}
-                      className="rounded-lg"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
-                      <span className="text-lg font-semibold text-muted-foreground">
-                        {guild.name.charAt(0).toUpperCase()}
-                      </span>
+            <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
+              <div className="relative rounded-lg border bg-card p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {guild.iconUrl ? (
+                      <Image
+                        src={guild.iconUrl}
+                        alt={guild.name}
+                        width={48}
+                        height={48}
+                        className="rounded-lg"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
+                        <span className="text-lg font-semibold text-muted-foreground">
+                          {guild.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-semibold group-hover:text-primary transition-colors">
+                        {guild.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {(guild.memberCount ?? (guild as any).approximateMemberCount ?? (guild as any).approximate_member_count ?? 0).toLocaleString()} members
+                      </p>
+                      <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
+                        <span>{(guild.roleCount ?? 0).toLocaleString()} roles</span>
+                        {guild.createdAt && (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Created {new Date(guild.createdAt).toLocaleDateString()}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground/70">ID: {guild.id}</p>
                     </div>
-                  )}
-                  <div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">
-                      {guild.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {guild.approximateMemberCount?.toLocaleString() ?? "Unknown"} members
-                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {guild.premium && <GuildPremiumBadge />}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {guild.premium && <GuildPremiumBadge />}
-                  <GuildSelectedBadge guildId={guild.id} />
-                </div>
               </div>
-              <div className="mt-4 flex gap-2">
-                <Link
-                  href={`/guilds/${guild.id}`}
-                  className="flex-1 text-center text-sm bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-2 rounded-md transition-colors"
-                >
-                  Manage Server
-                </Link>
-              </div>
-            </div>
+            </Link>
           ))}
         </div>
       </Section>

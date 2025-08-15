@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import ThemeToggle from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/theme-toggle";
 import InviteBotButton from "@/components/invite-bot-button";
 import { Bot } from "lucide-react";
 import UserMenu from "@/components/ui/user-menu";
