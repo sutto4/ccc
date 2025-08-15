@@ -48,7 +48,7 @@ export default function UserMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))]"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] hover:bg-[hsl(var(--card-hover))] hover:border-[hsl(var(--border-hover))] transition-colors duration-200"
         aria-label="User menu"
       >
         <span className="text-xs font-semibold">{initials}</span>
@@ -66,16 +66,16 @@ export default function UserMenu() {
             </div>
           </div>
           <div className="my-1 h-px bg-[hsl(var(--border))]" />
-          <a href="/profile" className="block rounded-md px-3 py-2 text-sm hover:bg-muted" role="menuitem">
+          <a href="/profile" className="block rounded-md px-3 py-2 text-sm hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] transition-colors duration-200" role="menuitem">
             My Profile
           </a>
-          <a href="/settings" className="block rounded-md px-3 py-2 text-sm hover:bg-muted" role="menuitem">
+          <a href="/settings" className="block rounded-md px-3 py-2 text-sm hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] transition-colors duration-200" role="menuitem">
             Settings
           </a>
           <div className="my-1 h-px bg-[hsl(var(--border))]" />
           <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+            onClick={() => signOut({ callbackUrl: "/guilds" })}
+            className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-red-500/10 hover:text-red-600 transition-colors duration-200"
             role="menuitem"
           >
             Sign out

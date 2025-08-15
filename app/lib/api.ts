@@ -1,3 +1,4 @@
+<<<<<<< Current (Your changes)
 // app/lib/api.ts
 
 export type Guild = {
@@ -117,3 +118,7 @@ export const removeRole = (guildId: string, userId: string, roleId: string, call
     method: "DELETE",
     headers: { "x-user-id": callerId },
   });
+=======
+// Deprecated duplicate of lib/api.ts. Please import from "@/lib/api" instead.
+export {};
+>>>>>>> Incoming (Background Agent changes)

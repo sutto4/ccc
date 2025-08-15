@@ -1,5 +1,7 @@
 // lib/api.ts
 
+import { env } from "@/lib/env";
+
 // Types
 export type Guild = {
   id: string
@@ -16,8 +18,11 @@ export type Role = {
   roleId: string
   name: string
   color: string | null
+  position?: number
   managed?: boolean
   editableByBot?: boolean
+  iconUrl?: string | null
+  unicodeEmoji?: string | null
 }
 
 export type Member = {
@@ -48,7 +53,7 @@ export type Paged<T> = {
 }
 
 // Base URL helper
-const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+const RAW = env.NEXT_PUBLIC_API_BASE_URL || ''
 const BASE = RAW.replace(/\/+$/, '') // strip trailing slashes
 
 function u(path: string) {
@@ -65,60 +70,22 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     },
     cache: 'no-store',
   })
-  let text = await res.text();
-  // Pre-process: Replace all unquoted BigInt literals (e.g., 12345678901234567890n) with quoted strings before parsing
-  // Handles both top-level and nested BigInts
-  text = text.replace(/([:\[\s,])(\d{15,})n(?=[,\]\s}])/g, '$1"$2"');
+  const text = await res.text();
   let parsed: any;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text, (_key, value) => {
+      if (typeof value === 'bigint') return value.toString();
+      return value;
+    });
   } catch (e) {
     if (!res.ok) {
-      let msg = `${res.status} ${res.statusText}`;
-      msg = text;
-      throw new Error(msg);
+      throw new Error(text || `${res.status} ${res.statusText}`);
     }
     throw e;
   }
-  // Recursively convert all BigInts to strings (for all keys, not just ids)
-  function convertBigIntsToStrings(obj: any): any {
-    if (Array.isArray(obj)) return obj.map(convertBigIntsToStrings);
-    if (obj && typeof obj === 'object') {
-      const out: any = {};
-      for (const k in obj) {
-        if (typeof obj[k] === 'bigint') {
-          out[k] = obj[k].toString();
-        } else {
-          out[k] = convertBigIntsToStrings(obj[k]);
-        }
-      }
-      return out;
-    }
-    return obj;
-  }
-  parsed = convertBigIntsToStrings(parsed);
   if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    if (parsed?.error) {
-      // Safely stringify error, converting BigInts to strings
-      try {
-        msg = typeof parsed.error === 'object'
-          ? JSON.stringify(parsed.error, (key, value) =>
-              typeof value === 'bigint' ? value.toString() : value
-            )
-          : String(parsed.error);
-      } catch {
-        msg = String(parsed.error);
-      }
-    }
-    // Always stringify msg to avoid BigInt errors
-    let safeMsg: string;
-    try {
-      safeMsg = typeof msg === 'string' ? msg : JSON.stringify(msg, (key, value) => typeof value === 'bigint' ? value.toString() : value);
-    } catch {
-      safeMsg = String(msg);
-    }
-    throw new Error(safeMsg);
+    const msg = typeof parsed?.error === 'string' ? parsed.error : `${res.status} ${res.statusText}`;
+    throw new Error(msg);
   }
   return parsed as T;
 }
@@ -126,12 +93,14 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 // API functions
 
 export async function fetchGuilds(_accessToken?: string): Promise<Guild[]> {
-  // token not needed for your bot API right now
   return j<Guild[]>('/guilds')
 }
 
 export async function fetchRoles(guildId: string): Promise<Role[]> {
-  return j<Role[]>(`/guilds/${guildId}/roles`)
+  const res = await j<any>(`/guilds/${guildId}/roles`)
+  if (Array.isArray(res)) return res as Role[]
+  if (res && Array.isArray(res.roles)) return res.roles as Role[]
+  return []
 }
 
 export const fetchMembersLegacy = (guildId: string) =>
@@ -175,7 +144,6 @@ export async function addRole(
   roleId: string,
   actorId: string
 ): Promise<{ ok: true }> {
-  // server accepts actor via query in our setup
   const qs = new URLSearchParams({ actor: actorId })
   return j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}?${qs}`, {
     method: 'POST',

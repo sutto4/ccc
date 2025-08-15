@@ -3,6 +3,7 @@ import React, { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table } from "@/components/ui/table";
+import { Select } from "@/components/ui/select";
 
 
 import { useEffect } from "react";
@@ -97,11 +98,11 @@ function exportToCSV(rows: any[], filename = "logs.csv") {
         </div>
         <div>
           <Label htmlFor="action-type">Action</Label>
-          <select id="action-type" value={actionType} onChange={e => setActionType(e.target.value)} className="w-40 h-9 rounded-md border px-2">
+          <Select id="action-type" value={actionType} onChange={e => setActionType((e.target as HTMLSelectElement).value)} className="w-40">
             {actionTypes.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex-1 min-w-[180px]">
           <Label htmlFor="search">Search</Label>

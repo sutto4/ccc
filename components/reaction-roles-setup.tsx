@@ -9,6 +9,8 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import EmojiPicker from "@/components/ui/emoji-picker";
+import { Select } from "@/components/ui/select";
+import { InlineSearchSelect } from "@/components/ui/inline-search-select";
 
 export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
   const [channelId, setChannelId] = useState("");
@@ -25,6 +27,9 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
   const [mappings, setMappings] = useState([
     { emoji: "", roleId: "" }
   ]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState(false);
 
   useEffect(() => {
     const match = window.location.pathname.match(/guilds\/(\d+)/);
@@ -79,9 +84,47 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
   const addMapping = () => setMappings(m => [...m, { emoji: "", roleId: "" }]);
   const removeMapping = (idx: number) => setMappings(m => m.filter((_, i) => i !== idx));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Not implemented: Would save config to backend");
+    setSaveOk(false);
+    setSaveError(null);
+    const match = window.location.pathname.match(/guilds\/(\d+)/);
+    const guildId = match?.[1];
+    if (!guildId) { setSaveError("Missing guild id"); return; }
+    if (!channelId) { setSaveError("Select a channel"); return; }
+    if (!messageId) { setSaveError("Enter a message ID"); return; }
+    const payload = {
+      channelId,
+      messageId,
+      mappings: mappings.filter(m => m.emoji && m.roleId)
+    };
+    if (payload.mappings.length === 0) { setSaveError("Add at least one emoji → role mapping"); return; }
+    try {
+      setSaving(true);
+      const res = await fetch(`/api/guilds/${guildId}/reaction-roles`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(data?.error || `Save failed (${res.status})`);
+        try {
+          const { toast } = await import("@/hooks/use-toast");
+          toast({ title: "Save failed", description: data?.error || `${res.status}`, variant: "destructive", duration: 5000 });
+        } catch {}
+        return;
+      }
+      setSaveOk(true);
+      try {
+        const { toast } = await import("@/hooks/use-toast");
+        toast({ title: "Saved", description: "Reaction roles configured", variant: "success", duration: 3000 });
+      } catch {}
+    } catch (err: any) {
+      setSaveError(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!premium) {
@@ -97,7 +140,7 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
 
   return (
     <Section title={<span className="flex items-center gap-2"><SmileIcon className="w-5 h-5 text-yellow-500" /> Setup Reaction Roles</span>}>
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Channel Picker with Popover and HoverCard */}
         <div>
           <label className="block mb-1 font-semibold flex items-center gap-1">
@@ -116,49 +159,12 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
           ) : channelsError ? (
             <div className="text-red-600 text-xs">{channelsError}</div>
           ) : (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button type="button" variant="outline" className="w-full flex justify-between items-center">
-                  {channelId ? (
-                    <span className="flex items-center gap-2">
-                      <HashIcon className="w-4 h-4 text-blue-500" />
-                      {channels.find((c: any) => c.id === channelId)?.name || "Select a channel"}
-                    </span>
-                  ) : "Select a channel"}
-                  <ChevronRightIcon className="w-4 h-4 ml-auto" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="max-h-64 overflow-y-auto p-1 bg-white text-black border border-border shadow-xl rounded-lg min-w-[220px]">
-                <ul>
-                  {channels.map((c: any) => (
-                    <li key={c.id}>
-                      <HoverCard>
-                        <HoverCardTrigger asChild>
-                          <Button
-                            type="button"
-                            variant={channelId === c.id ? "secondary" : "ghost"}
-                            className={
-                              `w-full flex justify-start items-center gap-2 px-3 py-2 rounded-md transition-colors
-                              ${channelId === c.id ? 'bg-blue-100 text-blue-900' : 'hover:bg-muted/60 hover:text-blue-700'}`
-                            }
-                            onClick={() => setChannelId(c.id)}
-                            aria-label={`Select channel ${c.name}`}
-                          >
-                            <HashIcon className="w-4 h-4 text-blue-500" aria-hidden="true" />
-                            <span>{c.name}</span>
-                            {channelId === c.id && <CheckIcon className="w-4 h-4 text-green-500 ml-auto" aria-hidden="true" />}
-                          </Button>
-                        </HoverCardTrigger>
-                        <HoverCardContent className="text-xs rounded shadow-md">
-                          <div><b>ID:</b> {c.id}</div>
-                          <div><b>Type:</b> {c.type === 0 ? "Text" : c.type}</div>
-                        </HoverCardContent>
-                      </HoverCard>
-                    </li>
-                  ))}
-                </ul>
-              </PopoverContent>
-            </Popover>
+            <InlineSearchSelect
+              options={channels.filter((c:any)=>c.type===0).map((c:any)=>({ value: c.id, label: `#${c.name}` }))}
+              value={channelId}
+              onChange={(v:string)=> setChannelId(v)}
+              placeholder="Search channels…"
+            />
           )}
         </div>
 
@@ -253,17 +259,17 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
                 ) : rolesError ? (
                   <div className="text-red-600 text-xs">{rolesError}</div>
                 ) : (
-                  <select
-                    className="input input-bordered flex-1"
+                  <Select
+                    className="flex-1"
                     value={m.roleId}
-                    onChange={e => handleMappingChange(idx, "roleId", e.target.value)}
+                    onChange={e => handleMappingChange(idx, "roleId", (e.target as HTMLSelectElement).value)}
                     required
                   >
                     <option value="" disabled>Select a role</option>
                     {roles.map((role: any) => (
-                      <option key={role.id} value={role.id}>{role.name}</option>
+                      <option key={role.roleId} value={role.roleId}>{role.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <Button type="button" variant="destructive" size="icon" onClick={() => removeMapping(idx)} disabled={mappings.length === 1} title="Remove mapping">
                   <Trash2Icon className="w-4 h-4" />
@@ -276,8 +282,15 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
           </div>
         </div>
 
-        <Button type="submit" className="w-full font-bold text-lg py-3 mt-4" variant="default">
-          <SmileIcon className="w-5 h-5 mr-2" /> Save Reaction Roles
+        {saveError && (
+          <div className="text-red-600 text-sm">{saveError}</div>
+        )}
+        {saveOk && !saveError && (
+          <div className="text-green-600 text-sm">Saved!</div>
+        )}
+
+        <Button type="submit" className="w-full font-bold text-lg py-3 mt-4" variant="default" disabled={saving}>
+          <SmileIcon className="w-5 h-5 mr-2" /> {saving ? 'Saving…' : 'Save Reaction Roles'}
         </Button>
       </form>
     </Section>

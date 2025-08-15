@@ -31,25 +31,35 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
-import { Home, Server, Settings, Shield, Crown } from "lucide-react";
+import { Shield, Server, Settings, Crown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchFeatures, type FeaturesResponse } from "@/lib/api";
+import { useSession, signOut } from "next-auth/react";
 
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
 const TOP: Item[] = [
-  { href: "/", label: "Dashboard", icon: Home },
+  { href: "/admin", label: "Admin", icon: Shield },
   { href: "/guilds", label: "My Servers", icon: Server },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname() || "";
+  const { data: session } = useSession();
   const [features, setFeatures] = useState<Record<string, boolean> | null>(null);
 
   // detect if we're inside a guild route
   const parts = pathname.split("/").filter(Boolean);
   const inGuild = parts[0] === "guilds" && parts[1];
   const guildId = inGuild ? parts[1] : null;
+
+  // Check if user is admin
+  const isAdmin = session?.role === "admin" || session?.role === "owner";
+  
+  // Debug logging
+  console.log("Session:", session);
+  console.log("User role:", session?.role);
+  console.log("Is admin:", isAdmin);
 
   useEffect(() => {
     let alive = true;
@@ -73,36 +83,41 @@ export default function Sidebar() {
   }, [guildId]);
 
   return (
-    <div className="fixed left-0 top-0 h-screen flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-[240px] min-w-[240px] max-w-[240px] border-r border-[hsl(var(--sidebar-border))] z-30">
-      <nav className="flex-1 overflow-y-auto p-2">
-        {TOP.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition", pathname === href ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-accent-foreground))]"].join(" ")}
-          >
-            <Icon className="h-4 w-4" />
-            <span className="truncate">{label}</span>
-          </Link>
-        ))}
+    <div className="flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-full h-full border-r border-[hsl(var(--sidebar-border))]">
+      <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
+        {TOP.map(({ href, label, icon: Icon }) => {
+          // Only show Admin item for admin users
+          if (href === "/" && !isAdmin) return null;
+          
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition", pathname === href ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]"].join(" ")}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="truncate">{label}</span>
+            </Link>
+          );
+        })}
         {/* Community section (collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Community</span>} defaultOpen>
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/users` : "#"}
+            href={guildId ? `/guilds/${guildId}/users` : "/guilds"}
             label="Users"
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/users`) : false}
             featureEnabled={true}
-            guildSelected={true}
+            guildSelected={!!guildId}
           />
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/roles` : "#"}
+            href={guildId ? `/guilds/${guildId}/roles` : "/guilds"}
             label="Roles"
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/roles`) : false}
             featureEnabled={true}
-            guildSelected={true}
+            guildSelected={!!guildId}
           />
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/members` : "#"}
+            href={guildId ? `/guilds/${guildId}/members` : "/guilds"}
             label="Custom Groups"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
@@ -113,7 +128,7 @@ export default function Sidebar() {
         {/* FiveM Frameworks (premium, collapsible) */}
         <CollapsibleSection title={<span className="font-bold">FiveM</span>} defaultOpen>
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/esx` : "#"}
+            href={guildId ? `/guilds/${guildId}/esx` : "/guilds"}
             label="ESX"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/esx`) : false}
@@ -121,7 +136,7 @@ export default function Sidebar() {
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/qbcore` : "#"}
+            href={guildId ? `/guilds/${guildId}/qbcore` : "/guilds"}
             label="QBcore"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/qbcore`) : false}
@@ -132,21 +147,21 @@ export default function Sidebar() {
         {/* Dummy nav items (collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/embeded-messages` : "/guilds"}
             label="Embeded Messages"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.embeded_messages)}
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/reaction-roles` : "#"}
+            href={guildId ? `/guilds/${guildId}/reaction-roles` : "/guilds"}
             label="Reaction Roles"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.reaction_roles)}
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/custom-commands` : "/guilds"}
             label="Custom Commands"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.custom_commands)}
@@ -156,28 +171,28 @@ export default function Sidebar() {
         {/* Socials (premium, collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Creator Alerts</span>} defaultOpen>
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/creator-alerts/twitch` : "/guilds"}
             label="Twitch"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/creator-alerts/youtube` : "/guilds"}
             label="Youtube"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/creator-alerts/x` : "/guilds"}
             label="X"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
           <NavLeaf
-            href="#"
+            href={guildId ? `/guilds/${guildId}/creator-alerts/tiktok` : "/guilds"}
             label="Tiktok"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             featureEnabled={!!(guildId && features?.creator_alerts)}
@@ -204,7 +219,9 @@ export default function Sidebar() {
               </DropdownMenuItem>
             </Link>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/guilds" })}>
+              Logout
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -233,9 +250,10 @@ function NavLeaf({
 }: NavLeafProps) {
   const base =
     "group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition select-none w-full relative";
-  // Determine if feature is available
-  const isAvailable = guildSelected ? featureEnabled : false;
-  const isGreyed = !isAvailable;
+  // Determine the state: no guild selected vs feature not available
+  const noGuildSelected = !guildSelected;
+  const featureNotAvailable = guildSelected && !featureEnabled;
+  const isGreyed = noGuildSelected || featureNotAvailable;
   // Muted color for greyed out
   const mutedColor = "#A1A1AA";
   let icon = rightIcon;
@@ -248,14 +266,21 @@ function NavLeaf({
   }
   const cls = [
     base,
-    active && isAvailable ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "",
+    active && guildSelected && featureEnabled ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "",
     isGreyed
       ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
       : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer",
   ].join(" ");
   const [modalOpen, setModalOpen] = React.useState(false);
+  const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
+  
   const handleClick = (e: React.MouseEvent) => {
-    if (isGreyed) {
+    if (noGuildSelected) {
+      e.preventDefault();
+      setShowNoGuildMessage(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => setShowNoGuildMessage(false), 3000);
+    } else if (featureNotAvailable) {
       e.preventDefault();
       setModalOpen(true);
     } else if (onClick) {
@@ -272,9 +297,18 @@ function NavLeaf({
   );
   return (
     <>
-      <a href={href} className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
+      <Link href={href} className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
         {content}
-      </a>
+      </Link>
+      
+      {/* No guild selected message */}
+      {showNoGuildMessage && (
+        <div className="fixed top-20 left-4 z-[100] bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg">
+          Please select a server first
+        </div>
+      )}
+      
+      {/* Premium modal only for feature not available */}
       <PremiumModal open={modalOpen} onOpenChange={setModalOpen} />
     </>
   );

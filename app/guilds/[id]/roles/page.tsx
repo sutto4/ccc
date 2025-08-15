@@ -34,10 +34,10 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
       }
     >
       <Tabs defaultValue="kanban" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="explorer">Role Explorer</TabsTrigger>
-          <TabsTrigger value="mass">Mass Role Assign</TabsTrigger>
+        <TabsList className="mb-4 rounded-full bg-muted/60 p-1 border border-border shadow-sm">
+          <TabsTrigger value="kanban" className="rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Kanban</TabsTrigger>
+          <TabsTrigger value="explorer" className="rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Role Explorer</TabsTrigger>
+          <TabsTrigger value="mass" className="rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Mass Role Assign</TabsTrigger>
         </TabsList>
         <TabsContent value="kanban">
           <h2 className="font-semibold text-lg mb-2">Kanban Role Management (Experimental)</h2>

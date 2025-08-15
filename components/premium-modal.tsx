@@ -5,14 +5,7 @@ import { Crown } from "lucide-react";
 export default function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="rounded-xl shadow-xl p-6 w-full max-w-md mx-auto backdrop-blur-md border border-gray-200"
-        style={{
-          background: 'rgba(255,255,255,0.35)',
-          color: '#111827',
-          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
-        }}
-      >
+      <DialogContent className="rounded-xl p-6 w-full max-w-md mx-auto text-black bg-white/50 dark:bg-white/50 backdrop-blur-2xl border border-white/60 dark:border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:text-black">
         <DialogTitle className="flex items-center gap-2 text-yellow-600 text-lg font-semibold mb-2">
           <Crown className="h-5 w-5 text-yellow-500" /> Unlock Premium Features
         </DialogTitle>

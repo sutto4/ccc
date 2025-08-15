@@ -18,7 +18,7 @@ export default function Providers({ children }: PropsWithChildren) {
   }, []);
   return (
     <ThemeProvider attribute="class" defaultTheme="light" value={{ light: "light" }} enableSystem={false} disableTransitionOnChange>
-      <SessionProvider basePath="/auth">
+      <SessionProvider>
         <QueryClientProvider client={client}>
           {children}
           <Toaster />

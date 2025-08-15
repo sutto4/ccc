@@ -28,7 +28,7 @@ export default async function GuildLayout(
   if (!guild) return notFound();
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="pl-4 pr-4 md:pr-6 md:pl-4">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-bold truncate">{guild.name}</h1>

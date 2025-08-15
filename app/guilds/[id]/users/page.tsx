@@ -12,6 +12,7 @@ import {
   type Role,
 } from "@/lib/api";
 import { logAction } from "@/lib/logger";
+import { Select } from "@/components/ui/select";
 
 type Member = {
   guildId: string;
@@ -203,11 +204,11 @@ export default function UsersPage() {
             setPage(1);
           }}
         />
-        <select
-          className="rounded-md border px-2 py-1 text-xs bg-background"
+        <Select
+          className="w-48 text-xs"
           value={roleFilter}
           onChange={e => {
-            setRoleFilter(e.target.value);
+            setRoleFilter((e.target as HTMLSelectElement).value);
             setPage(1);
           }}
         >
@@ -215,7 +216,7 @@ export default function UsersPage() {
           {roles.map((r) => (
             <option key={r.roleId} value={r.roleId}>{r.name}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-card">
@@ -277,14 +278,9 @@ export default function UsersPage() {
       {/* Modal for add/remove roles */}
       {selectedUser && (
         <Dialog open={true} onClose={() => { setSelectedUser(null); setModalRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); }} />
+          <div className="fixed inset-0 bg-black/10 backdrop-blur-sm" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); }} />
           <div
-            className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 backdrop-blur-md border border-gray-200"
-            style={{
-              background: 'rgba(255,255,255,0.35)',
-              color: '#111827',
-              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)'
-            }}
+            className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 border bg-white/70 text-black backdrop-blur-lg border-white/60"
           >
             <Dialog.Title className="text-lg font-semibold mb-2">Manage Roles for {selectedUser.username}</Dialog.Title>
             <div className="mb-2 text-xs text-muted-foreground">Discord ID: {selectedUser.discordUserId}</div>

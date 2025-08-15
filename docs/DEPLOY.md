@@ -18,7 +18,6 @@ Prereqs
 - Copy the Client ID and Client Secret.
 
 2) Configure environment variables
-<!-- Reference to .env.local removed -->
 - NEXTAUTH_URL=http://localhost:3000
 - NEXTAUTH_SECRET=generate_a_long_random_string
 - DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
@@ -26,9 +25,14 @@ Prereqs
 - NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
 - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
 - NEXT_PUBLIC_API_BASE_URL=/api
-- SERVER_API_BASE_URL=http://localhost:3001
+- SERVER_API_BASE_URL=http://localhost:3001  # Bot/backend base URL to proxy
+- DISCORD_BOT_TOKEN=YOUR_DISCORD_BOT_TOKEN   # Used by server routes calling Discord API
+- DB_HOST=...
+- DB_USER=...
+- DB_PASS=...
+- DB_NAME=...
 
-Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep secrets server-side [^1].
+Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep secrets server-side.
 
 3) Run locally
 - pnpm install
@@ -46,16 +50,23 @@ Note: Only variables prefixed with NEXT_PUBLIC_ are exposed to the browser; keep
   - NEXTAUTH_SECRET=...
   - DISCORD_CLIENT_ID=...
   - DISCORD_CLIENT_SECRET=...
-    - NEXT_PUBLIC_APP_BASE_URL=https://YOUR_DOMAIN.com
-    - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
-    - NEXT_PUBLIC_API_BASE_URL=/api
-    - SERVER_API_BASE_URL=https://YOUR_API_DOMAIN.com
-- Add your domain to Discord OAuth redirect list.
-- Deploy.
+  - NEXT_PUBLIC_APP_BASE_URL=https://YOUR_DOMAIN.com
+  - NEXT_PUBLIC_DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
+  - NEXT_PUBLIC_API_BASE_URL=/api
+  - SERVER_API_BASE_URL=https://YOUR_API_DOMAIN.com
+  - DISCORD_BOT_TOKEN=...
+  - DB_HOST=...
+  - DB_USER=...
+  - DB_PASS=...
+  - DB_NAME=...
 
-6) Docker (optional)
+Proxying to backend/bot
+- When SERVER_API_BASE_URL is set, all Next.js /api/* routes are proxied to that base (see next.config.mjs rewrites).
+- Frontend code should call paths like `/api/guilds/...` and the proxy will forward to your bot/backend.
+
+Docker (optional)
 Use this Dockerfile to containerize the UI:
-\`\`\`dockerfile
+```dockerfile
 # UI-only Next.js production image
 FROM node:20-alpine AS deps
 WORKDIR /app
@@ -78,6 +89,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 EXPOSE 3000
 CMD ["node", ".next/standalone/server.js"]
+<<<<<<< Current (Your changes)
 \`\`\`
 
 Build and run:
@@ -106,3 +118,6 @@ export default function Providers({ children }: PropsWithChildren) {
     </SessionProvider>
   )
 }
+=======
+```
+>>>>>>> Incoming (Background Agent changes)

@@ -20,7 +20,7 @@ export default function SignInPage() {
           <Button
             className="w-full"
             onClick={() => {
-              void signIn("discord", { callbackUrl: "/" })
+              void signIn("discord", { callbackUrl: "/guilds" })
             }}
           >
             Sign in with Discord

@@ -1,30 +1,37 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/providers";
 import ConsoleShell from "@/components/console-shell";
+import { Toaster } from "@/components/ui/toaster";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Discord Server Manager",
-  description: "Admin console for your Discord server",
+  title: "DuckCord Admin - Discord Server Management",
+  description: "The ultimate Discord server management platform. Manage roles, users, and features with powerful tools designed for modern communities.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <style>{`
-html {
-  font-family: ${GeistSans.style.fontFamily};
-  --font-sans: ${GeistSans.variable};
-  --font-mono: ${GeistMono.variable};
-}
-        `}</style>
+        {/* Conditional CSP for development */}
+        {process.env.NODE_ENV === "development" && (
+          <meta
+            httpEquiv="Content-Security-Policy"
+            content="script-src 'self' 'unsafe-eval' 'unsafe-inline';"
+          />
+        )}
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <Providers>
-          <ConsoleShell>{children}</ConsoleShell>
+          {children}
+          <Toaster />
         </Providers>
       </body>
     </html>

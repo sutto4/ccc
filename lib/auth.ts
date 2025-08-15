@@ -1,19 +1,42 @@
 import type { NextAuthOptions } from "next-auth"
 import DiscordProvider from "next-auth/providers/discord"
+import { env } from "@/lib/env"
+import { isAdmin } from "@/lib/db"
+
+// Validate required environment variables
+if (!env.DISCORD_CLIENT_ID || !env.DISCORD_CLIENT_SECRET) {
+  console.error("Missing required Discord OAuth environment variables");
+  console.error("DISCORD_CLIENT_ID:", env.DISCORD_CLIENT_ID ? "SET" : "MISSING");
+  console.error("DISCORD_CLIENT_SECRET:", env.DISCORD_CLIENT_SECRET ? "SET" : "MISSING");
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
     DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID || "",
-      clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+      clientId: env.DISCORD_CLIENT_ID || "",
+      clientSecret: env.DISCORD_CLIENT_SECRET || "",
       authorization: {
         params: { scope: "identify guilds email" },
       },
     }),
   ],
   session: { strategy: "jwt" },
+  secret: env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development",
   pages: {
     signIn: "/signin",
+  },
+  // Add logging to debug the issue
+  logger: {
+    error(code, ...message) {
+      console.error("NextAuth Error:", code, ...message);
+    },
+    warn(code, ...message) {
+      console.warn("NextAuth Warning:", code, ...message);
+    },
+    debug(code, ...message) {
+      console.log("NextAuth Debug:", code, ...message);
+    },
   },
   callbacks: {
     async jwt({ token, account, profile }) {
@@ -28,8 +51,22 @@ export const authOptions: NextAuthOptions = {
         token.discordId = profile.id
         // @ts-expect-error global_name exists on Discord profile
         token.name = token.name || (profile.global_name as string | undefined) || token.name
-        // Default everyone to viewer; later, map real RBAC from your DB/API
-        token.role = token.role || "viewer"
+        
+        // Check database for user role if we have a discordId
+        if (profile.id && !token.role) {
+          try {
+            // Only check admin status if database is configured
+            if (env.DB_HOST && env.DB_USER && env.DB_NAME) {
+              const isUserAdmin = await isAdmin(profile.id);
+              token.role = isUserAdmin ? "admin" : "viewer";
+            } else {
+              token.role = "viewer";
+            }
+          } catch (error) {
+            console.error("Error checking user role:", error);
+            token.role = "viewer";
+          }
+        }
       }
       return token
     },

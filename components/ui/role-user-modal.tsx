@@ -100,15 +100,9 @@ export function RoleUserModal({
 
   return (
     <Dialog open={open} onClose={onClose} className="fixed z-[200] inset-0 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/10" aria-hidden="true" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/10 backdrop-blur-sm" aria-hidden="true" onClick={onClose} />
       <div
-        className="relative rounded-xl shadow-xl p-6 w-full max-w-3xl mx-auto z-10 backdrop-blur-md border border-gray-200"
-        style={{
-          background: 'rgba(255,255,255,0.35)',
-          color: '#111827',
-          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)',
-          maxWidth: '720px'
-        }}
+        className="relative rounded-xl shadow-xl p-6 w-full mx-auto z-10 border bg-white/70 text-black backdrop-blur-lg max-w-3xl border-white/60"
       >
         <Dialog.Title className="text-lg font-semibold mb-2">Edit Users for {role.name}</Dialog.Title>
         <div className="mb-2 text-xs text-muted-foreground">Role ID: {role.roleId}</div>

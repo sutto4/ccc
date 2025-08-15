@@ -8,7 +8,13 @@ import UserMenu from "@/components/ui/user-menu";
 
 export default function Topbar() {
   return (
-    <div className="flex h-14 items-center justify-end gap-3 px-4">
+    <div className="flex h-18 items-center justify-between gap-4 px-4">
+      {/* Branding */}
+      <div className="flex items-center gap-2">
+        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 shadow" />
+        <div className="font-extrabold tracking-tight text-xl">DuckCord Admin</div>
+      </div>
+      {/* Actions */}
       <div className="flex items-center gap-2">
         <InviteBotButton
           size="sm"
