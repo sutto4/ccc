@@ -24,16 +24,21 @@ export default async function Page() {
                   <span>Discord Server Management Made Simple</span>
                 </div>
                 
-                <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-                  <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                    DuckCord
-                  </span>
-                  <br />
-                  <span className="text-gray-100">Admin</span>
-                </h1>
+                <div className="mb-6 flex items-center justify-center gap-4 md:gap-6">
+                  <img
+                    src="/brand/sh-logo.png"
+                    alt="ServerHub"
+                    className="h-28 md:h-40 w-auto object-contain"
+                  />
+                  <h1 className="text-5xl md:text-7xl font-bold text-white leading-tight text-left">
+                    <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                      ServerHub
+                    </span>
+                  </h1>
+                </div>
                 
                 <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
-                  The ultimate Discord server management platform. Manage roles, users, and features with powerful tools designed for modern communities.
+                  ServerHub is the ultimate Discord server management platform. Manage roles, users, and features with powerful tools designed for modern communities.
                 </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
@@ -278,7 +283,7 @@ export default async function Page() {
             Ready to Transform Your Server?
           </h2>
           <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join thousands of server administrators who trust DuckCord Admin to manage their communities effectively.
+            Join thousands of server administrators who trust ServerHub to manage their communities effectively.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -313,7 +318,7 @@ export default async function Page() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-emerald-600 rounded-lg"></div>
-                <span className="text-xl font-bold">DuckCord Admin</span>
+                <span className="text-xl font-bold">ServerHub</span>
               </div>
               <p className="text-gray-400">The ultimate Discord server management platform for modern communities.</p>
             </div>
@@ -350,7 +355,7 @@ export default async function Page() {
           </div>
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 DuckCord Admin. All rights reserved.</p>
+            <p>&copy; 2024 ServerHub. All rights reserved.</p>
           </div>
         </div>
       </footer>

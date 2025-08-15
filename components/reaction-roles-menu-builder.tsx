@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { HashIcon, ImageIcon, SendIcon, Trash2Icon, EditIcon, ToggleLeftIcon, ToggleRightIcon, SaveIcon, XIcon, RefreshCwIcon, LayoutGridIcon, CheckIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { HashIcon, ImageIcon, SendIcon, Trash2Icon, EditIcon, ToggleLeftIcon, ToggleRightIcon, SaveIcon, XIcon, RefreshCwIcon, LayoutGridIcon, CheckIcon, Upload, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean }) {
   const [channels, setChannels] = useState<any[]>([]);
@@ -22,12 +22,22 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
   const [color, setColor] = useState("#5865F2");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [authorName, setAuthorName] = useState("");
+  const [authorIconUrl, setAuthorIconUrl] = useState("");
+  const [footerText, setFooterText] = useState("");
+  const [footerIconUrl, setFooterIconUrl] = useState("");
+  const [showTimestamp, setShowTimestamp] = useState(true);
+  const [inlineEdit, setInlineEdit] = useState(true);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [placeholder, setPlaceholder] = useState("Select roles");
   const [minValues, setMinValues] = useState(0);
   const [maxValues, setMaxValues] = useState(1);
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  
+  // Role search state
+  const [roleSearch, setRoleSearch] = useState("");
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
   // Existing configs
   const [configs, setConfigs] = useState<any[]>([]);
@@ -52,6 +62,10 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
     const m = typeof window !== 'undefined' ? window.location.pathname.match(/guilds\/(\d+)/) : null;
     return m?.[1] || "";
   }, []);
+
+  // Color picker modal state
+  const [colorModalOpen, setColorModalOpen] = useState(false);
+  const [tempColor, setTempColor] = useState(color);
 
   useEffect(() => {
     (async () => {
@@ -82,6 +96,18 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
   };
 
   useEffect(() => { if (guildId) void refreshConfigs(); }, [guildId]);
+  
+  // Close role dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showRoleDropdown && !(event.target as Element).closest('.role-search-container')) {
+        setShowRoleDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showRoleDropdown]);
 
   const toggleRole = (rid: string) => {
     setSelectedRoleIds(prev => prev.includes(rid) ? prev.filter(x => x !== rid) : [...prev, rid]);
@@ -102,6 +128,9 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
         color: parseInt(color.replace('#',''), 16) || undefined,
         thumbnailUrl: thumbnailUrl || undefined,
         imageUrl: imageUrl || undefined,
+        author: authorName ? { name: authorName, iconUrl: authorIconUrl || undefined } : undefined,
+        footer: footerText ? { text: footerText, iconUrl: footerIconUrl || undefined } : undefined,
+        timestamp: showTimestamp ? Date.now() : undefined,
         roleIds: selectedRoleIds,
         placeholder: placeholder || undefined,
         minValues,
@@ -127,7 +156,9 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
       await refreshConfigs();
       // reset form
       setTitle(""); setDescription(""); setSelectedRoleIds([]);
-      setThumbnailUrl(""); setImageUrl(""); setPlaceholder("Select roles"); setMinValues(0); setMaxValues(1);
+      setThumbnailUrl(""); setImageUrl("");
+      setAuthorName(""); setAuthorIconUrl(""); setFooterText(""); setFooterIconUrl(""); setShowTimestamp(true);
+      setPlaceholder("Select roles"); setMinValues(0); setMaxValues(1);
     } catch (e: any) {
       setPublishMsg(e?.message || "Publish failed");
     } finally { setPublishing(false); }
@@ -233,6 +264,58 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
     finally { setSavingEdit(false); }
   };
 
+     const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
+   const [tempThumbnailUrl, setTempThumbnailUrl] = useState("");
+   const [imageModalType, setImageModalType] = useState<'thumbnail' | 'author' | 'image' | 'footer'>('thumbnail');
+   
+   // Filtered roles for search
+  const filteredRoles = useMemo(() => {
+    if (!roleSearch.trim()) return [];
+    return [...roles]
+      .sort((a: any, b: any) => (b.position ?? 0) - (a.position ?? 0))
+      .filter((r: any) => 
+        r.name.toLowerCase().includes(roleSearch.toLowerCase()) ||
+        r.roleId.toLowerCase().includes(roleSearch.toLowerCase())
+      );
+  }, [roles, roleSearch]);
+
+     const handleImageSave = () => {
+     switch (imageModalType) {
+       case 'thumbnail':
+         setThumbnailUrl(tempThumbnailUrl);
+         break;
+       case 'author':
+         setAuthorIconUrl(tempThumbnailUrl);
+         break;
+       case 'image':
+         setImageUrl(tempThumbnailUrl);
+         break;
+       case 'footer':
+         setFooterIconUrl(tempThumbnailUrl);
+         break;
+     }
+     setThumbnailModalOpen(false);
+   };
+ 
+   const handleImageRemove = () => {
+     switch (imageModalType) {
+       case 'thumbnail':
+         setThumbnailUrl("");
+         break;
+       case 'author':
+         setAuthorIconUrl("");
+         break;
+       case 'image':
+         setImageUrl("");
+         break;
+       case 'footer':
+         setFooterIconUrl("");
+         break;
+     }
+     setTempThumbnailUrl("");
+     setThumbnailModalOpen(false);
+   };
+
   return (
     <Section title="Role Menu Publisher">
       {!premium && (
@@ -242,120 +325,301 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
       {/* Builder */}
       <div className="rounded-xl border p-4 bg-card space-y-2">
         <div className="flex items-center gap-2 text-muted-foreground text-sm"><LayoutGridIcon className="w-4 h-4"/> Compose an embed and publish a Role Select Menu to a channel.</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1 flex items-center gap-1"><HashIcon className="w-4 h-4"/>Channel</label>
-              <Select className="w-full" value={channelId} onChange={e => setChannelId((e.target as HTMLSelectElement).value)}>
-                <option value="" disabled>Pick a text channel…</option>
+                 <div className="space-y-6">
+                       {/* Top: Channel selector */}
+            <div className="flex items-center gap-2">
+              <HashIcon className="w-4 h-4 text-muted-foreground" />
+              <Select value={channelId} onChange={e => setChannelId((e.target as HTMLSelectElement).value)} className="w-full">
+                <option value="" disabled>Pick channel…</option>
                 {channels.map((c: any) => <option key={c.id} value={c.id}>#{c.name}</option>)}
               </Select>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Title</label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Embed title" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Embed description" rows={4} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">Color</label>
-                <Input type="color" value={color} onChange={e => setColor(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 flex items-center gap-1"><ImageIcon className="w-4 h-4"/>Thumbnail URL</label>
-                <Input value={thumbnailUrl} onChange={e => setThumbnailUrl(e.target.value)} placeholder="https://…" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Image URL</label>
-              <Input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://…" />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">Placeholder</label>
-                <Input value={placeholder} onChange={e => setPlaceholder(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Min</label>
-                <Input type="number" value={minValues} onChange={e => setMinValues(Number(e.target.value)||0)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Max</label>
-                <Input type="number" value={maxValues} onChange={e => setMaxValues(Number(e.target.value)||1)} />
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium mb-1">Roles</label>
-            <div className="flex flex-wrap gap-1 mb-2 min-h-[1.5rem]">
-              {selectedRoleIds.length === 0 && (
-                <span className="text-xs text-muted-foreground">None selected</span>
-              )}
-              {selectedRoleIds.map((rid) => {
-                const r = roles.find((x: any) => x.roleId === rid);
-                const color = r?.color || '#e5e7eb';
-                return (
-                  <button
-                    key={rid}
-                    type="button"
-                    onClick={() => toggleRole(rid)}
-                    className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs hover:opacity-90"
-                    style={{ backgroundColor: `${color}20`, borderColor: color }}
-                    title="Remove"
-                  >
-                    {r?.iconUrl ? (
-                      <img src={r.iconUrl} alt="" className="w-3.5 h-3.5 rounded-sm" />
-                    ) : r?.unicodeEmoji ? (
-                      <span className="text-sm leading-none">{r.unicodeEmoji}</span>
-                    ) : (
-                      <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
+
+                                               {/* Main content: Single column stacked - half width */}
+            <div className="w-1/2 space-y-6">
+                              {/* Role selector - search bar with dropdown */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium">Roles</label>
+                  <div className="flex flex-wrap gap-1 mb-2 min-h-[1.5rem]">
+                    {selectedRoleIds.length === 0 && (
+                      <span className="text-xs text-muted-foreground">None selected</span>
                     )}
-                    <span className="truncate max-w-[140px]">{r?.name || rid}</span>
-                    <XIcon className="w-3 h-3" />
-                  </button>
-                );
-              })}
+                    {selectedRoleIds.map((rid) => {
+                      const r = roles.find((x: any) => x.roleId === rid);
+                      const color = r?.color || '#e5e7eb';
+                      return (
+                        <button
+                          key={rid}
+                          type="button"
+                          onClick={() => toggleRole(rid)}
+                          className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs hover:opacity-90"
+                          style={{ backgroundColor: `${color}20`, borderColor: color }}
+                          title="Remove"
+                        >
+                          {r?.iconUrl ? (
+                            <img src={r.iconUrl} alt="" className="w-3.5 h-3.5 rounded-sm" />
+                          ) : r?.unicodeEmoji ? (
+                            <span className="text-sm leading-none">{r.unicodeEmoji}</span>
+                          ) : (
+                            <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
+                          )}
+                          <span className="truncate max-w-[140px]">{r?.name || rid}</span>
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative w-full role-search-container">
+                    <Input
+                      placeholder="Search roles..."
+                      className="w-full"
+                      value={roleSearch}
+                      onChange={(e) => setRoleSearch(e.target.value)}
+                      onFocus={() => setShowRoleDropdown(true)}
+                    />
+                    {showRoleDropdown && roleSearch && (
+                      <div className="absolute top-full left-0 right-0 mt-1 border rounded-md bg-background shadow-lg max-h-48 overflow-auto z-10">
+                        {filteredRoles.map((r: any) => {
+                          const isOn = selectedRoleIds.includes(r.roleId);
+                          const color = r.color || '#e5e7eb';
+                          return (
+                            <button
+                              key={r.roleId}
+                              type="button"
+                              onClick={() => {
+                                toggleRole(r.roleId);
+                                setRoleSearch("");
+                                setShowRoleDropdown(false);
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-muted transition ${isOn ? 'bg-primary/10' : ''}`}
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                {r.iconUrl ? (
+                                  <img src={r.iconUrl} alt="" className="w-4 h-4 rounded-sm" />
+                                ) : r.unicodeEmoji ? (
+                                  <span className="text-base leading-none">{r.unicodeEmoji}</span>
+                                ) : (
+                                  <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
+                                )}
+                                <span className="truncate" title={r.roleId}>{r.name}</span>
+                              </span>
+                              {isOn && <CheckIcon className="w-4 h-4 text-primary" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+               {/* Inline editor toggle */}
+               <div className="flex items-center justify-between">
+                 <label className="block text-sm font-medium">Embed Editor</label>
+                 <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                   <input type="checkbox" className="accent-blue-600" checked={inlineEdit} onChange={(e)=>setInlineEdit(e.target.checked)} />
+                   Edit in preview
+                 </label>
+               </div>
+
+              {/* Live preview */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium">Live preview</label>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  {/* Simulated Discord message container */}
+                  <div className="flex items-start gap-3">
+                                         {/* Circular color picker trigger */}
+                     <button
+                       type="button"
+                       onClick={() => { setTempColor(color); setColorModalOpen(true); }}
+                       className="relative h-9 w-9 rounded-full border-2 border-border cursor-pointer overflow-hidden shadow-sm hover:shadow transition"
+                       title="Set embed color"
+                     >
+                       <span
+                         className="absolute inset-0 rounded-full"
+                         style={{ backgroundImage: 'conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
+                       />
+                       <span
+                         className="absolute inset-1 rounded-full border"
+                         style={{ backgroundColor: color }}
+                       />
+                     </button>
+                    <div className="min-w-0 flex-1">
+                      {/* Username + timestamp */}
+                      <div className="mb-1 text-sm flex items-center gap-3">
+                        <span className="font-semibold">ServerHub Bot</span>
+                        {showTimestamp && (
+                          <span className="ml-2 text-xs text-muted-foreground">{new Date().toLocaleTimeString()}</span>
+                        )}
+                      </div>
+
+                      {/* Embed card */}
+                      <div className="relative rounded-md border bg-card p-3" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
+                                                   {/* Thumbnail on the right */}
+                          <div className="absolute right-3 top-3 w-24">
+                            {thumbnailUrl ? (
+                              <div className="relative">
+                                <img src={thumbnailUrl} alt="thumb" className="w-20 h-20 rounded object-cover border" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImageModalType('thumbnail');
+                                    setTempThumbnailUrl(thumbnailUrl);
+                                    setThumbnailModalOpen(true);
+                                  }}
+                                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs"
+                                  title="Remove thumbnail"
+                                >
+                                  <XIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setImageModalType('thumbnail');
+                                  setTempThumbnailUrl("");
+                                  setThumbnailModalOpen(true);
+                                }}
+                                className="w-20 h-20 rounded border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                                title="Add thumbnail"
+                              >
+                                <ImageIcon className="w-6 h-6" />
+                              </button>
+                            )}
+                          </div>
+
+                                                   {/* Author row */}
+                          <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2 w-[24rem]`}>
+                            {inlineEdit ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImageModalType('author');
+                                    setTempThumbnailUrl(authorIconUrl);
+                                    setThumbnailModalOpen(true);
+                                  }}
+                                  className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors overflow-hidden"
+                                  title="Set author icon"
+                                >
+                                  {authorIconUrl ? (
+                                    <img src={authorIconUrl} alt="author" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <ImageIcon className="w-4 h-4" />
+                                  )}
+                                </button>
+                                <Input value={authorName} onChange={e => setAuthorName(e.target.value)} placeholder="Author name" className="flex-1" />
+                              </>
+                            ) : authorName && (
+                              <>
+                                {authorIconUrl && (<img src={authorIconUrl} alt="author" className="w-4 h-4 rounded-full border" />)}
+                                <span className="truncate">{authorName}</span>
+                              </>
+                            )}
+                          </div>
+
+                                                  {/* Title / Description */}
+                          {inlineEdit ? (
+                            <>
+                              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Embed title" className="font-semibold leading-snug mb-2 w-[24rem]" />
+                              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Embed description" rows={2} className="text-sm whitespace-pre-wrap text-muted-foreground" />
+                            </>
+                          ) : (
+                            <>
+                              {title && <div className="font-semibold leading-snug mb-2 w-[24rem] break-words">{title}</div>}
+                              {description && <div className="text-sm whitespace-pre-wrap text-muted-foreground">{description}</div>}
+                            </>
+                          )}
+
+                                                 {/* Large image below */}
+                         <div className="mt-3">
+                           {imageUrl ? (
+                             <div className="relative">
+                               <img src={imageUrl} alt="embed" className="w-full max-h-56 rounded object-cover border" />
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   setImageModalType('image');
+                                   setTempThumbnailUrl(imageUrl);
+                                   setThumbnailModalOpen(true);
+                                 }}
+                                 className="absolute top-2 right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs"
+                                 title="Remove image"
+                               >
+                                 <XIcon className="w-3 h-3" />
+                               </button>
+                             </div>
+                           ) : (
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setImageModalType('image');
+                                 setTempThumbnailUrl("");
+                                 setThumbnailModalOpen(true);
+                               }}
+                               className="w-full h-32 rounded border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                               title="Add large image"
+                             >
+                               <ImageIcon className="w-8 h-8" />
+                               </button>
+                           )}
+                         </div>
+
+                                                 {/* Footer */}
+                         <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+                           {inlineEdit ? (
+                             <>
+                                                               <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImageModalType('footer');
+                                    setTempThumbnailUrl(footerIconUrl);
+                                    setThumbnailModalOpen(true);
+                                  }}
+                                  className="w-6 h-6 rounded-full border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors overflow-hidden"
+                                  title="Set footer icon"
+                                >
+                                  {footerIconUrl ? (
+                                    <img src={footerIconUrl} alt="footer" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <ImageIcon className="w-3 h-3" />
+                                  )}
+                                </button>
+                                <input className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" placeholder="Footer text" value={footerText} onChange={(e)=>setFooterText(e.target.value)} />
+                             </>
+                           ) : (
+                             <>
+                               {footerIconUrl && (<img src={footerIconUrl} alt="footer" className="w-4 h-4 rounded-full border" />)}
+                               {footerText && <span className="truncate">{footerText}</span>}
+                             </>
+                           )}
+                           {showTimestamp && <span className="ml-auto">{new Date().toLocaleString()}</span>}
+                         </div>
+
+                      </div>
+
+                      {/* Select menu preview removed by request */}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+               {/* Min/Max/Placeholder settings removed by request */}
+
+               {/* Publish button */}
+               <Button
+                 onClick={doPublish}
+                 disabled={publishing || !premium}
+                 className="w-full bg-gradient-to-r from-blue-500/90 to-blue-400/80 text-white shadow-md hover:shadow-lg hover:from-blue-600/90 hover:to-blue-500/80 focus-visible:ring-blue-400/40"
+               >
+                 <SendIcon className="w-4 h-4 mr-2" /> {publishing ? 'Publishing…' : 'Publish as Role Menu'}
+               </Button>
+               {publishMsg && <div className={`text-sm ${publishMsg.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>{publishMsg}</div>}
             </div>
-            <div className="border rounded p-2 h-64 overflow-auto bg-background">
-              {[...roles].sort((a:any,b:any)=> (b.position??0)-(a.position??0)).map((r: any) => {
-                const isOn = selectedRoleIds.includes(r.roleId);
-                const color = r.color || '#e5e7eb';
-                return (
-                  <button
-                    key={r.roleId}
-                    type="button"
-                    onClick={() => toggleRole(r.roleId)}
-                    className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded cursor-pointer transition ${isOn ? 'bg-primary/10' : 'hover:bg-muted'}`}
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      {r.iconUrl ? (
-                        <img src={r.iconUrl} alt="" className="w-4 h-4 rounded-sm" />
-                      ) : r.unicodeEmoji ? (
-                        <span className="text-base leading-none">{r.unicodeEmoji}</span>
-                      ) : (
-                        <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
-                      )}
-                      <span className="truncate" title={r.roleId}>{r.name}</span>
-                    </span>
-                    {isOn && <CheckIcon className="w-4 h-4 text-primary" />}
-                  </button>
-                );
-              })}
-            </div>
-            <Button
-              onClick={doPublish}
-              disabled={publishing || !premium}
-              className="w-full bg-gradient-to-r from-blue-500/90 to-blue-400/80 text-white shadow-md hover:shadow-lg hover:from-blue-600/90 hover:to-blue-500/80 focus-visible:ring-blue-400/40"
-            >
-              <SendIcon className="w-4 h-4 mr-2" /> {publishing ? 'Publishing…' : 'Publish as Role Menu'}
-            </Button>
-            {publishMsg && <div className={`text-sm ${publishMsg.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>{publishMsg}</div>}
-          </div>
-        </div>
       </div>
+    </div>
 
       {/* Management */}
       <div className="mt-8 rounded-xl border p-4 bg-card">
@@ -473,26 +737,101 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
           </div>
         )}
       </div>
-      <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete reaction role message?</DialogTitle>
-            <DialogDescription>
-              This will also delete the Discord message. {confirmDelete?.title ? `(${confirmDelete.title})` : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={async () => { if (confirmDelete) { await doDelete(confirmDelete.id); setConfirmDelete(null); } }}
-              disabled={deleting}
-            >
-              <Trash2Icon className="w-4 h-4 mr-2" /> {deleting ? 'Deleting…' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Section>
-  );
-}
+             <Dialog open={!!confirmDelete} onOpenChange={(o: boolean) => { if (!o) setConfirmDelete(null); }}>
+         <DialogContent className="backdrop-blur-sm bg-background/95 border-border/50 shadow-xl">
+           <DialogHeader>
+             <DialogTitle>Delete reaction role message?</DialogTitle>
+             <DialogDescription>
+               This will also delete the Discord message. {confirmDelete?.title ? `(${confirmDelete.title})` : ''}
+             </DialogDescription>
+           </DialogHeader>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+             <Button
+               className="bg-red-600 hover:bg-red-700 text-white"
+               onClick={async () => { if (confirmDelete) { await doDelete(confirmDelete.id); setConfirmDelete(null); } }}
+               disabled={deleting}
+             >
+               <Trash2Icon className="w-4 h-4 mr-2" /> {deleting ? 'Deleting…' : 'Delete'}
+             </Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
+
+               {/* Image URL Modal */}
+        <Dialog open={thumbnailModalOpen} onOpenChange={(o: boolean) => { if (!o) setThumbnailModalOpen(false); }}>
+          <DialogContent className="backdrop-blur-sm bg-background/95 border-border/50 shadow-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {imageModalType === 'thumbnail' && 'Set Thumbnail Image'}
+                {imageModalType === 'author' && 'Set Author Icon'}
+                {imageModalType === 'image' && 'Set Large Image'}
+                {imageModalType === 'footer' && 'Set Footer Icon'}
+              </DialogTitle>
+              <DialogDescription>
+                Enter the URL for the image. This will be displayed in the embed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Image URL</label>
+                <Input
+                  value={tempThumbnailUrl}
+                  onChange={(e) => setTempThumbnailUrl(e.target.value)}
+                  placeholder="https://example.com/image.png"
+                  className="w-full"
+                />
+              </div>
+              {tempThumbnailUrl && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Preview</label>
+                  <div className="border rounded p-2 bg-muted/30">
+                    <img 
+                      src={tempThumbnailUrl} 
+                      alt="preview" 
+                      className="max-w-full max-h-32 object-contain mx-auto"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleImageRemove}>Remove</Button>
+              <Button onClick={handleImageSave}>Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+       {/* Color Picker Modal */}
+       <Dialog open={colorModalOpen} onOpenChange={(o: boolean) => { if (!o) setColorModalOpen(false); }}>
+         <DialogContent className="backdrop-blur-sm bg-background/95 border-border/50 shadow-xl">
+           <DialogHeader>
+             <DialogTitle>Pick embed color</DialogTitle>
+             <DialogDescription>Choose a color for the embed accent.</DialogDescription>
+           </DialogHeader>
+           <div className="space-y-4">
+             <input
+               type="color"
+               value={tempColor}
+               onChange={(e) => setTempColor(e.target.value)}
+               className="h-12 w-full rounded border"
+               title="Color"
+             />
+             <div>
+               <label className="block text-sm font-medium mb-1">Hex</label>
+               <Input value={tempColor} onChange={(e) => setTempColor(e.target.value)} />
+             </div>
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setColorModalOpen(false)}>Cancel</Button>
+             <Button onClick={() => { setColor(tempColor); setColorModalOpen(false); }}>Save</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
+
+     </Section>
+   );
+ }

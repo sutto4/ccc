@@ -5,14 +5,27 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import InviteBotButton from "@/components/invite-bot-button";
 import { Bot } from "lucide-react";
 import UserMenu from "@/components/ui/user-menu";
+import { useState } from "react";
+import { useTheme } from "next-themes";
 
 export default function Topbar() {
+  const [broken, setBroken] = useState(false)
+  const { resolvedTheme } = useTheme()
   return (
-    <div className="flex h-18 items-center justify-between gap-4 px-4">
+    <div className="flex h-18 items-center justify-between gap-3 px-3 md:px-4">
       {/* Branding */}
-      <div className="flex items-center gap-2">
-        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 shadow" />
-        <div className="font-extrabold tracking-tight text-xl">DuckCord Admin</div>
+      <div className="flex items-center gap-2 md:gap-3">
+        <img
+          key={resolvedTheme}
+          src={broken
+            ? "/placeholder-logo.svg"
+            : resolvedTheme === "dark"
+              ? "/brand/serverhub-dark.png"
+              : "/brand/serverhub-light.png"}
+          alt="ServerHub"
+          className="h-12 md:h-14 w-auto object-contain"
+          onError={() => setBroken(true)}
+        />
       </div>
       {/* Actions */}
       <div className="flex items-center gap-2">

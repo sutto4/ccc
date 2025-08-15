@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/providers";
 import ConsoleShell from "@/components/console-shell";
 
-const inter = Inter({ subsets: ["latin"] });
+const fontSans = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "DuckCord Admin - Discord Server Management",
-  description: "The ultimate Discord server management platform. Manage roles, users, and features with powerful tools designed for modern communities.",
+  title: "ServerHub - Discord Server Management",
+  description: "ServerHub: Manage roles, users, and features with powerful tools designed for modern Discord communities.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
           />
         )}
       </head>
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      <body className={`${fontSans.className} min-h-screen bg-background text-foreground antialiased`}>
         <Providers>
           {children}
         </Providers>
