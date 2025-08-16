@@ -101,8 +101,7 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       'content-type': 'application/json',
       ...(init?.headers || {}),
-    },
-    cache: 'no-store',
+    }
   })
   const text = await res.text();
   let parsed: any;

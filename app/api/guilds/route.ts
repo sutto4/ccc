@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { cache } from "@/lib/cache";
+import { createRateLimiter } from "@/lib/rate-limit";
+
+const limiter = createRateLimiter(10, 60_000); // 10 requests per minute per key
+const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
@@ -13,56 +18,139 @@ export async function GET(req: Request) {
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
 
-  // Fetch user's guilds from Discord
-  let userGuildsRes: Response;
-  try {
-    userGuildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
+  // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
+  const tokenKey = accessToken ? accessToken.slice(0, 24) : "anon";
+  const rl = limiter.check(`rl:guilds:${tokenKey}`);
+  if (!rl.allowed) {
+    const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
+    if (cachedUserGuilds.length > 0) {
+      const results = await intersectAndNormalize(cachedUserGuilds, botBase);
+      return NextResponse.json(results, {
+        headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs || 0) / 1000)), "X-RateLimit": "cached" },
+      });
+    }
+    const installedOnly = await normalizeInstalledOnly(botBase);
+    return NextResponse.json(installedOnly, {
+      status: 200,
+      headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs || 0) / 1000)), "X-RateLimit": "installed-only" },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Failed to reach Discord" }, { status: 502 });
   }
 
-  if (userGuildsRes.status === 429) {
-    const retryAfter = userGuildsRes.headers.get("retry-after") || "5";
-    return NextResponse.json(
-      { error: "Rate limited by Discord" },
-      { status: 429, headers: { "Retry-After": retryAfter } }
-    );
-  }
-  if (!userGuildsRes.ok) {
-    const body = await userGuildsRes.text();
-    return NextResponse.json({ error: body || "Failed to fetch user guilds" }, { status: userGuildsRes.status });
-  }
-  const userGuilds = (await userGuildsRes.json()) as any[];
+  const ugCacheKey = `userGuilds:${tokenKey}`;
+  let userGuilds = cache.get<any[]>(ugCacheKey) || [];
 
-  // Fetch bot-installed guilds from the VPS bot API (if configured)
-  let installedGuilds: any[] = [];
-  if (botBase) {
+  if (userGuilds.length === 0) {
+    // In-flight de-duplication to avoid concurrent double fetches
+    const existing = inFlightUserGuilds.get(tokenKey);
+    if (existing) {
+      try {
+        userGuilds = (await existing) || [];
+      } catch (e) {
+        // fallthrough to fresh fetch
+      }
+    }
+  }
+
+  if (userGuilds.length === 0) {
+    const promise = (async () => {
+      let userGuildsRes: Response;
+      try {
+        userGuildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      } catch (err: any) {
+        throw new Error(err?.message || "Failed to reach Discord");
+      }
+
+      // Handle 429 with a single short retry if advised
+      if (userGuildsRes.status === 429) {
+        const retryAfter = Number(userGuildsRes.headers.get("retry-after") || "0");
+        if (retryAfter > 0 && retryAfter <= 2) {
+          await new Promise((r) => setTimeout(r, retryAfter * 1000));
+          const retry = await fetch("https://discord.com/api/v10/users/@me/guilds", {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          if (retry.ok) return (await retry.json()) as any[];
+          if (retry.status !== 429) {
+            const body = await retry.text();
+            throw new Error(body || `Failed to fetch user guilds (${retry.status})`);
+          }
+        }
+        const e: any = new Error("Rate limited by Discord");
+        e.retryAfter = userGuildsRes.headers.get("retry-after") || "5";
+        throw e;
+      }
+
+      if (!userGuildsRes.ok) {
+        const body = await userGuildsRes.text();
+        throw new Error(body || `Failed to fetch user guilds (${userGuildsRes.status})`);
+      }
+      return (await userGuildsRes.json()) as any[];
+    })();
+
+    inFlightUserGuilds.set(tokenKey, promise);
     try {
-      const botRes = await fetch(`${botBase}/api/guilds`, { cache: "no-store" });
+      userGuilds = (await promise) || [];
+      cache.set(ugCacheKey, userGuilds, 5 * 60_000); // cache 5 minutes
+      cache.set(`${ugCacheKey}:shield`, userGuilds, 2_000);
+    } catch (e: any) {
+      const retryAfter = e?.retryAfter || "5";
+      const cached = cache.get<any[]>(ugCacheKey) || [];
+      if (cached.length > 0) {
+        const results = await intersectAndNormalize(cached, botBase);
+        return NextResponse.json(results, { status: 200, headers: { "Retry-After": retryAfter, "X-RateLimit": "cached" } });
+      }
+      const installedOnly = await normalizeInstalledOnly(botBase);
+      return NextResponse.json(installedOnly, {
+        status: 200,
+        headers: { "Retry-After": retryAfter, "X-RateLimit": "installed-only" },
+      });
+    } finally {
+      inFlightUserGuilds.delete(tokenKey);
+    }
+  }
+
+  const results = await intersectAndNormalize(userGuilds, botBase);
+  return NextResponse.json(results);
+}
+
+async function fetchInstalledGuilds(botBase: string) {
+  const igCacheKey = `installedGuilds`;
+  let installedGuilds = cache.get<any[]>(igCacheKey) || [];
+  if (installedGuilds.length === 0 && botBase) {
+    try {
+      const botRes = await fetch(`${botBase}/api/guilds`);
       if (botRes.ok) {
         installedGuilds = (await botRes.json()) as any[];
+        cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
       } else {
-        // Non-fatal: continue with empty installed list
         console.warn("/api/guilds bot endpoint failed:", botRes.status);
       }
     } catch (err) {
       console.warn("/api/guilds bot endpoint unreachable:", (err as any)?.message || err);
     }
   }
+  return installedGuilds || [];
+}
 
-  const installedSet = new Set(installedGuilds.map((g: any) => String(g.id || g.guildId || g.guild_id || "")));
+async function normalizeInstalledOnly(botBase: string) {
+  const installedGuilds = await fetchInstalledGuilds(botBase);
+  const installedSet = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || "")));
+  const installedAsUserGuilds = [...installedSet].map((id) => ({ id }));
+  return intersectAndNormalize(installedAsUserGuilds as any[], botBase);
+}
 
-  // Intersect user guilds with installed guilds
-  const results = userGuilds
-    .filter((g: any) => installedSet.has(String(g.id || "")))
+async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, botBase: string) {
+  const userGuilds = Array.isArray(userGuildsParam) ? userGuildsParam : [];
+  const installedGuilds = await fetchInstalledGuilds(botBase);
+  const installedSet = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || "")));
+
+  return userGuilds
+    .filter((g: any) => installedSet.has(String((g && (g as any).id) || "")))
     .map((g: any) => {
-      const id = String(g.id);
-      const installed = installedGuilds.find((x: any) => String(x.id || x.guildId || x.guild_id) === id) || {};
+      const id = String((g && (g as any).id) || "");
+      const installed = (installedGuilds || []).find((x: any) => String(x.id || x.guildId || x.guild_id) === id) || {};
 
-      // Prefer counts from bot API when available
       const memberCount =
         typeof installed.memberCount === "number"
           ? installed.memberCount
@@ -76,12 +164,12 @@ export async function GET(req: Request) {
           ? installed.roles
           : null;
 
-      const icon = (g.icon as string | null) || null;
-      const iconUrl = icon ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
+      const icon = (g && (g as any).icon as string | null) || null;
+      const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
 
       return {
         id,
-        name: String(g.name || ""),
+        name: String((g && (g as any).name) || installed.name || ""),
         memberCount: memberCount ?? 0,
         roleCount: roleCount ?? 0,
         iconUrl,
@@ -89,6 +177,4 @@ export async function GET(req: Request) {
         createdAt: null as string | null,
       };
     });
-
-  return NextResponse.json(results);
 }
