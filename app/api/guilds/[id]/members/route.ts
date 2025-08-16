@@ -4,6 +4,9 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
 import { withAuth } from "@/lib/authz";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const limiter = createRateLimiter(30, 60_000);
 
 export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
