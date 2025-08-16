@@ -14,20 +14,20 @@ export default async function ReactionRolesPage({ params }: { params: Promise<{ 
   return (
     <div className="py-6">
       <h1 className="text-2xl md:text-3xl font-bold mb-4">Reaction Roles</h1>
-      <p className="text-sm text-muted-foreground mb-6">Configure reaction roles either via a Role Select Menu message (recommended) or classic emoji reactions.</p>
+      <p className="text-sm text-muted-foreground mb-6">Configure reaction roles either via a Role Select Menu embedded message or classic emoji reactions.</p>
       <Tabs defaultValue="menu" className="w-full">
         <TabsList className="mb-4 rounded-full bg-muted/60 p-1 border border-border shadow-sm">
           <TabsTrigger
             value="menu"
             className="rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            Role Menu (Recommended)
+            Embedded Role Menu
           </TabsTrigger>
           <TabsTrigger
             value="classic"
             className="rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            Classic Emoji Reactions
+            Role Reactions
           </TabsTrigger>
         </TabsList>
         <TabsContent value="menu">

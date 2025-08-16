@@ -27,7 +27,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
   const [footerText, setFooterText] = useState("");
   const [footerIconUrl, setFooterIconUrl] = useState("");
   const [showTimestamp, setShowTimestamp] = useState(true);
-  const [inlineEdit, setInlineEdit] = useState(true);
+  // Inline editing is always on now; no toggle
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [placeholder, setPlaceholder] = useState("Select roles");
   const [minValues, setMinValues] = useState(0);
@@ -128,18 +128,25 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
         color: parseInt(color.replace('#',''), 16) || undefined,
         thumbnailUrl: thumbnailUrl || undefined,
         imageUrl: imageUrl || undefined,
-        author: authorName ? { name: authorName, iconUrl: authorIconUrl || undefined } : undefined,
-        footer: footerText ? { text: footerText, iconUrl: footerIconUrl || undefined } : undefined,
+        author: (authorName || authorIconUrl) ? { name: authorName || undefined, iconUrl: authorIconUrl || undefined } : undefined,
+        footer: (footerText || footerIconUrl) ? { text: footerText || undefined, iconUrl: footerIconUrl || undefined } : undefined,
         timestamp: showTimestamp ? Date.now() : undefined,
         roleIds: selectedRoleIds,
         placeholder: placeholder || undefined,
         minValues,
         maxValues: Math.max(1, Math.min(selectedRoleIds.length, maxValues))
       };
-      const res = await fetch(`/proxy/guilds/${guildId}/reaction-roles/publish-menu`, {
+      if (typeof window !== 'undefined') {
+        // Debug client-side payload
+        try { console.debug('[ServerHub] publish-menu payload', body); } catch {}
+      }
+      const res = await fetch(`/api/guilds/${guildId}/reaction-roles/publish-menu`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
       });
       const data = await res.json().catch(() => ({}));
+      if (typeof window !== 'undefined') {
+        try { console.debug('[ServerHub] publish-menu response', res.status, data); } catch {}
+      }
       if (!res.ok) {
         setPublishMsg(data?.error || `Failed (${res.status})`);
         try {
@@ -326,17 +333,22 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
       <div className="rounded-xl border p-4 bg-card space-y-2">
         <div className="flex items-center gap-2 text-muted-foreground text-sm"><LayoutGridIcon className="w-4 h-4"/> Compose an embed and publish a Role Select Menu to a channel.</div>
                  <div className="space-y-6">
-                       {/* Top: Channel selector */}
-            <div className="flex items-center gap-2">
-              <HashIcon className="w-4 h-4 text-muted-foreground" />
-              <Select value={channelId} onChange={e => setChannelId((e.target as HTMLSelectElement).value)} className="w-full">
-                <option value="" disabled>Pick channel…</option>
-                {channels.map((c: any) => <option key={c.id} value={c.id}>#{c.name}</option>)}
-              </Select>
-            </div>
-
-                                               {/* Main content: Single column stacked - half width */}
+            {/* Main content: Single column stacked - half width */}
             <div className="w-1/2 space-y-6">
+              {/* Channel selector (match role search width) */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium">Channel</label>
+                <div className="relative w-full">
+                  <div className="flex items-center gap-2">
+                    <HashIcon className="w-4 h-4 text-muted-foreground" />
+                    <Select value={channelId} onChange={e => setChannelId((e.target as HTMLSelectElement).value)} className="w-full">
+                      <option value="" disabled>Pick channel…</option>
+                      {channels.map((c: any) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
                               {/* Role selector - search bar with dropdown */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium">Roles</label>
@@ -378,7 +390,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                       onFocus={() => setShowRoleDropdown(true)}
                     />
                     {showRoleDropdown && roleSearch && (
-                      <div className="absolute top-full left-0 right-0 mt-1 border rounded-md bg-background shadow-lg max-h-48 overflow-auto z-10">
+                      <div className="absolute top-full left-0 right-0 mt-1 rounded-md shadow-lg z-50 max-h-48 overflow-auto bg-white text-gray-900 border border-gray-200">
                         {filteredRoles.map((r: any) => {
                           const isOn = selectedRoleIds.includes(r.roleId);
                           const color = r.color || '#e5e7eb';
@@ -391,7 +403,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                                 setRoleSearch("");
                                 setShowRoleDropdown(false);
                               }}
-                              className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-muted transition ${isOn ? 'bg-primary/10' : ''}`}
+                              className={`w-full flex items-center gap-2 px-3 py-2 transition ${isOn ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
                             >
                               <span className="flex items-center gap-2 min-w-0">
                                 {r.iconUrl ? (
@@ -412,23 +424,17 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                   </div>
                 </div>
 
-               {/* Inline editor toggle */}
-               <div className="flex items-center justify-between">
+               {/* Inline editor only */}
+               <div className="flex items-center justify-between mb-0">
                  <label className="block text-sm font-medium">Embed Editor</label>
-                 <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                   <input type="checkbox" className="accent-blue-600" checked={inlineEdit} onChange={(e)=>setInlineEdit(e.target.checked)} />
-                   Edit in preview
-                 </label>
                </div>
 
-              {/* Live preview */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium">Live preview</label>
-                </div>
-                <div className="rounded-lg border bg-background p-3">
-                  {/* Simulated Discord message container */}
-                  <div className="flex items-start gap-3">
+               {/* Preview container */}
+               <div className="space-y-2">
+                 <div className="flex items-center justify-between mb-2" />
+                  <div className="rounded-lg border bg-background p-3">
+                    {/* Simulated Discord message container */}
+                    <div className="flex items-start gap-3">
                                          {/* Circular color picker trigger */}
                      <button
                        type="button"
@@ -492,7 +498,6 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
 
                                                    {/* Author row */}
                           <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2 w-[24rem]`}>
-                            {inlineEdit ? (
                               <>
                                 <button
                                   type="button"
@@ -512,26 +517,13 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                                 </button>
                                 <Input value={authorName} onChange={e => setAuthorName(e.target.value)} placeholder="Author name" className="flex-1" />
                               </>
-                            ) : authorName && (
-                              <>
-                                {authorIconUrl && (<img src={authorIconUrl} alt="author" className="w-4 h-4 rounded-full border" />)}
-                                <span className="truncate">{authorName}</span>
-                              </>
-                            )}
                           </div>
-
-                                                  {/* Title / Description */}
-                          {inlineEdit ? (
-                            <>
-                              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Embed title" className="font-semibold leading-snug mb-2 w-[24rem]" />
-                              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Embed description" rows={2} className="text-sm whitespace-pre-wrap text-muted-foreground" />
-                            </>
-                          ) : (
-                            <>
-                              {title && <div className="font-semibold leading-snug mb-2 w-[24rem] break-words">{title}</div>}
-                              {description && <div className="text-sm whitespace-pre-wrap text-muted-foreground">{description}</div>}
-                            </>
-                          )}
+ 
+                                                   {/* Title / Description */}
+                          <>
+                            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Embed title" className="font-semibold leading-snug mb-2 w-[24rem]" />
+                            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Embed description" rows={2} className="text-sm whitespace-pre-wrap text-muted-foreground" />
+                          </>
 
                                                  {/* Large image below */}
                          <div className="mt-3">
@@ -569,34 +561,27 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
 
                                                  {/* Footer */}
                          <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
-                           {inlineEdit ? (
-                             <>
-                                                               <button
-                                  type="button"
-                                  onClick={() => {
-                                    setImageModalType('footer');
-                                    setTempThumbnailUrl(footerIconUrl);
-                                    setThumbnailModalOpen(true);
-                                  }}
-                                  className="w-6 h-6 rounded-full border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors overflow-hidden"
-                                  title="Set footer icon"
-                                >
-                                  {footerIconUrl ? (
-                                    <img src={footerIconUrl} alt="footer" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <ImageIcon className="w-3 h-3" />
-                                  )}
-                                </button>
-                                <input className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" placeholder="Footer text" value={footerText} onChange={(e)=>setFooterText(e.target.value)} />
+                           <>
+                                                                <button
+                                    type="button"
+                                    onClick={() => {
+                                      setImageModalType('footer');
+                                      setTempThumbnailUrl(footerIconUrl);
+                                      setThumbnailModalOpen(true);
+                                    }}
+                                    className="w-6 h-6 rounded-full border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors overflow-hidden"
+                                    title="Set footer icon"
+                                  >
+                                    {footerIconUrl ? (
+                                      <img src={footerIconUrl} alt="footer" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <ImageIcon className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                  <input className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" placeholder="Footer text" value={footerText} onChange={(e)=>setFooterText(e.target.value)} />
                              </>
-                           ) : (
-                             <>
-                               {footerIconUrl && (<img src={footerIconUrl} alt="footer" className="w-4 h-4 rounded-full border" />)}
-                               {footerText && <span className="truncate">{footerText}</span>}
-                             </>
-                           )}
-                           {showTimestamp && <span className="ml-auto">{new Date().toLocaleString()}</span>}
-                         </div>
+                            {showTimestamp && <span className="ml-auto">{new Date().toLocaleString()}</span>}
+                          </div>
 
                       </div>
 
@@ -641,6 +626,9 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                     <div className="text-xs text-muted-foreground truncate">in #{channels.find((x:any)=>x.id===c.channelId)?.name || c.channelId} • msg {c.messageId}</div>
                     <div className="mt-1 text-xs"><b>Enabled:</b> {c.enabled === null ? 'unknown' : c.enabled ? 'yes' : 'no'}</div>
                     <div className="text-xs"><b>Roles:</b> {c.mappings?.map((m:any)=>m.roleId).join(', ') || '—'}</div>
+                    {c.createdBy && (
+                      <div className="text-xs text-muted-foreground mt-1"><b>Created by:</b> {c.createdBy.username || c.createdBy.id || 'unknown'}</div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <Button size="sm" variant="outline" className="shadow-sm hover:shadow" onClick={() => startEdit(c)}><EditIcon className="w-4 h-4 mr-1"/>Edit</Button>
