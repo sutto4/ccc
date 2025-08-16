@@ -1,4 +1,3 @@
-<<<<<<< Current (Your changes)
 // app/lib/api.ts
 
 export type Guild = {
@@ -40,7 +39,13 @@ export type MembersPage = {
 const RAW = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const BASE = RAW.replace(/\/+$/, "");
 const HAS_API_SUFFIX = /\/api$/i.test(BASE);
-const toUrl = (p: string) => (HAS_API_SUFFIX ? `${BASE}${p}` : `${BASE}/api${p}`);
+const toUrl = (p: string) => {
+  if (!BASE) {
+    // If no base URL is set, use localhost for server-side calls
+    return `http://localhost:3000${p}`;
+  }
+  return HAS_API_SUFFIX ? `${BASE}${p}` : `${BASE}/api${p}`;
+};
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(toUrl(path), { cache: "no-store", ...(init || {}) });
@@ -87,8 +92,8 @@ export function fetchMembersPaged(
     opts || {};
   const p = new URLSearchParams();
   p.set("limit", String(limit));
+  p.set("q", q);
   p.set("after", after);
-  if (q) p.set("q", q);
   if (role) p.set("role", role);
   if (group) p.set("group", group);
   if (all) p.set("all", "true");
@@ -118,7 +123,3 @@ export const removeRole = (guildId: string, userId: string, roleId: string, call
     method: "DELETE",
     headers: { "x-user-id": callerId },
   });
-=======
-// Deprecated duplicate of lib/api.ts. Please import from "@/lib/api" instead.
-export {};
->>>>>>> Incoming (Background Agent changes)

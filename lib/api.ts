@@ -56,13 +56,47 @@ export type Paged<T> = {
 const RAW = env.NEXT_PUBLIC_API_BASE_URL || ''
 const BASE = RAW.replace(/\/+$/, '') // strip trailing slashes
 
+function buildOriginForServer(): string {
+  // Default localhost for server-side when no explicit origin provided
+  return 'http://localhost:3000'
+}
+
 function u(path: string) {
-  // paths in this file should start with "/" like "/guilds"
-  return `${BASE}${path}`
+  const isBrowser = typeof window !== 'undefined'
+
+  // If BASE is an absolute URL
+  if (/^https?:\/\//i.test(BASE)) {
+    const hasApiSuffix = /\/api$/i.test(BASE)
+    const apiBase = hasApiSuffix ? BASE : `${BASE}/api`
+    return `${apiBase}${path}`
+  }
+
+  // If BASE is exactly '/api' or empty
+  if (BASE === '' || BASE === '/api') {
+    if (isBrowser) {
+      // Browser can use relative
+      return `/api${path}`
+    }
+    // Server must use absolute
+    return `${buildOriginForServer()}/api${path}`
+  }
+
+  // If BASE is another relative base like '/foo'
+  if (BASE.startsWith('/')) {
+    if (isBrowser) {
+      return `${BASE}${path}`
+    }
+    return `${buildOriginForServer()}${BASE}${path}`
+  }
+
+  // Fallback (should not hit)
+  return `${buildOriginForServer()}/api${path}`
 }
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(u(path), {
+  const url = u(path);
+  console.log(`[lib/api] fetching`, url, `BASE=${BASE || '(empty)'} RAW=${RAW || '(empty)'} isBrowser=${typeof window !== 'undefined'}`);
+  const res = await fetch(url, {
     ...init,
     headers: {
       'content-type': 'application/json',
@@ -92,8 +126,10 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 
 // API functions
 
-export async function fetchGuilds(_accessToken?: string): Promise<Guild[]> {
-  return j<Guild[]>('/guilds')
+export async function fetchGuilds(accessToken?: string): Promise<Guild[]> {
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<Guild[]>('/guilds', { headers })
 }
 
 export async function fetchRoles(guildId: string): Promise<Role[]> {
