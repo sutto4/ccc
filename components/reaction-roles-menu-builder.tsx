@@ -58,6 +58,10 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
   const [editRoleIds, setEditRoleIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Bot customization state
+  const [customBotName, setCustomBotName] = useState("");
+  const [customBotAvatar, setCustomBotAvatar] = useState("");
+
   const guildId = useMemo(() => {
     const m = typeof window !== 'undefined' ? window.location.pathname.match(/guilds\/(\d+)/) : null;
     return m?.[1] || "";
@@ -85,6 +89,26 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
       } finally { setLoading(false); }
     })();
   }, [guildId]);
+
+  // Load bot customization settings
+  useEffect(() => {
+    if (guildId) {
+      loadBotCustomisation();
+    }
+  }, [guildId]);
+
+  const loadBotCustomisation = async () => {
+    try {
+      const res = await fetch(`/api/guilds/${guildId}/bot-customisation`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomBotName(data.botName || "");
+        setCustomBotAvatar(data.botAvatarUrl || "");
+      }
+    } catch (error) {
+      console.error("Failed to load bot customisation:", error);
+    }
+  };
 
   const refreshConfigs = async () => {
     setLoadingConfigs(true);
@@ -454,7 +478,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                     <div className="min-w-0 flex-1">
                       {/* Username + timestamp */}
                       <div className="mb-1 text-sm flex items-center gap-3">
-                        <span className="font-semibold">ServerHub Bot</span>
+                        <span className="font-semibold">{customBotName || "ServerHub Bot"}</span>
                         {showTimestamp && (
                           <span className="ml-2 text-xs text-muted-foreground">{new Date().toLocaleTimeString()}</span>
                         )}

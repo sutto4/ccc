@@ -47,6 +47,7 @@ export default function Sidebar() {
   const pathname = usePathname() || "";
   const { data: session } = useSession();
   const [features, setFeatures] = useState<Record<string, boolean> | null>(null);
+  const [premiumStatus, setPremiumStatus] = useState<boolean>(false);
 
   // detect if we're inside a guild route
   const parts = pathname.split("/").filter(Boolean);
@@ -66,15 +67,19 @@ export default function Sidebar() {
     (async () => {
       if (!guildId) {
         setFeatures(null);
+        setPremiumStatus(false);
         return;
       }
       try {
         const fx: FeaturesResponse = await fetchFeatures(guildId);
         if (!alive) return;
         setFeatures(fx?.features || {});
+        // Check if user has premium access (any feature enabled means premium)
+        setPremiumStatus(Object.values(fx?.features || {}).some(Boolean));
       } catch {
         if (!alive) return;
         setFeatures({});
+        setPremiumStatus(false);
       }
     })();
     return () => {
@@ -154,24 +159,40 @@ export default function Sidebar() {
             label="Embeded Messages"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/embeded-messages`) : false}
-            featureEnabled={!!(guildId && features?.embeded_messages)}
+            featureEnabled={!!(guildId && (features?.embeded_messages || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/reaction-roles` : "/guilds"}
             label="Reaction Roles"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/reaction-roles`) : false}
-            featureEnabled={!!(guildId && features?.reaction_roles)}
+            featureEnabled={!!(guildId && (features?.reaction_roles || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/custom-commands` : "/guilds"}
             label="Custom Commands"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-commands`) : false}
-            featureEnabled={!!(guildId && features?.custom_commands)}
+            featureEnabled={!!(guildId && (features?.custom_commands || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
+          />
+          <NavLeaf
+            href={guildId ? `/guilds/${guildId}/bot-customisation` : "/guilds"}
+            label="Bot Customisation"
+            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/bot-customisation`) : false}
+            featureEnabled={!!(guildId && (features?.bot_customisation || premiumStatus))}
+            guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
         </CollapsibleSection>
         {/* Socials (premium, collapsible) */}
@@ -181,32 +202,40 @@ export default function Sidebar() {
             label="Twitch"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/twitch`) : false}
-            featureEnabled={!!(guildId && features?.creator_alerts)}
+            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/creator-alerts/youtube` : "/guilds"}
             label="Youtube"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/youtube`) : false}
-            featureEnabled={!!(guildId && features?.creator_alerts)}
+            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/creator-alerts/x` : "/guilds"}
             label="X"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/x`) : false}
-            featureEnabled={!!(guildId && features?.creator_alerts)}
+            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
           <NavLeaf
             href={guildId ? `/guilds/${guildId}/creator-alerts/tiktok` : "/guilds"}
             label="Tiktok"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
             active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/tiktok`) : false}
-            featureEnabled={!!(guildId && features?.creator_alerts)}
+            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
             guildSelected={!!guildId}
+            premiumRequired={true}
+            hasPremium={premiumStatus}
           />
         </CollapsibleSection>
       </nav>
@@ -247,6 +276,8 @@ type NavLeafProps = {
   featureEnabled?: boolean; // true if guild has feature
   guildSelected?: boolean; // true if a guild is selected
   onClick?: () => void;
+  premiumRequired?: boolean; // true if premium access is required
+  hasPremium?: boolean; // true if user has premium access
 };
 
 function NavLeaf({
@@ -257,13 +288,16 @@ function NavLeaf({
   featureEnabled,
   guildSelected,
   onClick,
+  premiumRequired,
+  hasPremium,
 }: NavLeafProps) {
   const base =
     "group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition select-none w-full relative";
-  // Determine the state: no guild selected vs feature not available
+  // Determine the state: no guild selected vs feature not available vs premium required
   const noGuildSelected = !guildSelected;
   const featureNotAvailable = guildSelected && !featureEnabled;
-  const isGreyed = noGuildSelected || featureNotAvailable;
+  const needsPremium = premiumRequired && !hasPremium;
+  const isGreyed = noGuildSelected || featureNotAvailable || needsPremium;
   // Muted color for greyed out
   const mutedColor = "#A1A1AA";
   let icon = rightIcon;
@@ -276,7 +310,7 @@ function NavLeaf({
   }
   const cls = [
     base,
-    active && guildSelected && featureEnabled 
+    active && guildSelected && featureEnabled && (!premiumRequired || hasPremium)
       ? "bg-[hsl(var(--sidebar-accent))] text-white" 
       : isGreyed
         ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
@@ -292,6 +326,9 @@ function NavLeaf({
       // Auto-hide after 3 seconds
       setTimeout(() => setShowNoGuildMessage(false), 3000);
     } else if (featureNotAvailable) {
+      e.preventDefault();
+      setModalOpen(true);
+    } else if (needsPremium) {
       e.preventDefault();
       setModalOpen(true);
     } else if (onClick) {
