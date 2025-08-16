@@ -1,25 +1,20 @@
 import { NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { withAuth } from "@/lib/authz";
 
 const limiter = createRateLimiter(10, 60_000); // 10 requests per minute per key
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
-export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
-
-  if (!accessToken) {
-    return NextResponse.json({ error: "No access token" }, { status: 401 });
-  }
+export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken }) => {
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
-  const tokenKey = accessToken ? accessToken.slice(0, 24) : "anon";
+  const tokenKey = accessToken.slice(0, 24);
   const rl = limiter.check(`rl:guilds:${tokenKey}`);
   if (!rl.allowed) {
     const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
@@ -112,7 +107,7 @@ export async function GET(req: Request) {
 
   const results = await intersectAndNormalize(userGuilds, botBase);
   return NextResponse.json(results);
-}
+});
 
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;

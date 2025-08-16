@@ -1,12 +1,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/authz";
 import { env } from "@/lib/env";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
 
 const limiter = createRateLimiter(30, 60_000);
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withAuth(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
 	const { id: guildId } = await params;
 	if (!/^[0-9]{5,20}$/.test(guildId)) {
 		return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });
@@ -70,4 +71,4 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 	});
 	cache.set(cacheKey, normalized, 120_000);
 	return NextResponse.json({ roles: normalized });
-}
+});

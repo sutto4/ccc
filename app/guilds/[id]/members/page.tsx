@@ -29,7 +29,11 @@ export default function MembersPage() {
     (async () => {
       try {
         setLoading(true);
-        const [m, r] = await Promise.all([fetchMembersLegacy(guildId), fetchRoles(guildId)]);
+        const token = (session as any)?.accessToken as string | undefined;
+        const [m, r] = await Promise.all([
+          fetchMembersLegacy(guildId, token),
+          fetchRoles(guildId, token),
+        ]);
         if (!alive) return;
         setMembers(m.map((mem: any) => ({
           ...mem,
@@ -78,7 +82,7 @@ export default function MembersPage() {
     const user = members.find(m => m.discordUserId === userId);
     const role = roles.find(r => r.roleId === roleId);
     // Call API to persist
-    await addRole(guildId, userId, roleId, actor);
+    await addRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
     setMembers(prev => {
       const updated = prev.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: [...m.roleIds, roleId] } : m
@@ -111,7 +115,7 @@ export default function MembersPage() {
     const user = members.find(m => m.discordUserId === userId);
     const role = roles.find(r => r.roleId === roleId);
     // Call API to persist
-    await removeRole(guildId, userId, roleId, actor);
+    await removeRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
     setMembers(prev => {
       const updated = prev.map(m =>
         m.discordUserId === userId ? { ...m, roleIds: m.roleIds.filter(r => r !== roleId) } : m

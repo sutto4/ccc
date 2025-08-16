@@ -55,9 +55,11 @@ export default function UsersPage() {
     (async () => {
       try {
         setLoading(true);
+        const token = (session as any)?.accessToken as string | undefined;
+        if (!token) return; // wait for session
         const [m, r] = await Promise.all([
-          fetchMembersLegacy(guildId),
-          fetchRoles(guildId),
+          fetchMembersLegacy(guildId, token),
+          fetchRoles(guildId, token),
         ]);
         if (!alive) return;
         const withAvatars = m.map((mem: any) => ({
@@ -75,7 +77,7 @@ export default function UsersPage() {
     return () => {
       alive = false;
     };
-  }, [guildId]);
+  }, [guildId, (session as any)?.accessToken]);
 
   // Filter and paginate users (cross-filter: username and role)
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function UsersPage() {
       // Find user and role before addition
       const targetUser = members.find((m) => m.discordUserId === userId);
       const roleObj = roles.find((r) => r.roleId === roleId);
-      await addRole(guildId, userId, roleId, actor);
+      await addRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
       setMembers((prev) =>
         prev.map((m) =>
           m.discordUserId === userId
@@ -155,7 +157,7 @@ export default function UsersPage() {
       // Find user and role before removal
       const targetUser = members.find((m) => m.discordUserId === userId);
       const roleObj = roles.find((r) => r.roleId === roleId);
-      await removeRole(guildId, userId, roleId, actor);
+      await removeRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
       setMembers((prev) =>
         prev.map((m) =>
           m.discordUserId === userId

@@ -21,7 +21,7 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
   const guild = guilds.find((g) => g.id === guildId);
   if (!guild) return notFound();
 
-  const roles = await fetchRoles(guildId);
+  const roles = await fetchRoles(guildId, session.accessToken as any);
 
 
   return (

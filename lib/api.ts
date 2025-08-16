@@ -131,15 +131,20 @@ export async function fetchGuilds(accessToken?: string): Promise<Guild[]> {
   return j<Guild[]>('/guilds', { headers })
 }
 
-export async function fetchRoles(guildId: string): Promise<Role[]> {
-  const res = await j<any>(`/guilds/${guildId}/roles`)
+export async function fetchRoles(guildId: string, accessToken?: string): Promise<Role[]> {
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  const res = await j<any>(`/guilds/${guildId}/roles`, { headers })
   if (Array.isArray(res)) return res as Role[]
   if (res && Array.isArray(res.roles)) return res.roles as Role[]
   return []
 }
 
-export const fetchMembersLegacy = (guildId: string) =>
-  j<Member[]>(`/guilds/${guildId}/members`)
+export const fetchMembersLegacy = (guildId: string, accessToken?: string) => {
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<Member[]>(`/guilds/${guildId}/members`, { headers })
+}
 
 export async function fetchMembersPaged(
   guildId: string,
@@ -152,6 +157,7 @@ export async function fetchMembersPaged(
     all?: boolean
     source?: 'gateway' | 'rest'
     debug?: boolean
+    accessToken?: string
   } = {}
 ): Promise<Paged<Member>> {
   const params = new URLSearchParams()
@@ -165,23 +171,31 @@ export async function fetchMembersPaged(
   if (opts.debug) params.set('debug', '1')
 
   const qs = params.toString()
-  return j<Paged<Member>>(`/guilds/${guildId}/members-paged${qs ? `?${qs}` : ''}`)
+  const headers: Record<string, string> = {}
+  if (opts.accessToken) headers["Authorization"] = `Bearer ${opts.accessToken}`
+  return j<Paged<Member>>(`/guilds/${guildId}/members-paged${qs ? `?${qs}` : ''}`, { headers })
 }
 
-export async function searchMembers(guildId: string, q: string, limit = 25): Promise<Member[]> {
+export async function searchMembers(guildId: string, q: string, limit = 25, accessToken?: string): Promise<Member[]> {
   const params = new URLSearchParams({ q, limit: String(limit) })
-  return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`)
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<Member[]>(`/guilds/${guildId}/members-search?${params.toString()}`, { headers })
 }
 
 export async function addRole(
   guildId: string,
   userId: string,
   roleId: string,
-  actorId: string
+  actorId: string,
+  accessToken?: string
 ): Promise<{ ok: true }> {
   const qs = new URLSearchParams({ actor: actorId })
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
   return j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}?${qs}`, {
     method: 'POST',
+    headers,
   })
 }
 
@@ -189,11 +203,15 @@ export async function removeRole(
   guildId: string,
   userId: string,
   roleId: string,
-  actorId: string
+  actorId: string,
+  accessToken?: string
 ): Promise<{ ok: true }> {
   const qs = new URLSearchParams({ actor: actorId })
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
   return j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}?${qs}`, {
     method: 'DELETE',
+    headers,
   })
 }
 
