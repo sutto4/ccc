@@ -87,13 +87,16 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
         {TOP.map(({ href, label, icon: Icon }) => {
           // Only show Admin item for admin users
-          if (href === "/" && !isAdmin) return null;
+          if (href === "/admin" && !isAdmin) return null;
+          
+          // Use exact pathname matching for top-level links
+          const isActive = pathname === href;
           
           return (
             <Link
               key={href}
               href={href}
-              className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition", pathname === href ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]"].join(" ")}
+              className={["group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition", isActive ? "bg-[hsl(var(--sidebar-accent))] text-white" : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))]"].join(" ")}
             >
               <Icon className="h-4 w-4" />
               <span className="truncate">{label}</span>
@@ -150,6 +153,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/embeded-messages` : "/guilds"}
             label="Embeded Messages"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/embeded-messages`) : false}
             featureEnabled={!!(guildId && features?.embeded_messages)}
             guildSelected={!!guildId}
           />
@@ -157,6 +161,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/reaction-roles` : "/guilds"}
             label="Reaction Roles"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/reaction-roles`) : false}
             featureEnabled={!!(guildId && features?.reaction_roles)}
             guildSelected={!!guildId}
           />
@@ -164,6 +169,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/custom-commands` : "/guilds"}
             label="Custom Commands"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-commands`) : false}
             featureEnabled={!!(guildId && features?.custom_commands)}
             guildSelected={!!guildId}
           />
@@ -174,6 +180,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/creator-alerts/twitch` : "/guilds"}
             label="Twitch"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/twitch`) : false}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
@@ -181,6 +188,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/creator-alerts/youtube` : "/guilds"}
             label="Youtube"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/youtube`) : false}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
@@ -188,6 +196,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/creator-alerts/x` : "/guilds"}
             label="X"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/x`) : false}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
@@ -195,6 +204,7 @@ export default function Sidebar() {
             href={guildId ? `/guilds/${guildId}/creator-alerts/tiktok` : "/guilds"}
             label="Tiktok"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/tiktok`) : false}
             featureEnabled={!!(guildId && features?.creator_alerts)}
             guildSelected={!!guildId}
           />
@@ -266,10 +276,11 @@ function NavLeaf({
   }
   const cls = [
     base,
-    active && guildSelected && featureEnabled ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]" : "",
-    isGreyed
-      ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
-      : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer",
+    active && guildSelected && featureEnabled 
+      ? "bg-[hsl(var(--sidebar-accent))] text-white" 
+      : isGreyed
+        ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
+        : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer",
   ].join(" ");
   const [modalOpen, setModalOpen] = React.useState(false);
   const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
