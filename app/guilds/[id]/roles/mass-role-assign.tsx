@@ -4,8 +4,10 @@ import UserTransferPicker from "@/components/ui/user-transfer-picker";
 import RoleMultiPicker from "@/components/ui/role-multi-picker";
 import { addRole, removeRole, type Member, type Role } from "@/lib/api";
 import { logAction } from "@/lib/logger";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function MassRoleAssign({ guildId, roles }: { guildId: string; roles: Role[] }) {
+  const { canUseApp, loading: permissionsLoading, error: permissionsError } = usePermissions(guildId);
   const [selectedUsers, setSelectedUsers] = useState<Member[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [saving, startSaving] = useTransition();
@@ -82,6 +84,38 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
         setError(e.message || "Failed to remove roles");
       }
     });
+  }
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (permissionsError) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-red-600 mb-2">Permission Check Failed</div>
+        <p className="text-sm text-muted-foreground">{permissionsError}</p>
+      </div>
+    );
+  }
+
+  if (!canUseApp) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-red-600 mb-2">Access Denied</div>
+        <p className="text-sm text-muted-foreground">
+          You don't have permission to access the mass role assign feature. Contact a server administrator.
+        </p>
+      </div>
+    );
   }
 
   return (

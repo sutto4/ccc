@@ -23,6 +23,7 @@ export type Role = {
   editableByBot?: boolean
   iconUrl?: string | null
   unicodeEmoji?: string | null
+  permissions?: string[]
 }
 
 export type Member = {
@@ -36,13 +37,60 @@ export type Member = {
 }
 
 export type Features = {
-  custom_groups?: boolean
-  premium_members?: boolean
+  // Free features
+  verification_system?: boolean
+  feedback_system?: boolean
+  moderation?: boolean
+  
+  // Premium features
+  fdg_donator_sync?: boolean
+  custom_prefix?: boolean
+  fivem_esx?: boolean
+  fivem_qbcore?: boolean
+  reaction_roles?: boolean
+  custom_commands?: boolean
+  creator_alerts?: boolean
+  bot_customisation?: boolean
+  embedded_messages?: boolean
+  
+  // Legacy names for backward compatibility
+  esx?: boolean // maps to fivem_esx
+  qbcore?: boolean // maps to fivem_qbcore
+  custom_groups?: boolean // placeholder for future feature
+  premium_members?: boolean // placeholder for future feature
+  
+  // Package requirements for each feature
+  verification_system_package?: string
+  feedback_system_package?: string
+  moderation_package?: string
+  fdg_donator_sync_package?: string
+  custom_prefix_package?: string
+  fivem_esx_package?: string
+  fivem_qbcore_package?: string
+  reaction_roles_package?: string
+  custom_commands_package?: string
+  creator_alerts_package?: string
+  bot_customisation_package?: string
+  embedded_messages_package?: string
 }
 
 export type FeaturesResponse = {
   guildId: string
   features: Features
+}
+
+export type RolePermission = {
+  roleId: string
+  roleName: string
+  canUseApp: boolean
+}
+
+export type PermissionCheck = {
+  canUseApp: boolean
+  isOwner: boolean
+  hasRoleAccess: boolean
+  userId: string
+  userRoles: string[]
 }
 
 export type Paged<T> = {
@@ -134,7 +182,10 @@ export async function fetchGuilds(accessToken?: string): Promise<Guild[]> {
 export async function fetchRoles(guildId: string, accessToken?: string): Promise<Role[]> {
   const headers: Record<string, string> = {}
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
-  const res = await j<any>(`/guilds/${guildId}/roles`, { headers })
+  
+  // Try to fetch roles with permissions data
+  const res = await j<any>(`/guilds/${guildId}/roles?include_permissions=true`, { headers })
+  
   if (Array.isArray(res)) return res as Role[]
   if (res && Array.isArray(res.roles)) return res.roles as Role[]
   return []
@@ -217,4 +268,40 @@ export async function removeRole(
 
 export function fetchFeatures(guildId: string): Promise<FeaturesResponse> {
   return j<FeaturesResponse>(`/guilds/${guildId}/features`)
+}
+
+// Role permission functions
+export async function fetchRolePermissions(guildId: string, accessToken?: string): Promise<RolePermission[]> {
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<RolePermission[]>(`/guilds/${guildId}/role-permissions`, { headers })
+}
+
+export async function updateRolePermissions(
+  guildId: string, 
+  permissions: RolePermission[], 
+  accessToken?: string
+): Promise<{ success: boolean; message: string }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<{ success: boolean; message: string }>(`/guilds/${guildId}/role-permissions`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ permissions })
+  })
+}
+
+export async function checkUserPermissions(
+  guildId: string, 
+  userId: string, 
+  userRoles: string[], 
+  accessToken?: string
+): Promise<PermissionCheck> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  return j<PermissionCheck>(`/guilds/${guildId}/role-permissions/check`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ userId, userRoles })
+  })
 }

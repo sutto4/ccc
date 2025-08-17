@@ -26,11 +26,11 @@ export const GET = withAuth(async (req: NextRequest, { params }: { params: Promi
 
 	const botToken = env.DISCORD_BOT_TOKEN;
 	if (!botToken) {
-		const mock = [
-			{ guildId, roleId: "role1", name: "@everyone", color: null, managed: false, editableByBot: true },
-			{ guildId, roleId: "role2", name: "Admin", color: "#ff0000", managed: false, editableByBot: true },
-			{ guildId, roleId: "role3", name: "Member", color: "#00ff00", managed: false, editableByBot: true }
-		];
+			const mock = [
+		{ guildId, roleId: "role1", name: "@everyone", color: null, managed: false, editableByBot: true, position: 0, permissions: [] },
+		{ guildId, roleId: "role2", name: "Admin", color: "#ff0000", managed: false, editableByBot: true, position: 1, permissions: ["MANAGE_MEMBERS", "MANAGE_ROLES", "KICK_MEMBERS", "BAN_MEMBERS"] },
+		{ guildId, roleId: "role3", name: "Member", color: "#00ff00", managed: false, editableByBot: true, position: 2, permissions: [] }
+	];
 		cache.set(cacheKey, mock, 60_000);
 		return NextResponse.json({ roles: mock });
 	}
@@ -70,6 +70,7 @@ export const GET = withAuth(async (req: NextRequest, { params }: { params: Promi
 			editableByBot: r.tags?.bot_id ? false : true,
 			iconUrl,
 			unicodeEmoji,
+			permissions: Array.isArray(r.permissions) ? r.permissions : [], // Include role permissions
 		};
 	});
 	cache.set(cacheKey, normalized, 120_000);
