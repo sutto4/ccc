@@ -48,6 +48,7 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [features, setFeatures] = useState<Record<string, boolean> | null>(null);
   const [premiumStatus, setPremiumStatus] = useState<boolean>(false);
+  const [testModalOpen, setTestModalOpen] = useState<boolean>(false);
 
   // detect if we're inside a guild route
   const parts = pathname.split("/").filter(Boolean);
@@ -70,6 +71,8 @@ export default function Sidebar() {
   console.log("Session:", session);
   console.log("User role:", session?.role);
   console.log("Is admin:", isAdmin);
+  console.log("Features:", features);
+  console.log("Premium status:", premiumStatus);
 
   useEffect(() => {
     let alive = true;
@@ -98,8 +101,16 @@ export default function Sidebar() {
 
   return (
     <div className="flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-full h-full border-r border-[hsl(var(--sidebar-border))]">
-      <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
-        {TOP.map(({ href, label, icon: Icon }) => {
+             <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
+         {/* Test Premium Modal Button */}
+         <button
+           onClick={() => setTestModalOpen(true)}
+           className="w-full mb-4 px-3 py-2 text-sm bg-yellow-500 hover:bg-yellow-600 text-white rounded-md font-medium"
+         >
+           🧪 Test Premium Modal
+         </button>
+         
+         {TOP.map(({ href, label, icon: Icon }) => {
           // Only show Admin item for admin users
           if (href === "/admin" && !isAdmin) return null;
           
@@ -298,11 +309,14 @@ export default function Sidebar() {
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  );
-}
+                 </DropdownMenu>
+       </div>
+       
+       {/* Test Premium Modal */}
+       <PremiumModal open={testModalOpen} onOpenChange={setTestModalOpen} />
+     </div>
+   );
+ }
 
 type NavLeafProps = {
   href: string;
@@ -359,20 +373,35 @@ function NavLeaf({
   const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
   
   const handleClick = (e: React.MouseEvent) => {
+    console.log('NavLeaf click:', { 
+      label, 
+      featureEnabled, 
+      premiumRequired, 
+      hasPremium, 
+      featureNotAvailable,
+      isGreyed,
+      noGuildSelected,
+      guildSelected,
+      href
+    });
+    
     if (noGuildSelected) {
       e.preventDefault();
       setShowNoGuildMessage(true);
       // Auto-hide after 3 seconds
       setTimeout(() => setShowNoGuildMessage(false), 3000);
-    } else if (featureNotAvailable) {
+      return;
+    } else if (featureNotAvailable || (premiumRequired && !hasPremium)) {
+      // Show premium modal for any feature that's not available or requires premium
+      console.log('Opening premium modal for:', label);
       e.preventDefault();
+      e.stopPropagation();
       setModalOpen(true);
-    } else if (premiumRequired && !hasPremium) {
-      // Only show premium modal if feature actually requires premium AND user doesn't have it
-      e.preventDefault();
-      setModalOpen(true);
-    } else if (onClick) {
-      onClick();
+      return;
+    } else {
+      // Feature is available and accessible - navigate to the href
+      console.log('Navigating to:', href);
+      window.location.href = href;
     }
   };
   const content = (
@@ -385,9 +414,9 @@ function NavLeaf({
   );
   return (
     <>
-      <Link href={href} className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
+      <button className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
         {content}
-      </Link>
+      </button>
       
       {/* No guild selected message */}
       {showNoGuildMessage && (
