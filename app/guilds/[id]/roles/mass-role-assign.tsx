@@ -134,6 +134,7 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
             value={selectedUsers}
             onChange={setSelectedUsers}
             disabled={saving}
+            roles={roles}
           />
         </div>
 

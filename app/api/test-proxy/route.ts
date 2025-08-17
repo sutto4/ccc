@@ -1,9 +1,7 @@
-import { NextResponse } from "next/server";
-
 export async function GET() {
-  return NextResponse.json({ 
-    message: "This is the Next.js API, not the bot proxy",
-    timestamp: new Date().toISOString()
+  return Response.json({ 
+    message: "Proxy test", 
+    timestamp: new Date().toISOString(),
+    env: process.env.SERVER_API_BASE_URL || 'not set'
   });
 }
-

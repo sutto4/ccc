@@ -155,11 +155,11 @@ export default function Sidebar() {
         {/* Dummy nav items (collapsible) */}
         <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/embeded-messages` : "/guilds"}
-            label="Embeded Messages"
+            href={guildId ? `/guilds/${guildId}/embedded-messages` : "/guilds"}
+            label="Embedded Messages"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/embeded-messages`) : false}
-            featureEnabled={!!(guildId && (features?.embeded_messages || premiumStatus))}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/embedded-messages`) : false}
+            featureEnabled={!!(guildId && (features?.embedded_messages || premiumStatus))}
             guildSelected={!!guildId}
             premiumRequired={true}
             hasPremium={premiumStatus}

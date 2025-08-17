@@ -353,12 +353,18 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
         <div className="text-sm text-red-600 mb-4">Premium required to publish role menus.</div>
       )}
 
-      {/* Builder */}
-      <div className="rounded-xl border p-4 bg-card space-y-2">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm"><LayoutGridIcon className="w-4 h-4"/> Compose an embed and publish a Role Select Menu to a channel.</div>
-                 <div className="space-y-6">
-            {/* Main content: Single column stacked - half width */}
-            <div className="w-1/2 space-y-6">
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Column: Form */}
+        <div className="space-y-6 h-full flex-1 min-h-[700px] flex flex-col" style={{ minHeight: '700px' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Create New Role Menu</h3>
+          </div>
+
+          {/* Editor */}
+          <div className="rounded-xl border p-4 bg-card space-y-4 flex-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm"><LayoutGridIcon className="w-4 h-4"/> Compose an embed and publish a Role Select Menu to a channel.</div>
+            <div className="space-y-6">
               {/* Channel selector (match role search width) */}
               <div className="space-y-3">
                 <label className="block text-sm font-medium">Channel</label>
@@ -627,128 +633,162 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                </Button>
                {publishMsg && <div className={`text-sm ${publishMsg.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>{publishMsg}</div>}
             </div>
-      </div>
-    </div>
-
-      {/* Management */}
-      <div className="mt-8 rounded-xl border p-4 bg-card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Published Reaction Role Messages</h3>
-          <Button variant="secondary" onClick={refreshConfigs}><RefreshCwIcon className="w-4 h-4 mr-2"/>Refresh</Button>
-        </div>
-        {loadingConfigs ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
-        ) : configs.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No reaction role messages found.</div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {configs.map((c: any) => (
-              <div key={c.messageId} className="rounded-lg border bg-background p-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate">{c.embed?.title || '(Untitled)'}</div>
-                    <div className="text-xs text-muted-foreground truncate">in #{channels.find((x:any)=>x.id===c.channelId)?.name || c.channelId} • msg {c.messageId}</div>
-                    <div className="mt-1 text-xs"><b>Enabled:</b> {c.enabled === null ? 'unknown' : c.enabled ? 'yes' : 'no'}</div>
-                    <div className="text-xs"><b>Roles:</b> {c.mappings?.map((m:any)=>m.roleId).join(', ') || '—'}</div>
-                    {c.createdBy && (
-                      <div className="text-xs text-muted-foreground mt-1"><b>Created by:</b> {c.createdBy.username || c.createdBy.id || 'unknown'}</div>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button size="sm" variant="outline" className="shadow-sm hover:shadow" onClick={() => startEdit(c)}><EditIcon className="w-4 h-4 mr-1"/>Edit</Button>
-                    {c.enabled ? (
-                      <Button size="sm" variant="secondary" className="shadow-sm hover:shadow" onClick={() => toggleEnabled(c, false)}><ToggleLeftIcon className="w-4 h-4 mr-1"/>Disable</Button>
-                    ) : (
-                      <Button size="sm" variant="secondary" className="shadow-sm hover:shadow" onClick={() => toggleEnabled(c, true)}><ToggleRightIcon className="w-4 h-4 mr-1"/>Enable</Button>
-                    )}
-                    <Button
-                      size="sm"
-                      className="bg-red-600 hover:bg-red-700 text-white shadow-sm hover:shadow"
-                      onClick={() => setConfirmDelete({ id: c.messageId, title: c.embed?.title })}
-                      aria-label="Delete"
-                    >
-                      <Trash2Icon className="w-4 h-4 mr-1 text-white" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-
-                {editingId === c.messageId && (
-                  <div className="mt-3 border rounded p-3 space-y-3 bg-muted/30">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Title</label>
-                        <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Color</label>
-                        <Input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium mb-1">Description</label>
-                        <Textarea rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Thumbnail URL</label>
-                        <Input value={editThumbnailUrl} onChange={e => setEditThumbnailUrl(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Image URL</label>
-                        <Input value={editImageUrl} onChange={e => setEditImageUrl(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Placeholder</label>
-                        <Input value={editPlaceholder} onChange={e => setEditPlaceholder(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Min</label>
-                        <Input type="number" value={editMinValues} onChange={e => setEditMinValues(Number(e.target.value)||0)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Max</label>
-                        <Input type="number" value={editMaxValues} onChange={e => setEditMaxValues(Number(e.target.value)||1)} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Roles</label>
-                      <div className="border rounded p-2 h-48 overflow-auto bg-background">
-                        {[...roles].sort((a:any,b:any)=> (b.position??0)-(a.position??0)).map((r: any) => {
-                          const isOn = editRoleIds.includes(r.roleId);
-                          const color = r.color || '#e5e7eb';
-                          return (
-                            <button
-                              key={r.roleId}
-                              type="button"
-                              onClick={() => setEditRoleIds(prev => prev.includes(r.roleId) ? prev.filter(x => x !== r.roleId) : [...prev, r.roleId])}
-                              className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded cursor-pointer transition ${isOn ? 'bg-primary/10' : 'hover:bg-muted'}`}
-                            >
-                              <span className="flex items-center gap-2 min-w-0">
-                                {r.iconUrl ? (
-                                  <img src={r.iconUrl} alt="" className="w-4 h-4 rounded-sm" />
-                                ) : r.unicodeEmoji ? (
-                                  <span className="text-base leading-none">{r.unicodeEmoji}</span>
-                                ) : (
-                                  <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
-                                )}
-                                <span className="truncate" title={r.roleId}>{r.name}</span>
-                              </span>
-                              {isOn && <CheckIcon className="w-4 h-4 text-primary" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button onClick={saveEdit} disabled={savingEdit}><SaveIcon className="w-4 h-4 mr-1"/>{savingEdit ? 'Saving…' : 'Save Changes'}</Button>
-                      <Button variant="secondary" onClick={cancelEdit}><XIcon className="w-4 h-4 mr-1"/>Cancel</Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
-        )}
+        </div>
+
+        {/* Right Column: Published Role Menus */}
+        <div className="space-y-6 h-full flex-1">
+          {/* Header - matching left column spacing */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Published Role Menus</h3>
+            <Button variant="secondary" size="sm" onClick={refreshConfigs}>
+              <RefreshCwIcon className="w-4 h-4 mr-1"/>Refresh
+            </Button>
+          </div>
+          
+          {/* List Container - matching left column styling */}
+          <div className="rounded-xl border p-4 bg-card space-y-4 flex flex-col h-full max-h-[700px]">
+            {loadingConfigs ? (
+              <div className="text-sm text-muted-foreground">Loading…</div>
+            ) : configs.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-8">No reaction role messages found.</div>
+            ) : (
+              <div className="space-y-3 overflow-y-auto pr-2 flex-1">
+                {configs.map((c: any) => (
+                  <div key={c.messageId} className="rounded border p-4 bg-card">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold truncate text-base">
+                          {c.embed?.title || '(Untitled)'}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Channel: {channels.find((x:any)=>x.id===c.channelId)?.name || `#${c.channelId}`}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Roles: {c.mappings?.map((m:any)=>m.roleId).join(', ') || '—'}
+                        </div>
+                        {c.createdBy && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Created by: {c.createdBy.username || c.createdBy.id || 'unknown'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+                        <Button size="sm" onClick={() => startEdit(c)}>
+                          Edit
+                        </Button>
+                        {c.enabled ? (
+                          <Button size="sm" variant="secondary" onClick={() => toggleEnabled(c, false)}>
+                            <ToggleLeftIcon className="w-4 h-4 mr-1"/>Disable
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="secondary" onClick={() => toggleEnabled(c, true)}>
+                            <ToggleRightIcon className="w-4 h-4 mr-1"/>Enable
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          className="bg-red-600 hover:bg-red-700"
+                          onClick={() => setConfirmDelete({ id: c.messageId, title: c.embed?.title })}
+                        >
+                          <Trash2Icon className="w-4 h-4 mr-1"/>Delete
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Footer with status */}
+                    <div className="flex items-center justify-between text-xs mt-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${c.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <span className={c.enabled ? 'text-green-600' : 'text-gray-500'}>
+                          {c.enabled ? 'Active' : 'Disabled'}
+                        </span>
+                        <span className="text-muted-foreground">
+                          • Message ID: {c.messageId}
+                        </span>
+                      </div>
+                    </div>
+
+                    {editingId === c.messageId && (
+                      <div className="mt-3 border rounded p-3 space-y-3 bg-muted/30">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Title</label>
+                            <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Color</label>
+                            <Input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium mb-1">Description</label>
+                            <Textarea rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Thumbnail URL</label>
+                            <Input value={editThumbnailUrl} onChange={e => setEditThumbnailUrl(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Image URL</label>
+                            <Input value={editImageUrl} onChange={e => setEditImageUrl(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Placeholder</label>
+                            <Input value={editPlaceholder} onChange={e => setEditPlaceholder(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Min</label>
+                            <Input type="number" value={editMinValues} onChange={e => setEditMinValues(Number(e.target.value)||0)} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Max</label>
+                            <Input type="number" value={editMaxValues} onChange={e => setEditMaxValues(Number(e.target.value)||1)} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Roles</label>
+                          <div className="border rounded p-2 h-48 overflow-auto bg-background">
+                            {[...roles].sort((a:any,b:any)=> (b.position??0)-(a.position??0)).map((r: any) => {
+                              const isOn = editRoleIds.includes(r.roleId);
+                              const color = r.color || '#e5e7eb';
+                              return (
+                                <button
+                                  key={r.roleId}
+                                  type="button"
+                                  onClick={() => setEditRoleIds(prev => prev.includes(r.roleId) ? prev.filter(x => x !== r.roleId) : [...prev, r.roleId])}
+                                  className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded cursor-pointer transition ${isOn ? 'bg-primary/10' : 'hover:bg-muted'}`}
+                                >
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    {r.iconUrl ? (
+                                      <img src={r.iconUrl} alt="" className="w-4 h-4 rounded-sm" />
+                                    ) : r.unicodeEmoji ? (
+                                      <span className="text-base leading-none">{r.unicodeEmoji}</span>
+                                    ) : (
+                                      <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color + '20', borderColor: color }} />
+                                    )}
+                                    <span className="truncate" title={r.roleId}>{r.name}</span>
+                                  </span>
+                                  {isOn && <CheckIcon className="w-4 h-4 text-primary" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button onClick={saveEdit} disabled={savingEdit}><SaveIcon className="w-4 h-4 mr-1"/>{savingEdit ? 'Saving…' : 'Save Changes'}</Button>
+                          <Button variant="secondary" onClick={cancelEdit}><XIcon className="w-4 h-4 mr-1"/>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+
              <Dialog open={!!confirmDelete} onOpenChange={(o: boolean) => { if (!o) setConfirmDelete(null); }}>
          <DialogContent className="backdrop-blur-sm bg-background/95 border-border/50 shadow-xl">
            <DialogHeader>

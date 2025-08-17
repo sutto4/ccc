@@ -37,8 +37,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const premium = !!first?.premium;
 
     const features = premium
-      ? { premium_members: true, reaction_roles: true, custom_groups: true, embeded_messages: true, custom_commands: true, creator_alerts: true, esx: true, qbcore: true }
-      : { premium_members: false, reaction_roles: false, custom_groups: false, embeded_messages: false, custom_commands: false, creator_alerts: false, esx: false, qbcore: false };
+      ? { premium_members: true, reaction_roles: true, custom_groups: true, embedded_messages: true, custom_commands: true, creator_alerts: true, esx: true, qbcore: true }
+      : { premium_members: false, reaction_roles: false, custom_groups: false, embedded_messages: false, custom_commands: false, creator_alerts: false, esx: false, qbcore: false };
 
     return NextResponse.json({ guildId, features });
   } catch (e: any) {

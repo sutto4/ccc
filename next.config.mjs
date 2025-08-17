@@ -27,13 +27,25 @@ const nextConfig = {
     ]
   },
   async rewrites() {
-    // Proxy external bot/backend only under /proxy/* to avoid shadowing local /api/* routes
     const base = process.env.SERVER_API_BASE_URL;
-    if (!base) return [];
+    console.log('🔍 SERVER_API_BASE_URL:', base);
+    
+    if (!base) {
+      console.log('❌ No SERVER_API_BASE_URL found, returning empty rewrites');
+      return [];
+    }
+    
+    // More explicit rewrite configuration
     return [
       {
         source: '/proxy/:path*',
-        destination: `${base.replace(/\/+$/, '')}/:path*`,
+        destination: `${base}/:path*`,
+        has: [
+          {
+            type: 'header',
+            key: 'accept',
+          },
+        ],
       },
     ];
   },
