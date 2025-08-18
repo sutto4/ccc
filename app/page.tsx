@@ -1,16 +1,23 @@
-import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
-import { Bot, Shield, Users, Zap, Crown, CheckCircle, ArrowRight, Play, Sparkles, Rocket } from "lucide-react";
+"use client";
 
-export default async function Page() {
-  const session = await getServerSession(authOptions);
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Bot, Shield, Users, Zap, Crown, CheckCircle, ArrowRight, Play, Sparkles, Rocket } from "lucide-react";
+import SignInModal from "@/components/signin-modal";
+
+export default function Page() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [signInModalOpen, setSignInModalOpen] = useState(false);
   
   // If user is authenticated, redirect to My Servers
-  if (session) {
-    redirect('/guilds');
-  }
+  useEffect(() => {
+    if (session && status === "authenticated") {
+      router.push('/guilds');
+    }
+  }, [session, status, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-black">
@@ -42,14 +49,14 @@ export default async function Page() {
             </p>
         
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <Link
-                href="/signin"
+              <button
+                onClick={() => setSignInModalOpen(true)}
                 className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
               >
                 <Rocket className="h-5 w-5" />
                 Get Started Free
                 <ArrowRight className="h-5 w-5" />
-              </Link>
+              </button>
               
               <Link
                 href="#features"
@@ -159,7 +166,10 @@ export default async function Page() {
                 </li>
               </ul>
               
-              <button className="w-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-700 transition-all duration-300">
+              <button 
+                onClick={() => setSignInModalOpen(true)}
+                className="w-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-700 transition-all duration-300"
+              >
                 Get Started
               </button>
             </div>
@@ -194,7 +204,10 @@ export default async function Page() {
                 </li>
               </ul>
               
-              <button className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300">
+              <button 
+                onClick={() => setSignInModalOpen(true)}
+                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300"
+              >
                 Get Started
               </button>
             </div>
@@ -226,7 +239,10 @@ export default async function Page() {
                 </li>
               </ul>
               
-              <button className="w-full bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-emerald-700 hover:to-blue-700 transition-all duration-300">
+              <button 
+                onClick={() => setSignInModalOpen(true)}
+                className="w-full bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-emerald-700 hover:to-blue-700 transition-all duration-300"
+              >
                 Get Started
               </button>
             </div>
@@ -251,14 +267,14 @@ export default async function Page() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href="/signin"
+            <button
+              onClick={() => setSignInModalOpen(true)}
               className="inline-flex items-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-xl"
             >
               <Rocket className="h-5 w-5" />
               Start Managing Your Server
               <ArrowRight className="h-5 w-5" />
-            </Link>
+            </button>
             
             <Link
               href="#"
@@ -291,6 +307,9 @@ export default async function Page() {
           </div>
         </div>
       </footer>
+
+      {/* Sign In Modal */}
+      <SignInModal open={signInModalOpen} onOpenChange={setSignInModalOpen} />
     </div>
   );
 }
