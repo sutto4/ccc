@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
-import { Shield, Server, Settings, Crown } from "lucide-react";
+import { Shield, Server, Settings, Crown, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchFeatures, type FeaturesResponse } from "@/lib/api";
 import { useSession, signOut } from "next-auth/react";
@@ -268,6 +268,20 @@ export default function Sidebar() {
             guildSelected={!!guildId}
             premiumRequired={true}
             hasPremium={premiumStatus}
+          />
+        </CollapsibleSection>
+
+        {/* Development */}
+        <CollapsibleSection title="Development" defaultOpen={false}>
+          <NavLeaf
+            href="/design-system"
+            label="Design System"
+            rightIcon={<FileText className="h-3.5 w-3.5 text-blue-500" />}
+            active={pathname === "/design-system"}
+            featureEnabled={true}
+            guildSelected={false}
+            premiumRequired={false}
+            hasPremium={true}
           />
         </CollapsibleSection>
       </nav>

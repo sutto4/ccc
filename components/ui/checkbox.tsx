@@ -1,32 +1,84 @@
-"use client"
+import { forwardRef, InputHTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
 
-import * as React from "react"
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
-import { CheckIcon } from "lucide-react"
-
-import { cn } from "@/lib/utils"
-
-function Checkbox({
-  className,
-  ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
-  return (
-    <CheckboxPrimitive.Root
-      data-slot="checkbox"
-      className={cn(
-        "peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:data-[state=checked]:bg-primary data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    >
-      <CheckboxPrimitive.Indicator
-        data-slot="checkbox-indicator"
-        className="flex items-center justify-center text-current transition-none"
-      >
-        <CheckIcon className="size-3.5" />
-      </CheckboxPrimitive.Indicator>
-    </CheckboxPrimitive.Root>
-  )
+interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+  label?: string;
+  error?: string;
+  helperText?: string;
 }
 
-export { Checkbox }
+export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
+  ({ className, label, error, helperText, ...props }, ref) => {
+    return (
+      <div className="space-y-2">
+        <label className="flex items-start space-x-3 cursor-pointer">
+          <div className="flex items-center h-5">
+            <input
+              type="checkbox"
+              className={cn(
+                "h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0 transition-colors duration-200",
+                error && "border-red-300 focus:ring-red-500/20",
+                className
+              )}
+              ref={ref}
+              {...props}
+            />
+          </div>
+          <div className="text-sm">
+            {label && (
+              <span className="font-medium text-gray-700">{label}</span>
+            )}
+            {helperText && !error && (
+              <p className="text-gray-500 mt-0.5">{helperText}</p>
+            )}
+            {error && (
+              <p className="text-red-600 mt-0.5">{error}</p>
+            )}
+          </div>
+        </label>
+      </div>
+    );
+  }
+);
+Checkbox.displayName = 'Checkbox';
+
+interface RadioProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+  label?: string;
+  error?: string;
+  helperText?: string;
+}
+
+export const Radio = forwardRef<HTMLInputElement, RadioProps>(
+  ({ className, label, error, helperText, ...props }, ref) => {
+    return (
+      <div className="space-y-2">
+        <label className="flex items-start space-x-3 cursor-pointer">
+          <div className="flex items-center h-5">
+            <input
+              type="radio"
+              className={cn(
+                "h-4 w-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0 transition-colors duration-200",
+                error && "border-red-300 focus:ring-red-500/20",
+                className
+              )}
+              ref={ref}
+              {...props}
+            />
+          </div>
+          <div className="text-sm">
+            {label && (
+              <span className="font-medium text-gray-700">{label}</span>
+            )}
+            {helperText && !error && (
+              <p className="text-gray-500 mt-0.5">{helperText}</p>
+            )}
+            {error && (
+              <p className="text-red-600 mt-0.5">{error}</p>
+            )}
+          </div>
+        </label>
+      </div>
+    );
+  }
+);
+Radio.displayName = 'Radio';

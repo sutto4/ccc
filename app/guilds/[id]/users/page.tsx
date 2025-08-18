@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Dialog } from "@headlessui/react";
 import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
@@ -30,6 +30,23 @@ type Row = Member & { rolesExpanded?: boolean };
 
 const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
 
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function UsersPage() {
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
@@ -41,14 +58,16 @@ export default function UsersPage() {
   const [displayed, setDisplayed] = useState<Row[]>([]);
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState("");
-  const perPage = 40;
+  const [pageSize, setPageSize] = useState(50); // Configurable page size
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<Row | null>(null);
   const [modalRole, setModalRole] = useState<string>("");
-  // Add state for searchRole (role search in modal)
   const [searchRole, setSearchRole] = useState("");
+
+  // Debounce search input to prevent excessive filtering
+  const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => {
     let alive = true;
@@ -79,31 +98,47 @@ export default function UsersPage() {
     };
   }, [guildId, (session as any)?.accessToken]);
 
-  // Filter and paginate users (cross-filter: username and role)
-  useEffect(() => {
+  // Memoized filtered results - only recalculates when filters actually change
+  const filteredMembers = useMemo(() => {
     let filtered = members;
-    if (search) {
+    
+    // Apply search filter (case-insensitive)
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
       filtered = filtered.filter((u) =>
-        u.username.toLowerCase().includes(search.toLowerCase())
+        u.username.toLowerCase().includes(searchLower)
       );
     }
+    
+    // Apply role filter
     if (roleFilter) {
       filtered = filtered.filter((u) => u.roleIds.includes(roleFilter));
     }
-    setDisplayed(filtered.slice(0, page * perPage));
-  }, [members, search, roleFilter, page]);
+    
+    return filtered;
+  }, [members, debouncedSearch, roleFilter]);
+
+  // Memoized displayed results - only recalculates when page or pageSize changes
+  const displayedMembers = useMemo(() => {
+    return filteredMembers.slice(0, page * pageSize);
+  }, [filteredMembers, page, pageSize]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, roleFilter]);
 
   // Infinite scroll observer
   useEffect(() => {
     if (!loaderRef.current) return;
     const observer = new window.IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
+      if (entries[0].isIntersecting && displayedMembers.length < filteredMembers.length) {
         setPage((p) => p + 1);
       }
     });
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
-  }, [loaderRef.current]);
+  }, [displayedMembers.length, filteredMembers.length]);
 
   const roleMap = useMemo(() => new Map(roles.map((r) => [r.roleId, r])), [roles]);
 
@@ -116,7 +151,8 @@ export default function UsersPage() {
         (r as any).editableByBot !== false
     );
 
-  async function handleAddRole(userId: string, roleId: string) {
+  // Memoized callback for role operations
+  const handleAddRole = useCallback(async (userId: string, roleId: string) => {
     try {
       const actor = (session?.user as any)?.id || "";
       const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
@@ -148,9 +184,9 @@ export default function UsersPage() {
     } catch (e: any) {
       alert(`Add failed: ${e?.message || "unknown"}`);
     }
-  }
+  }, [guildId, members, roles, session]);
 
-  async function onRemove(userId: string, roleId: string) {
+  const onRemove = useCallback(async (userId: string, roleId: string) => {
     try {
       const actor = (session?.user as any)?.id || "";
       const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
@@ -182,42 +218,58 @@ export default function UsersPage() {
     } catch (e: any) {
       alert(`Remove failed: ${e?.message || "unknown"}`);
     }
-  }
+  }, [guildId, members, roles, session]);
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(filteredMembers.length / pageSize);
+  const hasMore = displayedMembers.length < filteredMembers.length;
+  const showingInfo = `${displayedMembers.length.toLocaleString()} of ${filteredMembers.length.toLocaleString()} users`;
 
   return (
     <Section
       title="Users"
       right={
         <div className="text-sm text-muted-foreground">
-          {loading ? "Loading…" : `${members.length.toLocaleString()} users`}
+          {loading ? "Loading…" : showingInfo}
         </div>
       }
     >
       {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
 
-      <div className="mb-4 flex gap-2 items-center">
+      <div className="mb-4 flex gap-2 items-center flex-wrap">
         <input
           type="text"
           className="w-full max-w-xs rounded-md border px-2 py-1 text-xs bg-background"
           placeholder="Search users…"
           value={search}
-          onChange={e => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
+          onChange={e => setSearch(e.target.value)}
         />
         <Select
           className="w-48 text-xs"
           value={roleFilter}
           onChange={e => {
             setRoleFilter((e.target as HTMLSelectElement).value);
-            setPage(1);
           }}
         >
           <option value="">All roles</option>
           {roles.map((r) => (
             <option key={r.roleId} value={r.roleId}>{r.name}</option>
           ))}
+        </Select>
+        
+        {/* Page size selector */}
+        <Select
+          className="w-24 text-xs"
+          value={pageSize.toString()}
+          onChange={e => {
+            const newSize = parseInt((e.target as HTMLSelectElement).value);
+            setPageSize(newSize);
+            setPage(1); // Reset to first page
+          }}
+        >
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
         </Select>
       </div>
 
@@ -231,7 +283,7 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {!loading && displayed.map((m) => (
+            {!loading && displayedMembers.map((m) => (
               <tr
                 key={m.discordUserId}
                 className="border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md"
@@ -368,18 +420,62 @@ export default function UsersPage() {
           </div>
         </Dialog>
       )}
-            {!loading && displayed.length === 0 && (
+            {!loading && displayedMembers.length === 0 && (
               <tr>
                 <td className="py-6 text-muted-foreground text-center" colSpan={3}>
-                  No users.
+                  {filteredMembers.length === 0 ? "No users found." : "No users in this page."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      {/* Infinite scroll loader */}
-      <div ref={loaderRef} className="h-8" />
+      
+      {/* Pagination info and controls */}
+      {!loading && filteredMembers.length > 0 && (
+        <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+          <div>
+            Page {page} of {totalPages} • {showingInfo}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="px-2 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              First
+            </button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-2 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-2 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              Next
+            </button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="px-2 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              Last
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Infinite scroll loader - only show if there are more results */}
+      {hasMore && (
+        <div ref={loaderRef} className="h-8 flex items-center justify-center">
+          <div className="text-xs text-muted-foreground">Scroll to load more...</div>
+        </div>
+      )}
     </Section>
   );
 }
