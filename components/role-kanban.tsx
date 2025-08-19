@@ -1,41 +1,34 @@
 "use client";
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Dialog } from "@headlessui/react";
-import { fetchRoles, fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useSession } from "next-auth/react";
-
-// Debounce hook for search optimization
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 export default function RoleKanban({ guildId, customGroups = [] }: { guildId: string, customGroups?: any[] }) {
 
-  const [roles, setRoles] = useState<any[]>([]);
+  // Use the shared hook for all member management
+  const {
+    loading,
+    loadingRoles,
+    members,
+    roles,
+    error,
+    search: roleSearch,
+    setSearch: setRoleSearch,
+    debouncedSearch: debouncedUserSearch,
+    roleMap,
+    filteredMembers,
+    roleMapMembers,
+    noRole,
+    usersNotInRole,
+    loadMembers,
+    DEFAULT_AVATAR
+  } = useGuildMembersKanban(guildId);
+
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]); // Default to empty (Clear All)
-  const [members, setMembers] = useState<any[]>([]);
-  const [roleSearch, setRoleSearch] = useState("");
-  
-  // Pagination and infinite scroll state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100); // Start with 100 users per page
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   
   // Modal state for adding user
   const [addUserRoleId, setAddUserRoleId] = useState<string|null>(null);
@@ -45,13 +38,6 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Infinite scroll refs
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const lastElementRef = useRef<HTMLDivElement | null>(null);
-
-  // Debounce user search for better performance
-  const debouncedUserSearch = useDebounce(userSearch, 300);
 
   const { data: session } = useSession();
 
@@ -72,163 +58,15 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     return () => document.removeEventListener('mousedown', handleClick);
   }, [dropdownOpen]);
 
-  // Load initial data
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetchRoles(guildId),
-      fetchMembersLegacy(guildId)
-    ]).then(([rolesData, membersData]) => {
-      setRoles(rolesData);
-      
-      // If no roles are selected, only show first page (for performance)
-      // If roles are selected, show all users for those roles
-      if (selectedRoleIds.length === 0) {
-        setMembers(membersData.slice(0, pageSize)); // Only load first page initially
-        setHasMore(membersData.length > pageSize);
-      } else {
-        setMembers(membersData); // Load all users for selected roles
-        setHasMore(false); // No pagination needed
-      }
-      
-      setLoading(false);
-    }).catch(error => {
-      console.error('Failed to load data:', error);
-      setLoading(false);
-    });
-  }, [guildId, pageSize, selectedRoleIds.length]);
-
-  // Load more users when page changes
-  useEffect(() => {
-    if (page === 1) return; // Skip initial load
-
-    // Prevent duplicate API calls
-    if (loadingMore) return;
-
-    setLoadingMore(true);
-    console.log(`Fetching page ${page}, pageSize: ${pageSize}`);
-    
-    fetchMembersLegacy(guildId).then(membersData => {
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const newMembers = membersData.slice(startIndex, endIndex);
-      
-      console.log(`Page ${page}: loaded ${newMembers.length} users (${startIndex}-${endIndex} of ${membersData.length})`);
-      
-      setMembers(prev => [...prev, ...newMembers]);
-      setHasMore(endIndex < membersData.length);
-      setLoadingMore(false);
-    }).catch(error => {
-      console.error('Failed to load more members:', error);
-      setLoadingMore(false);
-      // Reset page on error to prevent stuck state
-      setPage(prev => Math.max(1, prev - 1));
-    });
-  }, [page, guildId, pageSize]);
-
   // Reset pagination when filters change
   const handleRoleSelectionChange = useCallback((newRoleIds: string[]) => {
     setSelectedRoleIds(newRoleIds);
-    setPage(1);
-    setMembers([]); // Clear current members to reload
-    setHasMore(false); // No more pagination needed for role-filtered view
-    setLoadingMore(false); // Reset loading state
-    
-    // Immediately reload ALL users for the new role selection (not paginated)
-    setLoading(true);
-    fetchMembersLegacy(guildId).then(membersData => {
-      // Load ALL users, not just the first page
-      setMembers(membersData);
-      setLoading(false);
-    }).catch(error => {
-      console.error('Failed to reload members after role change:', error);
-      setLoading(false);
-    });
-  }, [guildId]);
-
-  // Debounced page increment to prevent rapid API calls
-  const debouncedPageIncrement = useCallback(() => {
-    if (loadingMore || !hasMore) return;
-    
-    // Set loading state immediately to prevent multiple calls
-    setLoadingMore(true);
-    
-    setPage(prev => {
-      const nextPage = prev + 1;
-      console.log(`Incrementing to page ${nextPage}`);
-      return nextPage;
-    });
-  }, [loadingMore, hasMore]);
-
-  // Infinite scroll observer with debouncing
-  useEffect(() => {
-    if (loading || !hasMore || loadingMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          // Use debounced increment to prevent rapid triggers
-          debouncedPageIncrement();
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' } // Add rootMargin to trigger earlier
-    );
-
-    if (lastElementRef.current) {
-      observer.observe(lastElementRef.current);
-    }
-
-    observerRef.current = observer;
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [loading, hasMore, loadingMore, debouncedPageIncrement]);
-
-  // Cleanup observer when loading state changes
-  useEffect(() => {
-    if (loadingMore && observerRef.current) {
-      // Disconnect observer while loading to prevent multiple triggers
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-  }, [loadingMore]);
-
-  // Force dropdown background to match theme, even if theme changes while open
-  useEffect(() => {
-    if (!dropdownOpen || !dropdownRef.current) return;
-    const el = dropdownRef.current;
-    function setDropdownBg() {
-      if (document.documentElement.classList.contains('dark')) {
-        el.style.setProperty('background-color', '#18181b', 'important');
-        el.style.setProperty('color', '#fff', 'important');
-      } else {
-        el.style.setProperty('background-color', '#fff', 'important');
-        el.style.setProperty('color', '', 'important');
-      }
-    }
-    setDropdownBg();
-    // Listen for theme changes
-    const observer = new MutationObserver(setDropdownBg);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, [dropdownOpen]);
-
-  // Memoized filtered members for better performance
-  const filteredMembers = useMemo(() => {
-    if (!debouncedUserSearch) return members;
-    
-    const searchLower = debouncedUserSearch.toLowerCase();
-    return members.filter(m => 
-      m.username.toLowerCase().includes(searchLower) ||
-      (m.accountid && m.accountid.toLowerCase().includes(searchLower))
-    );
-  }, [members, debouncedUserSearch]);
+    // Reload all members for the new role selection
+    loadMembers();
+  }, [loadMembers]);
 
   // Map roleId to members (only for selected roles)
-  const roleMap: Record<string, any[]> = useMemo(() => {
+  const selectedRoleMap: Record<string, any[]> = useMemo(() => {
     const map: Record<string, any[]> = {};
     selectedRoleIds.forEach((roleId) => {
       map[roleId] = members.filter((m) => m.roleIds.includes(roleId));
@@ -237,18 +75,13 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   }, [members, selectedRoleIds]);
 
   // Users with no roles (only if no roles are selected, show a small sample)
-  const noRole = useMemo(() => {
+  const selectedNoRole = useMemo(() => {
     if (selectedRoleIds.length === 0) {
       // If no roles selected, show a small sample of users with no roles
-      return members.filter((m) => m.roleIds.length === 0).slice(0, 50);
+      return noRole.slice(0, 50);
     }
-    return members.filter((m) => m.roleIds.length === 0);
-  }, [members, selectedRoleIds]);
-
-  // Users not in role (for add user modal) - paginated
-  const usersNotInRole = useCallback((roleId: string) => {
-    return members.filter((m) => !m.roleIds.includes(roleId));
-  }, [members]);
+    return noRole;
+  }, [noRole, selectedRoleIds]);
 
   // For DnD: columns = ["noRole", ...selectedRoleIds], sorted by role hierarchy
   const columns = useMemo(() => {
@@ -270,10 +103,10 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   // For DnD, each user-role instance must be unique
   const getColumnUserInstances = useCallback((col: string) => {
     if (col === "noRole") {
-      return noRole.map(u => ({ user: u, roleId: null }));
+      return selectedNoRole.map(u => ({ user: u, roleId: null }));
     }
-    return (roleMap[col] || []).map(u => ({ user: u, roleId: col }));
-  }, [noRole, roleMap]);
+    return (selectedRoleMap[col] || []).map(u => ({ user: u, roleId: col }));
+  }, [selectedNoRole, selectedRoleMap]);
 
   const onDragEnd = useCallback(async (result: DropResult) => {
     if (!result.destination) return;
@@ -291,8 +124,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     
     if ((fromRole && !validRoleIds.includes(fromRole)) || (toRole && !validRoleIds.includes(toRole))) {
       alert('Unknown Role: One of the roles involved in this operation does not exist. The list will now refresh.');
-      fetchRoles(guildId).then(setRoles);
-      fetchMembersLegacy(guildId).then(setMembers);
+      loadMembers();
       return;
     }
 
@@ -374,35 +206,13 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
               className="px-2 py-1 rounded bg-muted text-xs border hover:bg-accent"
               onClick={() => handleRoleSelectionChange([])}
             >Clear All</button>
-            
-            {/* Page size selector for better performance */}
-            <select
-              className="w-20 text-xs"
-              value={pageSize.toString()}
-              onChange={e => {
-                const newSize = parseInt(e.target.value);
-                setPageSize(newSize);
-                setPage(1);
-                
-                // If no roles selected, reset pagination
-                // If roles selected, keep showing all users
-                if (selectedRoleIds.length === 0) {
-                  setMembers([]);
-                  setHasMore(true);
-                }
-              }}
-            >
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="200">200</option>
-            </select>
           </div>
           
           <div className="relative w-full max-w-xs sm:max-w-xs md:max-w-xs lg:max-w-xs xl:max-w-xs" style={{maxWidth: 240}}>
             <input
               ref={inputRef}
               type="text"
-              className="w-full px-2 py-1 border rounded text-sm"
+              className="w-full px-2 py-1 border border-border rounded text-sm bg-background text-foreground placeholder:text-muted-foreground"
               placeholder="Search roles..."
               value={roleSearch}
               onChange={e => {
@@ -425,7 +235,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
             {dropdownOpen && (
               <div
                 ref={dropdownRef}
-                className="absolute left-0 top-full z-[100] bg-white dark:bg-neutral-900 border rounded shadow w-full max-h-48 overflow-y-auto mt-1"
+                className="absolute left-0 top-full z-[100] bg-card border border-border rounded shadow-lg w-full max-h-48 overflow-y-auto mt-1"
                 style={{ minWidth: 200 }}
               >
                 {roles
@@ -436,7 +246,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                   .map(role => (
                     <div
                       key={role.roleId}
-                      className={`flex items-center gap-2 px-2 py-1 text-xs cursor-pointer hover:bg-accent ${selectedRoleIds.includes(role.roleId) ? 'bg-accent/50' : ''}`}
+                      className={`flex items-center gap-2 px-2 py-1 text-xs cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${selectedRoleIds.includes(role.roleId) ? 'bg-accent/50 text-accent-foreground' : 'text-foreground'}`}
                       onClick={() => {
                         const newRoleIds = selectedRoleIds.includes(role.roleId)
                           ? selectedRoleIds.filter(id => id !== role.roleId)
@@ -448,16 +258,23 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                         type="checkbox"
                         checked={selectedRoleIds.includes(role.roleId)}
                         readOnly
+                        className="text-primary"
                       />
-                      <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: role.color || '#e5e7eb', borderColor: role.color || '#e5e7eb' }} />
-                      {role.name}
+                      <span 
+                        className="inline-block h-3 w-3 rounded-full border" 
+                        style={{ 
+                          backgroundColor: role.color ? `${role.color}20` : 'var(--muted)',
+                          borderColor: role.color || 'var(--border)'
+                        }} 
+                      />
+                      <span className="truncate">{role.name}</span>
                     </div>
                   ))}
                 {roles.filter(role =>
                   role.name.toLowerCase().includes(roleSearch.toLowerCase()) ||
                   role.roleId.toLowerCase().includes(roleSearch.toLowerCase())
                 ).length === 0 && (
-                  <div className="px-2 py-1 text-xs text-muted-foreground">No roles found</div>
+                  <div className="px-2 py-1 text-xs text-muted-foreground border-t border-border pt-2">No roles found</div>
                 )}
               </div>
             )}
@@ -467,7 +284,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
         {/* Performance info */}
         <div className="text-xs text-muted-foreground mb-2">
           {selectedRoleIds.length === 0 ? (
-            `Showing ${members.length.toLocaleString()} users • Page size: ${pageSize} • No roles selected (showing users with no roles)`
+            `Showing ${members.length.toLocaleString()} users • No roles selected (showing users with no roles)`
           ) : (
             `Showing ${members.length.toLocaleString()} users • ${selectedRoleIds.length} roles selected (all users loaded)`
           )}
@@ -548,22 +365,13 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
           </div>
         </div>
       </DragDropContext>
-      
-      {/* Infinite scroll loader */}
-      {hasMore && (
-        <div ref={lastElementRef} className="h-8 flex items-center justify-center mt-4">
-          <div className="text-xs text-muted-foreground">
-            {loadingMore ? "Loading more users..." : "Scroll to load more users"}
-          </div>
-        </div>
-      )}
-      
-      {/* Show loading state when changing roles */}
-      {loading && (
-        <div className="h-8 flex items-center justify-center mt-4">
-          <div className="text-xs text-muted-foreground">Loading users for selected roles...</div>
-        </div>
-      )}
+       
+       {/* Show loading state when changing roles */}
+       {loading && (
+         <div className="h-8 flex items-center justify-center mt-4">
+           <div className="text-xs text-muted-foreground">Loading users for selected roles...</div>
+         </div>
+       )}
       
       {/* Modal for adding user to role */}
       <Dialog open={!!addUserRoleId} onClose={() => setAddUserRoleId(null)} className="fixed z-[200] inset-0 flex items-center justify-center">

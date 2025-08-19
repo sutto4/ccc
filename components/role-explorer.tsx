@@ -5,7 +5,7 @@ import RoleUsersList from "@/components/role-users-list";
 import { UserChips } from "@/components/ui/user-chips";
 import { RoleUserChipsOnDemand } from "@/components/ui/role-user-chips-on-demand";
 import { RoleUserModal } from "@/components/ui/role-user-modal";
-import { fetchMembersLegacy } from "@/lib/api";
+import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 export default function RoleExplorer({ guildId, roles = [] }: { guildId: string; roles?: any[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -14,12 +14,10 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
   const [view, setView] = useState<'card' | 'table'>('card');
   const [modalRole, setModalRole] = useState<any | null>(null);
   const [modalRoleUserIds, setModalRoleUserIds] = useState<string[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  
+  // Use the shared hook for member management
+  const { members, loading, error } = useGuildMembersKanban(guildId);
 
-  // Always fetch all members when Role Explorer mounts (for modal accuracy)
-  useEffect(() => {
-    fetchMembersLegacy(guildId).then(setMembers).catch(() => setMembers([]));
-  }, [guildId]);
   // Sort roles by position (descending, like Discord)
   const filteredRoles = (roles || [])
     .filter((r: any) =>
@@ -98,64 +96,64 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
               )}
             </div>
           ))}
-          {filteredRoles.length === 0 && (
-            <div className="text-sm text-muted-foreground col-span-full">No roles found.</div>
-          )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border rounded-xl bg-card">
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <table className="min-w-full divide-y divide-border text-xs">
             <thead>
-              <tr className="bg-muted">
-                <th className="px-3 py-2 text-left text-xs font-semibold">Name</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold">Role ID</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold">Color</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold">Users</th>
+              <tr className="border-b">
+                <th className="text-left py-2 px-4">Role</th>
+                <th className="text-left py-2 px-4">Users</th>
+                <th className="text-left py-2 px-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredRoles.map((r) => {
-                return (
-                  <tr
-                    key={r.roleId}
-                    className="border-b last:border-0 cursor-pointer transition hover:bg-primary/10 hover:shadow-md"
-                    onClick={() => {
-                      setModalRole(r);
-                      // Compute user IDs for this role from latest members
-                      setModalRoleUserIds(members.filter(m => m.roleIds.includes(r.roleId)).map(m => m.discordUserId));
-                    }}
-                  >
-                    <td className="px-3 py-2 font-medium">{r.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.roleId}</td>
-                    <td className="px-3 py-2">
+              {filteredRoles.map((r) => (
+                <tr key={r.roleId} className="border-b">
+                  <td className="py-2 px-4">
+                    <div className="flex items-center gap-2">
                       <span
-                        className="inline-block h-4 w-4 rounded-full border"
-                        style={{ backgroundColor: r.color || '#e5e7eb', borderColor: r.color || '#e5e7eb' }}
-                        title={r.color ?? 'no color'}
+                        className="inline-block h-4 w-4 rounded-full border border-white shadow-sm"
+                        style={{ backgroundColor: r.color || '#e5e7eb' }}
                       />
-                    </td>
-                    <td className="px-3 py-2 text-xs min-w-[160px]">
-                      <RoleUserChipsOnDemand guildId={guildId} roleId={r.roleId} max={3} />
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredRoles.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-sm text-muted-foreground text-center py-4">No roles found.</td>
+                      <div>
+                        <div className="font-medium">{r.name}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{r.roleId}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-2 px-4">
+                    <RoleUserChipsOnDemand guildId={guildId} roleId={r.roleId} />
+                  </td>
+                  <td className="py-2 px-4">
+                    <button
+                      className="px-2 py-1 rounded bg-primary text-primary-foreground text-xs hover:bg-primary/90 transition"
+                      onClick={() => {
+                        setModalRole(r);
+                        setModalRoleUserIds([]);
+                      }}
+                    >
+                      Manage Users
+                    </button>
+                  </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Role User Management Modal */}
       {modalRole && (
         <RoleUserModal
-          open={!!modalRole}
-          onClose={() => setModalRole(null)}
           guildId={guildId}
           role={modalRole}
-          roleUserIds={modalRoleUserIds}
+          selectedUserIds={modalRoleUserIds}
+          onUserIdsChange={setModalRoleUserIds}
+          onClose={() => {
+            setModalRole(null);
+            setModalRoleUserIds([]);
+          }}
         />
       )}
     </div>

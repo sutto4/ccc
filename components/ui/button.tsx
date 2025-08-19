@@ -1,4 +1,5 @@
 import { forwardRef, ButtonHTMLAttributes } from 'react';
+import { Slot } from '@radix-ui/react-slot';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = {
@@ -23,23 +24,21 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   icon?: React.ReactNode;
   iconPosition?: 'left' | 'right';
+  asChild?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", loading, icon, iconPosition = "left", children, disabled, ...props }, ref) => {
-    return (
-      <button
-        className={cn(
-          "inline-flex items-center justify-center font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed",
-          buttonVariants[variant],
-          buttonSizes[size],
-          loading && "cursor-wait",
-          className
-        )}
-        ref={ref}
-        disabled={disabled || loading}
-        {...props}
-      >
+  ({ className, variant = "primary", size = "md", loading, icon, iconPosition = "left", asChild = false, children, disabled, ...props }, ref) => {
+    const buttonClassName = cn(
+      "inline-flex items-center justify-center font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed",
+      buttonVariants[variant],
+      buttonSizes[size],
+      loading && "cursor-wait",
+      className
+    );
+
+    const buttonContent = (
+      <>
         {loading && (
           <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -53,6 +52,29 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {!loading && icon && iconPosition === "right" && (
           <span className="ml-2">{icon}</span>
         )}
+      </>
+    );
+
+    if (asChild) {
+      return (
+        <Slot
+          className={buttonClassName}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </Slot>
+      );
+    }
+    
+    return (
+      <button
+        className={buttonClassName}
+        ref={ref}
+        disabled={disabled || loading}
+        {...props}
+      >
+        {buttonContent}
       </button>
     );
   }

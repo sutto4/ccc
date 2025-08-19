@@ -15,8 +15,11 @@ export default function InviteBotButton(props: Props) {
     ? `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${perms}&scope=bot%20applications.commands`
     : "#";
   const disabled = !clientId || rest.disabled;
+  
+  // When asChild is true, the Button will render as the Link
+  // The disabled state is handled through the Button's styling
   return (
-    <Button asChild disabled={disabled} {...rest}>
+    <Button asChild {...rest}>
       <Link href={url} target="_blank" rel="noopener noreferrer">
         {children ?? "Invite Bot"}
       </Link>

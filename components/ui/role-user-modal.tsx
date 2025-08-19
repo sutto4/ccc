@@ -1,37 +1,27 @@
 import { useEffect, useState } from "react";
 import { Dialog } from "@headlessui/react";
-import { fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
+import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 export function RoleUserModal({
-  open,
-  onClose,
   guildId,
   role,
-  roleUserIds,
+  selectedUserIds,
+  onUserIdsChange,
+  onClose,
 }: {
-  open: boolean;
-  onClose: () => void;
   guildId: string;
   role: any;
-  roleUserIds: string[];
+  selectedUserIds: string[];
+  onUserIdsChange: (userIds: string[]) => void;
+  onClose: () => void;
 }) {
-  const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use the shared hook for member management
+  const { members, loading, error } = useGuildMembersKanban(guildId);
+  
   const [search, setSearch] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-
-  // Always fetch members when modal opens or when a reload is triggered
-  const [reloadKey, setReloadKey] = useState(0);
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetchMembersLegacy(guildId)
-      .then(setMembers)
-      .catch(() => setMembers([]))
-      .finally(() => setLoading(false));
-  }, [open, guildId, reloadKey]);
 
   // Always compute users in role from the latest member data
   const usersInRole = members.filter((m) => m.roleIds && m.roleIds.includes(role.roleId));
@@ -39,10 +29,9 @@ export function RoleUserModal({
 
   async function handleAdd(userId: string) {
     setPending(true);
-    setError(null);
     try {
       await addRole(guildId, userId, role.roleId, "");
-      setReloadKey(k => k + 1);
+      onUserIdsChange([...selectedUserIds, userId]);
       setSearch("");
       // Logging
       const actor = ""; // If you have session/user context, use it here
@@ -62,17 +51,17 @@ export function RoleUserModal({
         }
       });
     } catch (e: any) {
-      setError(e?.message || "Failed to add user");
+      console.error('Failed to add user:', e);
     } finally {
       setPending(false);
     }
   }
+  
   async function handleRemove(userId: string) {
     setPending(true);
-    setError(null);
     try {
       await removeRole(guildId, userId, role.roleId, "");
-      setReloadKey(k => k + 1);
+      onUserIdsChange(selectedUserIds.filter(id => id !== userId));
       setSearch("");
       // Logging
       const actor = ""; // If you have session/user context, use it here
@@ -92,14 +81,14 @@ export function RoleUserModal({
         }
       });
     } catch (e: any) {
-      setError(e?.message || "Failed to remove user");
+      console.error('Failed to remove user:', e);
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} className="fixed z-[200] inset-0 flex items-center justify-center">
+    <Dialog open={true} onClose={onClose} className="fixed z-[200] inset-0 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/10 backdrop-blur-sm" aria-hidden="true" onClick={onClose} />
       <div
         className="relative rounded-xl shadow-xl p-6 w-full mx-auto z-10 border bg-white/70 text-black backdrop-blur-lg max-w-3xl border-white/60"

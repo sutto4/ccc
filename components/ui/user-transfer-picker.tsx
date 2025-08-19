@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
-import { fetchMembersLegacy, type Member, type Role } from "@/lib/api";
+import { type Member, type Role } from "@/lib/api";
 import { CheckIcon, ChevronRight, ChevronLeft } from "lucide-react";
+import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
@@ -33,13 +34,14 @@ export default function UserTransferPicker({
   disabled?: boolean;
   roles?: Role[];
 }) {
-  const [allUsers, setAllUsers] = useState<Member[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  // Use the shared hook for member management
+  const { members: allUsers, loading, error } = useGuildMembersKanban(guildId);
   
-  // Pagination and infinite scroll state
+  const [search, setSearch] = useState("");
+  
+  // Pagination and infinite scroll state for performance
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100); // Start with 100 users per page
+  const [pageSize, setPageSize] = useState(100);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -47,25 +49,17 @@ export default function UserTransferPicker({
   // Infinite scroll refs
   const observerRef = useRef<IntersectionObserver | null>(null);
   const lastElementRef = useRef<HTMLDivElement | null>(null);
-
+  
   // Debounce search for better performance
-  const debouncedSearch = useDebounce(search, 300);
+  const debouncedSearch = useDebounce(search, 500);
 
-  // Load initial data
+  // Update pagination when allUsers changes
   useEffect(() => {
-    setLoading(true);
-    fetchMembersLegacy(guildId)
-      .then((members) => {
-        setTotalUsers(members.length);
-        setAllUsers(members.slice(0, pageSize)); // Only load first page initially
-        setHasMore(members.length > pageSize);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error('Failed to load members:', error);
-        setLoading(false);
-      });
-  }, [guildId, pageSize]);
+    if (allUsers.length > 0) {
+      setTotalUsers(allUsers.length);
+      setHasMore(allUsers.length > pageSize);
+    }
+  }, [allUsers, pageSize]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -74,7 +68,6 @@ export default function UserTransferPicker({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          // Prevent multiple rapid triggers
           setPage(prev => {
             const nextPage = prev + 1;
             console.log(`UserTransferPicker: Loading page ${nextPage}`);
@@ -96,91 +89,72 @@ export default function UserTransferPicker({
         observerRef.current.disconnect();
       }
     };
-  }, [loading, hasMore, loadingMore]);
+  }, [loading, hasMore, loadingMore, pageSize]);
 
   // Load more users when page changes
   useEffect(() => {
-    if (page === 1) return; // Skip initial load
-
-    // Prevent duplicate API calls
-    if (loadingMore) return;
+    if (page <= 1 || loading || loadingMore) return;
 
     setLoadingMore(true);
-    console.log(`UserTransferPicker: Fetching page ${page}, pageSize: ${pageSize}`);
-    
-    fetchMembersLegacy(guildId).then(members => {
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const newMembers = members.slice(startIndex, endIndex);
-      
-      console.log(`UserTransferPicker: Page ${page}: loaded ${newMembers.length} users (${startIndex}-${endIndex} of ${members.length})`);
-      
-      setAllUsers(prev => [...prev, ...newMembers]);
-      setHasMore(endIndex < members.length);
+    // Simulate loading delay for better UX
+    const timer = setTimeout(() => {
       setLoadingMore(false);
-    }).catch(error => {
-      console.error('Failed to load more members:', error);
-      setLoadingMore(false);
-      // Reset page on error to prevent stuck state
-      setPage(prev => Math.max(1, prev - 1));
-    });
-  }, [page, guildId, pageSize]);
+    }, 300);
 
-  // Cleanup observer when loading state changes
-  useEffect(() => {
-    if (loadingMore && observerRef.current) {
-      // Disconnect observer while loading to prevent multiple triggers
-      observerRef.current.disconnect();
-      observerRef.current = null;
+    return () => clearTimeout(timer);
+  }, [page, loading]);
+
+  // Filter and paginate users based on search and current page
+  const filteredAndPaginatedUsers = useMemo(() => {
+    if (!allUsers.length) return [];
+
+    // Apply search filter
+    let filtered = allUsers;
+    if (debouncedSearch.trim()) {
+      const searchLower = debouncedSearch.toLowerCase();
+      filtered = allUsers.filter(user =>
+        user.username.toLowerCase().includes(searchLower) ||
+        user.discordUserId.toLowerCase().includes(searchLower) ||
+        (user.accountid && user.accountid.toLowerCase().includes(searchLower))
+      );
     }
-  }, [loadingMore]);
 
-  // Enhanced search function that searches by username, user ID, and role names
-  const searchUsers = useCallback((users: Member[], searchTerm: string) => {
-    if (!searchTerm.trim()) return users;
-    
-    const term = searchTerm.toLowerCase();
-    
-    return users.filter(user => {
-      // Search by username
-      if (user.username.toLowerCase().includes(term)) return true;
-      
-      // Search by user ID
-      if (user.discordUserId.toLowerCase().includes(term)) return true;
-      
-      // Search by role names - check if any of the user's roles contain the search term
-      if (user.roleIds.some(roleId => {
-        const role = roles?.find(r => r.roleId === roleId);
-        return role?.name.toLowerCase().includes(term);
-      })) return true;
-      
-      return false;
-    });
-  }, [roles]);
+    // Apply pagination
+    const startIndex = 0;
+    const endIndex = page * pageSize;
+    return filtered.slice(startIndex, endIndex);
+  }, [allUsers, debouncedSearch, page, pageSize]);
 
-  // Memoized filtered available users for better performance
-  const available = useMemo(() => {
-    return searchUsers(
-      allUsers.filter(u => !value.some(sel => sel.discordUserId === u.discordUserId)),
-      debouncedSearch
-    );
-  }, [allUsers, value, debouncedSearch, searchUsers]);
+  // Check if user is selected
+  const isUserSelected = useCallback((user: Member) => {
+    return value.some(selectedUser => selectedUser.discordUserId === user.discordUserId);
+  }, [value]);
 
-  // Reset pagination when search changes
-  useEffect(() => {
-    if (debouncedSearch !== search) {
-      setPage(1);
-      setAllUsers([]);
-      setHasMore(true);
-      // Reload with search filter
-      fetchMembersLegacy(guildId).then(members => {
-        const filtered = searchUsers(members, debouncedSearch);
-        setTotalUsers(filtered.length);
-        setAllUsers(filtered.slice(0, pageSize));
-        setHasMore(filtered.length > pageSize);
-      });
+  // Toggle user selection
+  const toggleUserSelection = useCallback((user: Member) => {
+    if (isUserSelected(user)) {
+      onChange(value.filter(selectedUser => selectedUser.discordUserId !== user.discordUserId));
+    } else {
+      onChange([...value, user]);
     }
-  }, [debouncedSearch, search, guildId, pageSize, searchUsers]);
+  }, [value, onChange, isUserSelected]);
+
+  // Select all visible users
+  const selectAllVisible = useCallback(() => {
+    const unselectedUsers = filteredAndPaginatedUsers.filter(user => !isUserSelected(user));
+    onChange([...value, ...unselectedUsers]);
+  }, [filteredAndPaginatedUsers, value, onChange, isUserSelected]);
+
+  // Deselect all visible users
+  const deselectAllVisible = useCallback(() => {
+    const selectedVisibleUsers = filteredAndPaginatedUsers.filter(user => isUserSelected(user));
+    onChange(value.filter(user => !selectedVisibleUsers.some(sv => sv.discordUserId === user.discordUserId)));
+  }, [filteredAndPaginatedUsers, value, onChange, isUserSelected]);
+
+  // Clear all selections
+  const clearAll = useCallback(() => {
+    onChange([]);
+  }, [onChange]);
 
   return (
     <div className="flex gap-4 w-full flex-1 min-h-0">
@@ -191,7 +165,7 @@ export default function UserTransferPicker({
           <div className="flex items-center gap-2">
             {search.trim() && (
               <span className="text-xs text-muted-foreground">
-                {available.length} found
+                {filteredAndPaginatedUsers.length} found
               </span>
             )}
             {/* Page size selector for better performance */}
@@ -202,8 +176,30 @@ export default function UserTransferPicker({
                 const newSize = parseInt(e.target.value);
                 setPageSize(newSize);
                 setPage(1);
-                setAllUsers([]);
+                // setAllUsers([]); // This line is removed as allUsers is now managed by the hook
                 setHasMore(true);
+                
+                // Use cached data if available to avoid API calls
+                // if (fullListLoaded) { // This line is removed as fullListLoaded is no longer used
+                //   setTotalUsers(fullUserList.length);
+                //   setAllUsers(fullUserList.slice(0, newSize));
+                //   setHasMore(fullUserList.length > newSize);
+                // } else {
+                  // Only reload if not cached
+                  // setLoading(true); // This line is removed as loading is now managed by the hook
+                  // fetchMembersLegacy(guildId).then(members => { // This line is removed as fetchMembersLegacy is no longer used
+                  //   setTotalUsers(members.length);
+                  //   setAllUsers(members.slice(0, newSize));
+                  //   setHasMore(members.length > newSize);
+                  //   // Cache the full list
+                  //   setFullUserList(members);
+                  //   setFullListLoaded(true);
+                  //   setLoading(false);
+                  // }).catch(error => {
+                  //   console.error('Failed to reload with new page size:', error);
+                  //   setLoading(false);
+                  // });
+                // }
               }}
             >
               <option value="50">50</option>
@@ -223,21 +219,64 @@ export default function UserTransferPicker({
           Tip: Type a role name like "Moderator" to find all users with that role
         </div>
         
+        {/* Cache info */}
+        {/* {fullListLoaded && ( // This line is removed as fullListLoaded is no longer used */}
+        {/*   <div className="text-xs text-green-600 mb-2"> // This line is removed as fullListLoaded is no longer used */}
+        {/*     ✓ Full user list cached - searches are instant // This line is removed as fullListLoaded is no longer used */}
+        {/*   </div> // This line is removed as fullListLoaded is no longer used */}
+        {/* )} // This line is removed as fullListLoaded is no longer used */}
+        
         {/* Performance info */}
         <div className="text-xs text-muted-foreground mb-2">
-          Showing {allUsers.length.toLocaleString()} of {totalUsers.toLocaleString()} users • Page size: {pageSize}
+          {loading ? (
+            "Loading..."
+          ) : search.trim() ? 
+            `${filteredAndPaginatedUsers.length.toLocaleString()} users found` : 
+            `Showing ${filteredAndPaginatedUsers.length.toLocaleString()} of ${totalUsers.toLocaleString()} users • Page size: ${pageSize}`
+          }
         </div>
+        
+        {/* Retry button for rate limiting */}
+        {!loading && filteredAndPaginatedUsers.length === 0 && (
+          <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
+            <span>No users loaded</span>
+            <button
+              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => {
+                // setLoading(true); // This line is removed as loading is now managed by the hook
+                // fetchMembersLegacy(guildId) // This line is removed as fetchMembersLegacy is no longer used
+                //   .then((members) => { // This line is removed as fetchMembersLegacy is no longer used
+                //     setTotalUsers(members.length); // This line is removed as fetchMembersLegacy is no longer used
+                //     setAllUsers(members.slice(0, pageSize)); // This line is removed as fetchMembersLegacy is no longer used
+                //     setHasMore(members.length > pageSize); // This line is removed as fetchMembersLegacy is no longer used
+                //     setFullUserList(members); // This line is removed as fetchMembersLegacy is no longer used
+                //     setFullListLoaded(true); // This line is removed as fetchMembersLegacy is no longer used
+                //     setLoading(false); // This line is removed as loading is now managed by the hook
+                //   }) // This line is removed as fetchMembersLegacy is no longer used
+                //   .catch((error) => { // This line is removed as fetchMembersLegacy is no longer used
+                //     console.error('Retry failed:', error); // This line is removed as fetchMembersLegacy is no longer used
+                //     setLoading(false); // This line is removed as loading is now managed by the hook
+                //     if (error.message.includes('Too Many Requests')) { // This line is removed as fetchMembersLegacy is no longer used
+                //       alert('Discord API rate limit still active. Please wait longer and try again.'); // This line is removed as fetchMembersLegacy is no longer used
+                //     } // This line is removed as fetchMembersLegacy is no longer used
+                //   }); // This line is removed as fetchMembersLegacy is no longer used
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         
         <div className="flex-1 min-h-0 overflow-y-auto rounded border bg-card text-foreground">
           {loading ? (
             <div className="text-xs text-muted-foreground px-2 py-2">Loading...</div>
-          ) : available.length === 0 ? (
+          ) : filteredAndPaginatedUsers.length === 0 ? (
             <div className="text-xs text-muted-foreground px-2 py-2">
               {search.trim() ? `No users found matching "${search}"` : 'No users found'}
             </div>
           ) : (
             <>
-              {available.map((u, index) => {
+              {filteredAndPaginatedUsers.map((u, index) => {
                 // Find which role matched the search (if any)
                 const matchedRole = search.trim() ? u.roleIds.find(roleId => {
                   const role = roles?.find(r => r.roleId === roleId);
@@ -245,15 +284,15 @@ export default function UserTransferPicker({
                 }) : null;
                 const matchedRoleName = matchedRole ? roles?.find(r => r.roleId === matchedRole)?.name : null;
                 
-                // Add ref to last element for infinite scroll
-                const isLastElement = index === available.length - 1;
+                // Add ref to last element for infinite scroll (only when not searching)
+                const isLastElement = !search.trim() && index === filteredAndPaginatedUsers.length - 1;
                 
                 return (
                   <div
                     key={u.discordUserId}
                     ref={isLastElement ? lastElementRef : null}
                     className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-primary/10"
-                    onClick={() => onChange([...value, u])}
+                    onClick={() => toggleUserSelection(u)}
                   >
                     <img src={u.avatarUrl || "/placeholder-user.jpg"} alt={u.username} className="w-6 h-6 rounded-full border bg-muted object-cover" />
                     <div className="min-w-0 flex-1">
@@ -269,7 +308,7 @@ export default function UserTransferPicker({
               })}
               
               {/* Infinite scroll loader */}
-              {hasMore && (
+              {!search.trim() && hasMore && (
                 <div className="h-8 flex items-center justify-center py-2">
                   <div className="text-xs text-muted-foreground">
                     {loadingMore ? "Loading more users..." : "Scroll to load more users"}
@@ -292,7 +331,7 @@ export default function UserTransferPicker({
               <div
                 key={u.discordUserId}
                 className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-red-50"
-                onClick={() => onChange(value.filter((sel) => sel.discordUserId !== u.discordUserId))}
+                onClick={() => toggleUserSelection(u)}
               >
                 <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 <img src={u.avatarUrl || "/placeholder-user.jpg"} alt={u.username} className="w-6 h-6 rounded-full border bg-muted object-cover" />

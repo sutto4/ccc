@@ -2,15 +2,17 @@
 import { useState, useEffect } from "react";
 import { Dialog } from "@headlessui/react";
 import { useSession } from "next-auth/react";
-import { fetchMembersPaged, fetchMembersLegacy, addRole, removeRole } from "@/lib/api";
+import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
+import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 const DEFAULT_AVATAR = "/placeholder-user.jpg";
 
 export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: string; roleId: string; roleName?: string }) {
+	// Use the shared hook for member management
+	const { members: allMembers, loading, error } = useGuildMembersKanban(guildId);
+	
 	const [users, setUsers] = useState<any[]>([]);
-	const [allMembers, setAllMembers] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
 	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [userSearch, setUserSearch] = useState("");
@@ -19,26 +21,26 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 	const [adding, setAdding] = useState(false);
 	const { data: session } = useSession();
 
-			useEffect(() => {
-				setLoading(true);
-				// Fetch all members, then filter client-side for users in the role (like Kanban)
-				fetchMembersLegacy(guildId)
-					.then((members) => {
-						setAllMembers(members);
-						setUsers(members.filter((m) => m.roleIds.includes(roleId) && (search === "" || m.username.toLowerCase().includes(search.toLowerCase()))));
-					})
-					.finally(() => setLoading(false));
-			}, [guildId, roleId, search]);
+	// Filter users in the role based on search
+	useEffect(() => {
+		if (allMembers.length > 0) {
+			const filteredUsers = allMembers.filter((m) => 
+				m.roleIds.includes(roleId) && 
+				(search === "" || m.username.toLowerCase().includes(search.toLowerCase()))
+			);
+			setUsers(filteredUsers);
+		}
+	}, [allMembers, roleId, search]);
 
-			useEffect(() => {
-				if (!addModalOpen) {
-					setAddResults([]);
-					return;
-				}
-				// Always show all users not in the role, filter client-side like Kanban
-				const notInRole = allMembers.filter((u) => !users.some((m) => m.discordUserId === u.discordUserId));
-				setAddResults(notInRole);
-			}, [addModalOpen, allMembers, users]);
+	useEffect(() => {
+		if (!addModalOpen) {
+			setAddResults([]);
+			return;
+		}
+		// Always show all users not in the role, filter client-side like Kanban
+		const notInRole = allMembers.filter((u) => !users.some((m) => m.discordUserId === u.discordUserId));
+		setAddResults(notInRole);
+	}, [addModalOpen, allMembers, users]);
 
 	async function handleAdd(userId: string) {
 		   if (!session?.user?.id) return;
