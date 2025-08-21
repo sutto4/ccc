@@ -296,33 +296,23 @@ export default function Sidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="z-[100] bg-popover border shadow-lg">
+            {guildId && (
+              <>
+                <Link href={`/guilds/${guildId}/settings`} passHref legacyBehavior>
+                  <DropdownMenuItem asChild className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
+                    <a>Server Settings</a>
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
               Profile
             </DropdownMenuItem>
             <DropdownMenuItem className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
               Preferences
             </DropdownMenuItem>
-            {guildId && (
-              <>
-                <DropdownMenuSeparator />
-                <Link href={`/guilds/${guildId}/settings/logs`} passHref legacyBehavior>
-                  <DropdownMenuItem asChild className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
-                    <a>View Logs</a>
-                  </DropdownMenuItem>
-                </Link>
-              </>
-            )}
-            {guildId && (
-              <>
-                <DropdownMenuSeparator />
-                <Link href={`/guilds/${guildId}/role-permissions`} passHref legacyBehavior>
-                  <DropdownMenuItem asChild className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
-                    <a>Permissions</a>
-                  </DropdownMenuItem>
-                </Link>
-                <DropdownMenuSeparator />
-              </>
-            )}
+            <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={() => signOut({ callbackUrl: "/guilds" })}
               className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer"

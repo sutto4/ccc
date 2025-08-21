@@ -10,10 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon } from "lucide-react";
+import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles } from "@/lib/api";
 import type { Role } from "@/lib/api";
+import PremiumModal from "@/components/premium-modal";
+import GuildPremiumBadge from "@/components/guild-premium-badge";
+import GuildVIPBadge from "@/components/guild-vip-badge";
 
 interface RolePermission {
   roleId: string;
@@ -42,6 +45,20 @@ export default function GuildSettingsPage() {
     logChannel: ""
   });
 
+  // Subscription state
+  const [subscription, setSubscription] = useState({
+    status: "loading", // loading, active, past_due, canceled, etc.
+    package: "",
+    currentPeriodEnd: "",
+    cancelAtPeriodEnd: false,
+    stripeCustomerId: "",
+    stripeSubscriptionId: "",
+    premium: false
+  });
+
+  // Premium modal state
+  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
+
   useEffect(() => {
     if (status === "loading") return;
     
@@ -51,6 +68,7 @@ export default function GuildSettingsPage() {
 
     if (session && session.accessToken) {
       loadRoles();
+      loadSubscription();
     }
   }, [status, session, guildId]);
 
@@ -60,6 +78,47 @@ export default function GuildSettingsPage() {
       loadPermissions();
     }
   }, [roles, guildId]);
+
+  const loadSubscription = async () => {
+    try {
+      const response = await fetch(`/api/guilds/${guildId}/subscription`);
+      if (response.ok) {
+        const data = await response.json();
+        setSubscription({
+          status: data.status || "inactive",
+          package: data.package || "Free",
+          currentPeriodEnd: data.currentPeriodEnd || "",
+          cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
+          stripeCustomerId: data.stripeCustomerId || "",
+          stripeSubscriptionId: data.stripeSubscriptionId || "",
+          premium: data.premium || false
+        });
+      } else {
+        // Set default values if no subscription found
+        setSubscription({
+          status: "inactive",
+          package: "Free",
+          currentPeriodEnd: "",
+          cancelAtPeriodEnd: false,
+          stripeCustomerId: "",
+          stripeSubscriptionId: "",
+          premium: false
+        });
+      }
+    } catch (error) {
+      console.error('Error loading subscription:', error);
+      // Set default values on error
+      setSubscription({
+        status: "inactive",
+        package: "Free",
+        currentPeriodEnd: "",
+        cancelAtPeriodEnd: false,
+        stripeCustomerId: "",
+        stripeSubscriptionId: "",
+        premium: false
+      });
+    }
+  };
 
   const loadRoles = async () => {
     try {
@@ -240,7 +299,7 @@ export default function GuildSettingsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             General
@@ -248,6 +307,10 @@ export default function GuildSettingsPage() {
           <TabsTrigger value="role-permissions" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Role Permissions
+          </TabsTrigger>
+          <TabsTrigger value="subscription" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Subscription
           </TabsTrigger>
           <TabsTrigger value="logs" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -498,6 +561,154 @@ export default function GuildSettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* Subscription Tab */}
+        <TabsContent value="subscription" className="space-y-4">
+          <Card>
+            <CardHeader title="Subscription Management" subtitle="Manage your server's subscription and billing." />
+            <CardContent className="space-y-6">
+              {/* Current Subscription Status */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Current Subscription</h3>
+                {subscription.status === "loading" ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                    Loading subscription...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${
+                          subscription.status === 'active' ? 'bg-green-500' : 
+                          subscription.status === 'past_due' ? 'bg-yellow-500' : 
+                          subscription.status === 'canceled' ? 'bg-red-500' : 
+                          subscription.status === 'inactive' ? 'bg-gray-500' : 'bg-blue-500'
+                        }`} />
+                        <span className="capitalize font-medium">
+                          {subscription.status === 'active' ? 'Active' : 
+                           subscription.status === 'past_due' ? 'Past Due' : 
+                           subscription.status === 'canceled' ? 'Canceled' : 
+                           subscription.status === 'inactive' ? 'Inactive' : subscription.status}
+                        </span>
+                        {/* Show VIP badge for global override premium, Premium badge for active subscriptions */}
+                        {subscription.premium && subscription.status === 'active' && <GuildPremiumBadge />}
+                        {subscription.premium && subscription.status !== 'active' && <GuildVIPBadge />}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Package</Label>
+                      <div className="font-medium">{subscription.package}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Next Billing Date</Label>
+                      <div className="font-medium">
+                        {subscription.currentPeriodEnd ? 
+                          new Date(subscription.currentPeriodEnd).toLocaleDateString() : 
+                          'N/A'
+                        }
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Auto-Renewal</Label>
+                      <div className="font-medium">
+                        {subscription.cancelAtPeriodEnd ? 'Will cancel at period end' : 'Enabled'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Subscription Actions */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Manage Subscription</h3>
+                <div className="space-y-3">
+                  {/* Upgrade Button - always show if no active subscription */}
+                  {!subscription.stripeCustomerId && (
+                    <Button 
+                      onClick={() => setPremiumModalOpen(true)}
+                      className="w-full md:w-auto bg-green-600 hover:bg-green-700"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Upgrade Subscription
+                    </Button>
+                  )}
+                  
+                  {/* Stripe Customer Portal - show if they have a customer ID (even if inactive) */}
+                  {subscription.stripeCustomerId && (
+                    <Button 
+                      onClick={() => window.open('https://billing.stripe.com/p/login/test', '_blank')}
+                      className="w-full md:w-auto"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      {subscription.status === 'active' ? 'Manage Billing & Subscription' : 'View Billing History'}
+                    </Button>
+                  )}
+                  
+                  <p className="text-sm text-muted-foreground">
+                    {subscription.stripeCustomerId 
+                      ? subscription.status === 'active'
+                        ? "Access your Stripe customer portal to update payment methods, view invoices, and manage your subscription."
+                        : "Access your Stripe customer portal to view billing history, update payment methods, and manage your account."
+                      : "Upgrade to unlock premium features like advanced role management, custom commands, and priority support."
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Subscription Features */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">What's Included</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
+                      Advanced role management
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
+                      Custom commands
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
+                      Priority support
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
+                      Analytics dashboard
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Support Info */}
+              <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                <div className="text-sm text-blue-800">
+                  <div className="font-medium mb-1">Need Help?</div>
+                  <p className="text-blue-700">
+                    If you have questions about your subscription or need to make changes, 
+                    you can manage everything through the Stripe portal above, or contact our support team.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Logs Tab */}
         <TabsContent value="logs" className="space-y-4">
           <Card>
@@ -512,6 +723,12 @@ export default function GuildSettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Premium Modal */}
+      <PremiumModal
+        open={premiumModalOpen}
+        onOpenChange={setPremiumModalOpen}
+      />
     </div>
   );
 }
