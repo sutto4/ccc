@@ -8,7 +8,7 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<any> };
 
 const ADMIN_ITEMS: NavItem[] = [
 	{ href: "/admin", label: "Dashboard", icon: Shield },
-	{ href: "/admin/guilds", label: "Guilds", icon: Settings },
+	{ href: "/guilds", label: "Guilds", icon: Settings },
 ];
 
 export default function AdminSidebar() {

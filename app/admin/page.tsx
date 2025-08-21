@@ -46,14 +46,14 @@ export default function AdminGuildsPage() {
         />
         <div className="flex gap-2">
           <Button
-            variant={view === 'card' ? 'default' : 'outline'}
+            variant={view === 'card' ? 'primary' : 'outline'}
             onClick={() => setView('card')}
             aria-pressed={view === 'card'}
           >
             Card View
           </Button>
           <Button
-            variant={view === 'table' ? 'default' : 'outline'}
+            variant={view === 'table' ? 'primary' : 'outline'}
             onClick={() => setView('table')}
             aria-pressed={view === 'table'}
           >
@@ -75,10 +75,10 @@ export default function AdminGuildsPage() {
           {!loading && !error && filtered.map(g => (
             <Link
               key={g.guild_id}
-              href={`/guilds/${g.guild_id}/settings/features`}
+              href={`/guilds/${g.guild_id}/settings`}
               className="relative flex flex-col items-center p-4 gap-2 bg-card border shadow-sm rounded-xl transition group focus:outline-none cursor-pointer hover:bg-primary/10 hover:shadow-md focus:ring-2 focus:ring-primary/50"
               tabIndex={0}
-              aria-label={`View and edit features for ${g.guild_name}`}
+              aria-label={`Configure guild ${g.guild_name}`}
             >
               <div className="absolute top-2 right-2">
                 {g.premium ? <GuildPremiumBadge /> : null}
@@ -132,15 +132,15 @@ export default function AdminGuildsPage() {
                   tabIndex={0}
                   onClick={e => {
                     if (e.target === e.currentTarget) {
-                      window.location.href = `/guilds/${g.guild_id}/settings/features`;
+                      window.location.href = `/guilds/${g.guild_id}/settings`;
                     }
                   }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
-                      window.location.href = `/guilds/${g.guild_id}/settings/features`;
+                      window.location.href = `/guilds/${g.guild_id}/settings`;
                     }
                   }}
-                  aria-label={`View and edit features for ${g.guild_name}`}
+                  aria-label={`Configure guild ${g.guild_name}`}
                 >
                   <td className="px-3 py-2 font-semibold truncate whitespace-nowrap max-w-[180px] group-hover:underline">{g.guild_name}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{g.owner_name ? `👑 ${g.owner_name}` : <span className="text-muted-foreground">—</span>}</td>

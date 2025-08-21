@@ -1,18 +1,14 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { withAuth } from '@/lib/authz';
 import mysql from 'mysql2/promise';
 import { env } from '@/lib/env';
 
 // Database connection helper
 async function getDbConnection() {
-  console.log('Database config:', {
-    host: env.DB_HOST,
-    user: env.DB_USER,
-    database: env.DB_NAME,
-    hasPassword: !!env.DB_PASS
-  });
-  
   return mysql.createConnection({
     host: env.DB_HOST,
     user: env.DB_USER,
@@ -21,18 +17,90 @@ async function getDbConnection() {
   });
 }
 
-// GET: Fetch current role permissions for a guild
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// Check if user has access to this guild
+async function checkUserAccess(guildId: string, userId: string): Promise<boolean> {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const connection = await getDbConnection();
+    try {
+      // Check if user has direct access (bypass role checks)
+      const [userAccess] = await connection.execute(
+        'SELECT 1 FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+        [guildId, userId]
+      );
+
+      if ((userAccess as any[]).length > 0) {
+        console.log(`User ${userId} has direct access to guild ${guildId}`);
+        return true;
+      }
+
+      // Check if user's current Discord roles grant access
+      // ALWAYS validate against Discord API - no fallbacks
+      const botToken = env.DISCORD_BOT_TOKEN;
+      if (!botToken) {
+        console.error('Bot token not configured for role validation');
+        return false; // Fail secure - no access without validation
+      }
+
+      // Fetch user's current roles from Discord
+      const userRolesResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+        headers: { Authorization: `Bot ${botToken}` }
+      });
+
+      if (!userRolesResponse.ok) {
+        console.log(`User ${userId} not found in guild ${guildId} or bot lacks permissions`);
+        return false; // User not in guild or bot can't see them
+      }
+
+      const userMember = await userRolesResponse.json();
+      const userRoleIds = userMember.roles || [];
+
+      // Get roles that grant access from database
+      const [allowedRoles] = await connection.execute(`
+        SELECT role_id FROM server_role_permissions 
+        WHERE guild_id = ? AND can_use_app = 1
+      `, [guildId]);
+
+      const allowedRoleIds = (allowedRoles as any[]).map((r: any) => r.role_id);
+
+      // Check if user has ANY of the allowed roles RIGHT NOW
+      const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
+
+      if (hasAllowedRole) {
+        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        return true;
+      }
+
+      console.log(`User ${userId} has no access to guild ${guildId} - roles: ${userRoleIds.join(', ')}`);
+      return false;
+
+    } finally {
+      await connection.end();
+    }
+  } catch (error) {
+    console.error('Database or Discord API error checking user access:', error);
+    return false; // Fail secure - deny access if anything fails
+  }
+}
+
+// GET: Fetch current role permissions for a guild
+export const GET = withAuth(async (
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+  auth: any
+) => {
+  try {
+    const { id: guildId } = await params;
+    const userId = auth?.discordId;
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID not found' }, { status: 401 });
     }
 
-    const { id: guildId } = await params;
+    // Check if user has access to this guild
+    const hasAccess = await checkUserAccess(guildId, userId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied to this guild' }, { status: 403 });
+    }
     
     // Fetch role permissions from database
     const connection = await getDbConnection();
@@ -56,24 +124,31 @@ export async function GET(
     console.error('Error fetching role permissions:', error);
     return NextResponse.json({ 
       error: 'Internal server error', 
-      details: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-}
+});
 
 // PUT: Update role permissions for a guild
-export async function PUT(
+export const PUT = withAuth(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  { params }: { params: Promise<{ id: string }> },
+  auth: any
+) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id: guildId } = await params;
+    const userId = auth?.discordId;
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID not found' }, { status: 401 });
     }
 
-    const { id: guildId } = await params;
+    // Check if user has access to this guild
+    const hasAccess = await checkUserAccess(guildId, userId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied to this guild' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { permissions } = body;
 
@@ -138,8 +213,7 @@ export async function PUT(
     console.error('Error updating role permissions:', error);
     return NextResponse.json({ 
       error: 'Internal server error', 
-      details: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-}
+});

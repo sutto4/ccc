@@ -16,7 +16,7 @@ export const authOptions: NextAuthOptions = {
       clientId: env.DISCORD_CLIENT_ID || "",
       clientSecret: env.DISCORD_CLIENT_SECRET || "",
       authorization: {
-        params: { scope: "identify guilds email" },
+        params: { scope: "identify guilds email guilds.members.read guilds.join" },
       },
     }),
   ],

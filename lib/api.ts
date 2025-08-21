@@ -24,6 +24,7 @@ export type Role = {
   iconUrl?: string | null
   unicodeEmoji?: string | null
   permissions?: string[]
+  permissionsRaw?: number // Raw Discord permission bitfield for debugging
 }
 
 export type Member = {
