@@ -272,19 +272,7 @@ export default function Sidebar() {
           />
         </CollapsibleSection>
 
-        {/* Development */}
-        <CollapsibleSection title="Development" defaultOpen={false}>
-          <NavLeaf
-            href="/design-system"
-            label="Design System"
-            rightIcon={<FileText className="h-3.5 w-3.5 text-blue-500" />}
-            active={pathname === "/design-system"}
-            featureEnabled={true}
-            guildSelected={false}
-            premiumRequired={false}
-            hasPremium={true}
-          />
-        </CollapsibleSection>
+        {/* Development moved to Admin; hidden from guild users */}
       </nav>
       
       {/* Footer / Settings */}
