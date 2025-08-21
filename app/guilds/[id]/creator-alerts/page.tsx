@@ -98,7 +98,24 @@ export default function CreatorAlertsPage() {
     setForm({ ...r });
   };
 
-  const remove = (id: string) => setRules((prev) => prev.filter((r) => r.id !== id));
+  const remove = async (id: string) => {
+    try {
+      const res = await fetch(`/api/guilds/${guildId}/creator-alerts?id=${id}`, { 
+        method: "DELETE" 
+      });
+      
+      if (res.ok) {
+        // Remove from local state only after successful API call
+        setRules((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        console.error('Failed to delete creator alert rule');
+        // Optionally show an error message to the user
+      }
+    } catch (error) {
+      console.error('Error deleting creator alert rule:', error);
+      // Optionally show an error message to the user
+    }
+  };
 
   // Search Discord users by username
   const searchDiscordUsers = async (query: string) => {
