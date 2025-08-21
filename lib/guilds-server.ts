@@ -17,6 +17,11 @@ export type Guild = {
   iconUrl?: string | null
   premium?: boolean
   createdAt?: string | null
+  group?: {
+    id: number
+    name: string
+    description: string | null
+  } | null
 }
 
 export type Role = {
@@ -252,8 +257,42 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
         iconUrl: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128` : null,
         premium: installedData?.premium || false,
         createdAt: installedData?.createdAt || null,
+        group: null,
       });
     }
+  }
+
+  // Enrich with group info from DB (guilds.group_id -> server_groups)
+  try {
+    if (results.length > 0) {
+      const connection = await getDbConnection();
+      try {
+        const ids = results.map(g => g.id);
+        const placeholders = ids.map(() => '?').join(',');
+        const [rows] = await connection.execute(
+          `SELECT g.guild_id, g.group_id, sg.name AS group_name, sg.description AS group_description
+           FROM guilds g
+           LEFT JOIN server_groups sg ON sg.id = g.group_id
+           WHERE g.guild_id IN (${placeholders})`,
+          ids
+        );
+        const byGuildId = new Map<string, { id: number; name: string; description: string | null } | null>();
+        for (const row of rows as any[]) {
+          if (row.group_id) {
+            byGuildId.set(String(row.guild_id), { id: Number(row.group_id), name: row.group_name, description: row.group_description });
+          } else {
+            byGuildId.set(String(row.guild_id), null);
+          }
+        }
+        for (const g of results) {
+          g.group = byGuildId.has(g.id) ? (byGuildId.get(g.id) ?? null) : null;
+        }
+      } finally {
+        await connection.end();
+      }
+    }
+  } catch (e) {
+    console.error('Failed to enrich guilds with group info:', e);
   }
 
   console.log('Processed results:', results.length, 'guilds');
@@ -265,7 +304,7 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
     const botRes = await fetch(`${botBase}/guilds`);
     if (botRes.ok) {
       const installedGuilds = await botRes.json();
-      return installedGuilds.map((g: any) => ({
+      const basic: Guild[] = installedGuilds.map((g: any) => ({
         id: g.guild_id || g.id,
         name: g.guild_name || g.name,
         memberCount: g.memberCount || 0,
@@ -273,7 +312,43 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
         iconUrl: g.iconUrl || null,
         premium: g.premium || false,
         createdAt: g.createdAt || null,
+        group: null,
       }));
+
+      // Enrich with group info similar to intersect flow
+      try {
+        if (basic.length > 0) {
+          const connection = await getDbConnection();
+          try {
+            const ids = basic.map(g => g.id);
+            const placeholders = ids.map(() => '?').join(',');
+            const [rows] = await connection.execute(
+              `SELECT g.guild_id, g.group_id, sg.name AS group_name, sg.description AS group_description
+               FROM guilds g
+               LEFT JOIN server_groups sg ON sg.id = g.group_id
+               WHERE g.guild_id IN (${placeholders})`,
+              ids
+            );
+            const byGuildId = new Map<string, { id: number; name: string; description: string | null } | null>();
+            for (const row of rows as any[]) {
+              if (row.group_id) {
+                byGuildId.set(String(row.guild_id), { id: Number(row.group_id), name: row.group_name, description: row.group_description });
+              } else {
+                byGuildId.set(String(row.guild_id), null);
+              }
+            }
+            for (const g of basic) {
+              g.group = byGuildId.has(g.id) ? (byGuildId.get(g.id) ?? null) : null;
+            }
+          } finally {
+            await connection.end();
+          }
+        }
+      } catch (e) {
+        console.error('Failed to enrich (normalizeInstalledOnly) with group info:', e);
+      }
+
+      return basic;
     }
   } catch (e) {
     console.error("Failed to fetch bot guilds:", e);

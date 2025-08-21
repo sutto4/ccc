@@ -20,6 +20,15 @@ function getPool(): mysql.Pool {
   return pool;
 }
 
+export async function query(sql: string, params?: any[]): Promise<any> {
+  if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) {
+    throw new Error('Database not configured');
+  }
+  const p = getPool();
+  const [rows] = await p.execute(sql, params || []);
+  return rows;
+}
+
 export async function isAdmin(discordId: string): Promise<boolean> {
   if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) return false;
   const p = getPool();

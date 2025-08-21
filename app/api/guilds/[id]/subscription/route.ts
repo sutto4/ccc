@@ -83,9 +83,9 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
 }
 
 // GET: Fetch subscription data for a guild
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = withAuth(async (req: Request, { params }: { params: { id: string } }, auth: any) => {
   try {
-    const { id: guildId } = await params;
+    const { id: guildId } = params;
     const userId = auth?.discordId;
 
     if (!userId) {
@@ -103,16 +103,20 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
     try {
       const [rows] = await connection.execute(`
         SELECT 
-          stripe_customer_id,
-          subscription_id,
-          subscription_status,
-          current_period_start,
-          current_period_end,
-          cancel_at_period_end,
-          premium,
-          product_name
-        FROM guilds 
-        WHERE guild_id = ?
+          g.stripe_customer_id,
+          g.subscription_id,
+          g.subscription_status,
+          g.current_period_start,
+          g.current_period_end,
+          g.cancel_at_period_end,
+          g.premium,
+          g.product_name,
+          g.group_id,
+          sg.name AS group_name,
+          sg.description AS group_description
+        FROM guilds g
+        LEFT JOIN server_groups sg ON sg.id = g.group_id
+        WHERE g.guild_id = ?
       `, [guildId]);
 
       if ((rows as any[]).length === 0) {
@@ -129,7 +133,12 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
         cancelAtPeriodEnd: Boolean(guildData.cancel_at_period_end),
         stripeCustomerId: guildData.stripe_customer_id || null,
         stripeSubscriptionId: guildData.subscription_id || null,
-        premium: Boolean(guildData.premium)
+        premium: Boolean(guildData.premium),
+        group: guildData.group_id ? {
+          id: String(guildData.group_id),
+          name: guildData.group_name || '',
+          description: guildData.group_description || ''
+        } : null
       };
 
       return NextResponse.json(subscriptionData);

@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
-import { Shield, Server, Settings, Crown, FileText } from "lucide-react";
+import { Shield, Server, Settings, Crown, FileText, Folder, Home } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchFeatures, type FeaturesResponse } from "@/lib/api";
 import { useSession, signOut } from "next-auth/react";
@@ -41,8 +41,9 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
 const TOP: Item[] = [
-  { href: "/admin", label: "Admin", icon: Shield },
-  { href: "/guilds", label: "My Servers", icon: Server },
+  { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/guilds", label: "My Servers", icon: Shield },
+  { href: "/admin", label: "Admin", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -306,6 +307,11 @@ export default function Sidebar() {
                 <DropdownMenuSeparator />
               </>
             )}
+            <Link href="/server-groups" passHref legacyBehavior>
+              <DropdownMenuItem asChild className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
+                <a>Server Groups</a>
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuItem className="hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer">
               Profile
             </DropdownMenuItem>

@@ -4,8 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { fetchGuilds, type Guild } from "@/lib/api";
 import Section from "@/components/ui/section";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Folder, Users, Shield } from "lucide-react";
 
-import { Bot, Shield, Users, Zap, Star } from "lucide-react";
+import { Bot, Zap, Star } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -102,55 +105,149 @@ export default async function GuildsPage() {
   return (
     <div className="pl-4 pr-4 md:pr-6 md:pl-4 py-8">
       <Section title="My Servers">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {guilds.map((guild) => (
-            <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
-              <div className="relative rounded-lg border bg-card p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    {guild.iconUrl ? (
-                      <Image
-                        src={guild.iconUrl}
-                        alt={guild.name}
-                        width={48}
-                        height={48}
-                        className="rounded-lg"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
-                        <span className="text-lg font-semibold text-muted-foreground">
-                          {guild.name.charAt(0).toUpperCase()}
-                        </span>
+        <div className="space-y-6">
+          {/* Grouped Servers */}
+          {(() => {
+            const groupedGuilds = guilds.filter(g => g.group);
+            if (groupedGuilds.length === 0) return null;
+
+            // Build groups with servers and sort
+            const groups = Array.from(
+              groupedGuilds.reduce<Map<number, { id: number; name: string; description: string | null; servers: Guild[] }>>(
+                (acc, g) => {
+                  const gr = g.group!;
+                  const cur = acc.get(gr.id) || { id: gr.id, name: gr.name, description: gr.description, servers: [] };
+                  cur.servers.push(g);
+                  acc.set(gr.id, cur);
+                  return acc;
+                },
+                new Map()
+              ).values()
+            )
+              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+            return groups.map(group => {
+              const groupServers = [...group.servers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+              return (
+                <Card key={group.id} className="border-2 border-blue-100 bg-blue-50/30">
+                  <CardHeader
+                    title={
+                      <div className="flex items-center gap-3">
+                        <Folder className="h-5 w-5 text-blue-600" />
+                        <span className="text-lg font-semibold text-blue-800">{group.name}</span>
                       </div>
-                    )}
-                    <div>
-                      <h3 className="font-semibold group-hover:text-primary transition-colors">
-                        {guild.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {(guild.memberCount ?? (guild as any).approximateMemberCount ?? (guild as any).approximate_member_count ?? 0).toLocaleString()} members
-                      </p>
-                      <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
-                        <span>{(guild.roleCount ?? 0).toLocaleString()} roles</span>
-                        {guild.createdAt && (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Created {new Date(guild.createdAt).toLocaleDateString()}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      <p className="mt-1 text-[10px] text-muted-foreground/70">ID: {guild.id}</p>
+                    }
+                    subtitle={group.description ? <span className="text-sm text-blue-700">{group.description}</span> : undefined}
+                  />
+                  <CardContent>
+                    <div className="mb-2 text-xs text-blue-700">
+                      <Users className="inline h-3 w-3 mr-1 align-text-bottom" />
+                      {groupServers.length} server{groupServers.length !== 1 ? 's' : ''}
                     </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {groupServers.map((guild) => (
+                        <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
+                          <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                {guild.iconUrl ? (
+                                  <Image
+                                    src={guild.iconUrl}
+                                    alt={guild.name}
+                                    width={40}
+                                    height={40}
+                                    className="rounded-lg"
+                                  />
+                                ) : (
+                                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-muted-foreground">
+                                      {guild.name.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                )}
+                                <div>
+                                  <h4 className="font-medium group-hover:text-primary transition-colors">
+                                    {guild.name}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground">
+                                    {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {guild.premium && <GuildPremiumBadge />}
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            });
+          })()}
+
+          {/* Individual Servers */}
+          {(() => {
+            const individualGuilds = guilds.filter(g => !g.group);
+            if (individualGuilds.length === 0) return null;
+            
+            return (
+              <Card className="border-2 border-gray-200 bg-gray-50/30">
+                <CardHeader
+                  title={
+                    <div className="flex items-center gap-3">
+                      <Shield className="h-5 w-5 text-gray-600" />
+                      <span className="text-lg font-semibold text-gray-800">Individual Servers</span>
+                    </div>
+                  }
+                  subtitle={<span className="text-sm text-gray-600">Servers not assigned to any group</span>}
+                />
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {individualGuilds.map((guild) => (
+                      <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
+                        <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              {guild.iconUrl ? (
+                                <Image
+                                  src={guild.iconUrl}
+                                  alt={guild.name}
+                                  width={40}
+                                  height={40}
+                                  className="rounded-lg"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                                  <span className="text-sm font-semibold text-muted-foreground">
+                                    {guild.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="font-medium group-hover:text-primary transition-colors">
+                                  {guild.name}
+                                </h4>
+                                <p className="text-xs text-muted-foreground">
+                                  {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {guild.premium && <GuildPremiumBadge />}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {guild.premium && <GuildPremiumBadge />}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </Section>
     </div>

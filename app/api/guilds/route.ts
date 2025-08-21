@@ -140,6 +140,32 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
   const installedGuilds = await fetchInstalledGuilds(botBase);
   const installedSet = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || "")));
 
+  // Fetch group information for all guilds
+  let groupInfo: any = {};
+  try {
+    const db = await import('@/lib/db');
+    const groups = await db.query(`
+      SELECT 
+        g.guild_id,
+        sg.id as group_id,
+        sg.name as group_name,
+        sg.description as group_description
+      FROM guilds g
+      LEFT JOIN server_groups sg ON g.group_id = sg.id
+      WHERE g.group_id IS NOT NULL
+    `);
+    
+    groups.forEach((g: any) => {
+      groupInfo[g.guild_id] = {
+        groupId: g.group_id,
+        groupName: g.group_name,
+        groupDescription: g.group_description
+      };
+    });
+  } catch (error) {
+    console.warn('Failed to fetch group info:', error);
+  }
+
   return userGuilds
     .filter((g: any) => installedSet.has(String((g && (g as any).id) || "")))
     .map((g: any) => {
@@ -162,6 +188,9 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       const icon = (g && (g as any).icon as string | null) || null;
       const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
 
+      // Get group information for this guild
+      const group = groupInfo[id] || null;
+
       return {
         id,
         name: String((g && (g as any).name) || installed.name || ""),
@@ -170,6 +199,11 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         iconUrl,
         premium: Boolean(installed.premium || false),
         createdAt: null as string | null,
+        group: group ? {
+          id: group.groupId,
+          name: group.groupName,
+          description: group.groupDescription
+        } : null,
       };
     });
 }

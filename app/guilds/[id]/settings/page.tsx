@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink } from "lucide-react";
+import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles } from "@/lib/api";
 import type { Role } from "@/lib/api";
 import PremiumModal from "@/components/premium-modal";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
 import GuildVIPBadge from "@/components/guild-vip-badge";
+import ServerGroupsManager from "@/components/server-groups-manager";
 
 interface RolePermission {
   roleId: string;
@@ -53,7 +54,11 @@ export default function GuildSettingsPage() {
     cancelAtPeriodEnd: false,
     stripeCustomerId: "",
     stripeSubscriptionId: "",
-    premium: false
+    premium: false,
+    group: {
+      id: "",
+      name: ""
+    }
   });
 
   // Premium modal state
@@ -91,7 +96,11 @@ export default function GuildSettingsPage() {
           cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
           stripeCustomerId: data.stripeCustomerId || "",
           stripeSubscriptionId: data.stripeSubscriptionId || "",
-          premium: data.premium || false
+          premium: data.premium || false,
+          group: data.group || {
+            id: "",
+            name: ""
+          }
         });
       } else {
         // Set default values if no subscription found
@@ -102,7 +111,11 @@ export default function GuildSettingsPage() {
           cancelAtPeriodEnd: false,
           stripeCustomerId: "",
           stripeSubscriptionId: "",
-          premium: false
+          premium: false,
+          group: {
+            id: "",
+            name: ""
+          }
         });
       }
     } catch (error) {
@@ -115,7 +128,11 @@ export default function GuildSettingsPage() {
         cancelAtPeriodEnd: false,
         stripeCustomerId: "",
         stripeSubscriptionId: "",
-        premium: false
+        premium: false,
+        group: {
+          id: "",
+          name: ""
+        }
       });
     }
   };
@@ -295,11 +312,18 @@ export default function GuildSettingsPage() {
         <p className="text-muted-foreground">
           Manage your server's bot settings and permissions.
         </p>
+        {/* Group Information */}
+        {subscription.group && subscription.group.name && (
+          <div className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200">
+            <Folder className="h-4 w-4 text-blue-500" />
+            Part of group: <span className="font-semibold">{subscription.group.name}</span>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             General
@@ -311,6 +335,10 @@ export default function GuildSettingsPage() {
           <TabsTrigger value="subscription" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
             Subscription
+          </TabsTrigger>
+          <TabsTrigger value="server-groups" className="flex items-center gap-2">
+            <Folder className="h-4 w-4" />
+            Server Groups
           </TabsTrigger>
           <TabsTrigger value="logs" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -705,6 +733,24 @@ export default function GuildSettingsPage() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Server Groups Tab */}
+        <TabsContent value="server-groups" className="space-y-4">
+          <Card>
+            <CardHeader
+              title={
+                <div className="flex items-center gap-2">
+                  <Folder className="h-5 w-5" />
+                  Server Groups
+                </div>
+              }
+              subtitle="Organize your servers into groups for easier management"
+            />
+            <CardContent>
+              <ServerGroupsManager guildId={params.id} />
             </CardContent>
           </Card>
         </TabsContent>

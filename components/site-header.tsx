@@ -5,17 +5,12 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useTheme } from "next-themes";
+// import { useTheme } from "next-themes";
 import AuthButtons from "@/components/auth-buttons";
 
 export default function SiteHeader() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-
-  const isDark =
-    theme === "dark" || (theme === "system" && resolvedTheme === "dark");
-  const nextTheme = isDark ? "light" : "dark";
 
   return (
     <header className="border-b sticky top-0 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40">
@@ -36,17 +31,7 @@ export default function SiteHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          {mounted && (
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Toggle dark mode"
-              onClick={() => setTheme(nextTheme)}
-              title={isDark ? "Switch to light" : "Switch to dark"}
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </Button>
-          )}
+          {/* Theme toggle disabled */}
           <AuthButtons />
           <Avatar className="size-8">
             <AvatarFallback>JD</AvatarFallback>
