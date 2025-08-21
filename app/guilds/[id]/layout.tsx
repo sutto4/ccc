@@ -9,7 +9,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { fetchGuilds } from "@/lib/api";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Image from "next/image";
@@ -24,7 +23,9 @@ export default async function GuildLayout(
 
   const { id } = await props.params;
 
-  const guilds = await fetchGuilds(session.accessToken as any);
+  // Use the direct server function instead of HTTP API
+  const { getGuildsForUser } = await import('@/lib/guilds-server');
+  const guilds = await getGuildsForUser(session.accessToken as string);
   const guild = guilds.find((g) => g.id === id);
   if (!guild) return notFound();
 

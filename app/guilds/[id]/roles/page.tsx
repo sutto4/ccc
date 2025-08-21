@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Section from "@/components/ui/section";
-import { fetchGuilds, fetchRoles, type Guild, type Role } from "@/lib/api";
+import { type Guild, type Role } from "@/lib/api";
 import RoleExplorer from "@/components/role-explorer";
 import RoleKanbanWrapper from "@/components/role-kanban-wrapper";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -17,11 +17,15 @@ export default async function RolesPage({ params }: { params: Promise<Params> })
 
   const { id: guildId } = await params;
 
-  const guilds: Guild[] = await fetchGuilds(session.accessToken as any);
+  // Use the direct server function instead of HTTP API
+  const { getGuildsForUser } = await import('@/lib/guilds-server');
+  const guilds: Guild[] = await getGuildsForUser(session.accessToken as string);
   const guild = guilds.find((g) => g.id === guildId);
   if (!guild) return notFound();
 
-  const roles = await fetchRoles(guildId, session.accessToken as any);
+  // Use the direct server function instead of HTTP API
+  const { getRolesForGuild } = await import('@/lib/guilds-server');
+  const roles = await getRolesForGuild(guildId, session.accessToken as string);
 
 
   return (

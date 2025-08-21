@@ -44,6 +44,43 @@ export const authOptions: NextAuthOptions = {
         // persist OAuth access token
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).accessToken = account.access_token
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(token as any).refreshToken = account.refresh_token
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(token as any).expiresAt = account.expires_at
+      }
+      
+      // If token is expired, try to refresh it
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((token as any).expiresAt && Date.now() > (token as any).expiresAt * 1000) {
+        console.log('Token expired, attempting refresh...');
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const refreshToken = (token as any).refreshToken;
+          if (refreshToken) {
+            const response = await fetch('https://discord.com/api/oauth2/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: env.DISCORD_CLIENT_ID || '',
+                client_secret: env.DISCORD_CLIENT_SECRET || '',
+                grant_type: 'refresh_token',
+                refresh_token: refreshToken,
+              }),
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ;(token as any).accessToken = data.access_token;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ;(token as any).expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+              console.log('Token refreshed successfully');
+            }
+          }
+        } catch (error) {
+          console.error('Failed to refresh token:', error);
+        }
       }
       if (account && profile) {
         // Attach Discord identity info
