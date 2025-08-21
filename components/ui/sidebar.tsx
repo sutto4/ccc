@@ -228,43 +228,13 @@ export default function Sidebar() {
           />
         </CollapsibleSection>
         
-        {/* Creator Alerts section (premium, collapsible) */}
+        {/* Creator Alerts (consolidated) */}
         <CollapsibleSection title={<span className="font-bold">Creator Alerts</span>} defaultOpen>
           <NavLeaf
-            href={guildId ? `/guilds/${guildId}/creator-alerts/twitch` : "/guilds"}
-            label="Twitch"
+            href={guildId ? `/guilds/${guildId}/creator-alerts` : "/guilds"}
+            label="Manage Creator Alerts"
             rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/twitch`) : false}
-            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
-            guildSelected={!!guildId}
-            premiumRequired={true}
-            hasPremium={premiumStatus}
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/creator-alerts/youtube` : "/guilds"}
-            label="Youtube"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/youtube`) : false}
-            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
-            guildSelected={!!guildId}
-            premiumRequired={true}
-            hasPremium={premiumStatus}
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/creator-alerts/x` : "/guilds"}
-            label="X"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/x`) : false}
-            featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
-            guildSelected={!!guildId}
-            premiumRequired={true}
-            hasPremium={premiumStatus}
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/creator-alerts/tiktok` : "/guilds"}
-            label="Tiktok"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts/tiktok`) : false}
+            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts`) : false}
             featureEnabled={!!(guildId && (features?.creator_alerts || premiumStatus))}
             guildSelected={!!guildId}
             premiumRequired={true}
