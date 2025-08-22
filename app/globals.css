@@ -30,34 +30,8 @@
     --sidebar-accent: 221 83% 53%;
     --sidebar-accent-foreground: 0 0% 100%;
   }
-  .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
-    --muted: 222 47% 10%;
-    --muted-foreground: 215 20% 75%;
-    --popover: 222 47% 7%;
-    --popover-foreground: 210 40% 98%;
-    --card: 222 47% 7%;
-    --card-foreground: 210 40% 98%;
-    --border: 217 33% 18%;
-    --input: 217 33% 18%;
-    --ring: 221 83% 66%;
-    --primary: 221 83% 66%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 222 47% 10%;
-    --secondary-foreground: 210 40% 98%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --header: 222 47% 7%;
-    --header-foreground: 210 40% 98%;
-    --sidebar: 222 47% 7%;
-    --sidebar-hover: 222 47% 10%;
-    --sidebar-border: 217 33% 18%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-foreground-muted: 215 16% 70%;
-    --sidebar-accent: 221 83% 66%;
-    --sidebar-accent-foreground: 0 0% 100%;
-  }
+  /* Dark theme is intentionally disabled */
+  .dark { }
   * { border-color: hsl(var(--border)); }
   body {
     background-color: hsl(var(--background));
