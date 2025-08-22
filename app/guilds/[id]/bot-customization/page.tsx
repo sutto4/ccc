@@ -11,7 +11,7 @@ interface BotCustomizationSettings {
   bot_avatar: string;
 }
 
-export default function BotCustomizationPage({ params }: { params: { id: string } }) {
+export default function BotCustomizationPage({ params }: { params: Promise<{ id: string }> }) {
   const [settings, setSettings] = useState<BotCustomizationSettings>({
     bot_name: "Discord Bot",
     bot_avatar: ""
@@ -20,11 +20,20 @@ export default function BotCustomizationPage({ params }: { params: { id: string 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [avatarError, setAvatarError] = useState(false);
-
-  const guildId = params.id;
+  const [guildId, setGuildId] = useState<string>("");
 
   useEffect(() => {
-    loadSettings();
+    const loadParams = async () => {
+      const { id } = await params;
+      setGuildId(id);
+    };
+    loadParams();
+  }, [params]);
+
+  useEffect(() => {
+    if (guildId) {
+      loadSettings();
+    }
   }, [guildId]);
 
   const loadSettings = async () => {
