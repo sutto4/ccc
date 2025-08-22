@@ -14,7 +14,7 @@ export type Guild = {
   group?: {
     id: number
     name: string
-    description: string
+    description: string | null
   } | null
 }
 
