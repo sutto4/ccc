@@ -5,8 +5,8 @@ import { authOptions } from "@/lib/auth";
 // In-memory storage for bot customisation (in production, this would be in a database)
 const botCustomisationStore = new Map<string, { botName: string; botAvatarUrl: string }>();
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const { id: guildId } = params;
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: guildId } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -19,8 +19,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(settings);
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const { id: guildId } = params;
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: guildId } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
