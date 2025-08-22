@@ -1,8 +1,9 @@
 export async function GET(
   request: Request,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path } = await params;
+  const pathString = path.join('/');
   const base = process.env.SERVER_API_BASE_URL;
   
   if (!base) {
@@ -10,7 +11,7 @@ export async function GET(
   }
   
   try {
-    const response = await fetch(`${base}/${path}`, {
+    const response = await fetch(`${base}/${pathString}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -26,9 +27,10 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path } = await params;
+  const pathString = path.join('/');
   const base = process.env.SERVER_API_BASE_URL;
   
   console.log('🔍 Proxy POST request:', { path, base }); // Debug log
@@ -40,9 +42,9 @@ export async function POST(
   
   try {
     const body = await request.json();
-    console.log('🔍 Forwarding request to:', `${base}/${path}`); // Debug log
+    console.log('🔍 Forwarding request to:', `${base}/${pathString}`); // Debug log
     
-    const response = await fetch(`${base}/${path}`, {
+    const response = await fetch(`${base}/${pathString}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,9 +64,10 @@ export async function POST(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path } = await params;
+  const pathString = path.join('/');
   const base = process.env.SERVER_API_BASE_URL;
   
   console.log('🔍 Proxy PUT request:', { path, base }); // Debug log
@@ -76,9 +79,9 @@ export async function PUT(
   
   try {
     const body = await request.json();
-    console.log('🔍 Forwarding PUT request to:', `${base}/${path}`); // Debug log
+    console.log('🔍 Forwarding PUT request to:', `${base}/${pathString}`); // Debug log
     
-    const response = await fetch(`${base}/${path}`, {
+    const response = await fetch(`${base}/${pathString}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -98,9 +101,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path } = await params;
+  const pathString = path.join('/');
   const base = process.env.SERVER_API_BASE_URL;
   
   console.log('🔍 Proxy DELETE request:', { path, base }); // Debug log
@@ -111,9 +115,9 @@ export async function DELETE(
   }
   
   try {
-    console.log('🔍 Forwarding DELETE request to:', `${base}/${path}`); // Debug log
+    console.log('🔍 Forwarding DELETE request to:', `${base}/${pathString}`); // Debug log
     
-    const response = await fetch(`${base}/${path}`, {
+    const response = await fetch(`${base}/${pathString}`, {
       method: 'DELETE',
       headers: {
         'Authorization': request.headers.get('Authorization') || '',
