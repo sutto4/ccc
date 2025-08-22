@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/authz";
 import { query } from "@/lib/db";
 
 // POST clear cache for a guild
-export const POST = withAuth(async (req, { params }: { params: { id: string } }) => {
+export const POST = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const guildId = params.id;
   
   try {

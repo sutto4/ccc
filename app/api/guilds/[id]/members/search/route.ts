@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/authz";
 
 // GET /api/guilds/[id]/members/search?q=username - search for Discord members by username
-export const GET = withAuth(async (req, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const guildId = params.id;
   const { searchParams } = new URL(req.url);
   const query = searchParams.get('q');
