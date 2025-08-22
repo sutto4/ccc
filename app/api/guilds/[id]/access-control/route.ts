@@ -66,7 +66,7 @@ async function checkAdminAccess(guildId: string, userId: string): Promise<boolea
       const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
 
       if (hasAllowedRole) {
-        console.log(`User ${userId} has role-based admin access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        console.log(`User ${userId} has role-based admin access to guild ${guildId} via roles: ${userRoleIds.filter((roleId: string) => allowedRoleIds.includes(roleId)).join(', ')}`);
         return true;
       }
 
