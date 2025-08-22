@@ -74,6 +74,17 @@ export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
 );
 CardContent.displayName = 'CardContent';
 
+export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
+  ({ className, ...props }, ref) => (
+    <h3
+      ref={ref}
+      className={cn("text-lg font-semibold leading-6", className)}
+      {...props}
+    />
+  )
+);
+CardTitle.displayName = 'CardTitle';
+
 interface CardFooterProps extends HTMLAttributes<HTMLDivElement> {
   action?: React.ReactNode;
 }
