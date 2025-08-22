@@ -262,7 +262,7 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
     }
   }
 
-  // Enrich with group info from DB (guilds.group_id -> server_groups)
+  // Enrich with group info from DB and filter out guilds where bot has left
   try {
     if (results.length > 0) {
       const connection = await getDbConnection();
@@ -270,32 +270,58 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
         const ids = results.map(g => g.id);
         const placeholders = ids.map(() => '?').join(',');
         const [rows] = await connection.execute(
-          `SELECT g.guild_id, g.group_id, sg.name AS group_name, sg.description AS group_description
+          `SELECT g.guild_id, g.group_id, g.status, g.premium, sg.name AS group_name, sg.description AS group_description
            FROM guilds g
            LEFT JOIN server_groups sg ON sg.id = g.group_id
            WHERE g.guild_id IN (${placeholders})`,
           ids
         );
         const byGuildId = new Map<string, { id: number; name: string; description: string | null } | null>();
+        const guildStatuses = new Map<string, string>();
+        const guildPremium = new Map<string, boolean>();
+        
         for (const row of rows as any[]) {
+          // Store guild status and premium
+          guildStatuses.set(String(row.guild_id), row.status || 'active');
+          guildPremium.set(String(row.guild_id), Boolean(row.premium));
+          
           if (row.group_id) {
             byGuildId.set(String(row.guild_id), { id: Number(row.group_id), name: row.group_name, description: row.group_description });
           } else {
             byGuildId.set(String(row.guild_id), null);
           }
         }
+        
         for (const g of results) {
           g.group = byGuildId.has(g.id) ? (byGuildId.get(g.id) ?? null) : null;
+          g.premium = guildPremium.get(g.id) || false;
         }
+        
+        // Filter out guilds where bot has left
+        const activeResults = results.filter(g => {
+          const status = guildStatuses.get(g.id) || 'active';
+          const isActive = status !== 'left';
+          if (!isActive) {
+            console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
+          }
+          return isActive;
+        });
+        
+        console.log(`Filtered ${results.length - activeResults.length} guilds with 'left' status`);
+        return activeResults;
       } finally {
         await connection.end();
       }
     }
   } catch (e) {
     console.error('Failed to enrich guilds with group info:', e);
+    // If database fails, return original results (no filtering)
+    console.log('Processed results (DB error):', results.length, 'guilds');
+    return results;
   }
 
-  console.log('Processed results:', results.length, 'guilds');
+  // If we get here without returning from the try block, return original results
+  console.log('Processed results (fallback):', results.length, 'guilds');
   return results;
 }
 
@@ -315,7 +341,7 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
         group: null,
       }));
 
-      // Enrich with group info similar to intersect flow
+      // Enrich with group info and filter out guilds where bot has left
       try {
         if (basic.length > 0) {
           const connection = await getDbConnection();
@@ -323,31 +349,56 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
             const ids = basic.map(g => g.id);
             const placeholders = ids.map(() => '?').join(',');
             const [rows] = await connection.execute(
-              `SELECT g.guild_id, g.group_id, sg.name AS group_name, sg.description AS group_description
+              `SELECT g.guild_id, g.group_id, g.status, g.premium, sg.name AS group_name, sg.description AS group_description
                FROM guilds g
                LEFT JOIN server_groups sg ON sg.id = g.group_id
                WHERE g.guild_id IN (${placeholders})`,
               ids
             );
             const byGuildId = new Map<string, { id: number; name: string; description: string | null } | null>();
+            const guildStatuses = new Map<string, string>();
+            const guildPremium = new Map<string, boolean>();
+            
             for (const row of rows as any[]) {
+              // Store guild status and premium
+              guildStatuses.set(String(row.guild_id), row.status || 'active');
+              guildPremium.set(String(row.guild_id), Boolean(row.premium));
+              
               if (row.group_id) {
                 byGuildId.set(String(row.guild_id), { id: Number(row.group_id), name: row.group_name, description: row.group_description });
               } else {
                 byGuildId.set(String(row.guild_id), null);
               }
             }
+            
             for (const g of basic) {
               g.group = byGuildId.has(g.id) ? (byGuildId.get(g.id) ?? null) : null;
+              g.premium = guildPremium.get(g.id) || false;
             }
+            
+            // Filter out guilds where bot has left
+            const activeBasic = basic.filter(g => {
+              const status = guildStatuses.get(g.id) || 'active';
+              const isActive = status !== 'left';
+              if (!isActive) {
+                console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
+              }
+              return isActive;
+            });
+            
+            console.log(`Filtered ${basic.length - activeBasic.length} guilds with 'left' status`);
+            return activeBasic;
           } finally {
             await connection.end();
           }
         }
       } catch (e) {
         console.error('Failed to enrich (normalizeInstalledOnly) with group info:', e);
+        // If database fails, return original basic results (no filtering)
+        return basic;
       }
 
+      // If we get here without returning from the try block, return original results
       return basic;
     }
   } catch (e) {

@@ -66,11 +66,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         guildFeaturesMap[row.feature_name] = Boolean(row.enabled);
       });
 
+      console.log('[FEATURES-GET] Guild features map:', guildFeaturesMap);
+
       // Build the features response
       const features: Record<string, any> = {};
       featuresRows.forEach((row: any) => {
         const featureKey = row.feature_key;
         const isEnabled = guildFeaturesMap.hasOwnProperty(featureKey) ? guildFeaturesMap[featureKey] : false;
+        
+        // Debug log for custom_groups specifically
+        if (featureKey === 'custom_groups') {
+          console.log(`[FEATURES-GET] custom_groups debug:`, {
+            featureKey,
+            hasProperty: guildFeaturesMap.hasOwnProperty(featureKey),
+            rawValue: guildFeaturesMap[featureKey],
+            isEnabled,
+            guildFeaturesMap
+          });
+        }
         
         features[featureKey] = isEnabled;
         features[`${featureKey}_package`] = row.minimum_package;

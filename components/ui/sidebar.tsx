@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
-import { Shield, Server, Settings, Crown, FileText, Folder, Home } from "lucide-react";
+import { Shield, Server, Settings, Crown, FileText, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchFeatures, type FeaturesResponse, type Features } from "@/lib/api";
 import { useSession, signOut } from "next-auth/react";
@@ -41,7 +41,6 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
 const TOP: Item[] = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/guilds", label: "My Servers", icon: Shield },
   { href: "/admin", label: "Admin", icon: Settings },
 ];
@@ -70,7 +69,7 @@ export default function Sidebar() {
     return packageType === "premium";
   };
 
-  // Helper function to check if a feature is accessible (free or premium enabled)
+  // Helper function to check if a feature is accessible (free, premium enabled, or custom enabled)
   const isFeatureAccessible = (featureKey: string) => {
     if (!features) return false;
     
@@ -95,8 +94,39 @@ export default function Sidebar() {
       return isEnabled;
     }
     
+    // Custom features require the feature to be enabled
+    if (packageType === "custom") {
+      console.log(`  -> Feature ${featureKey} is custom, returning ${isEnabled}`);
+      return isEnabled;
+    }
+    
     console.log(`  -> Feature ${featureKey} has unknown package type, returning false`);
     return false;
+  };
+
+  // Helper function to check if a feature should be visible in navigation
+  const isFeatureVisible = (featureKey: string) => {
+    if (!features) return false;
+    
+    const packageKey = `${featureKey}_package` as keyof Features;
+    const packageType = features[packageKey];
+    const isEnabled = features[featureKey as keyof Features] === true;
+    
+    // If no package type is defined, assume it's not configured and hide it
+    if (!packageType) {
+      console.log(`isFeatureVisible(${featureKey}): no package type defined, hiding feature`);
+      return false;
+    }
+    
+    // Custom features only appear if enabled
+    if (packageType === "custom") {
+      console.log(`isFeatureVisible(${featureKey}): custom feature, visible=${isEnabled}`);
+      return isEnabled;
+    }
+    
+    // Free and premium features are always visible (but may be greyed out)
+    console.log(`isFeatureVisible(${featureKey}): ${packageType} feature, always visible`);
+    return true;
   };
   
   // Debug logging
@@ -172,99 +202,121 @@ export default function Sidebar() {
             featureEnabled={true}
             guildSelected={!!guildId}
           />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/members` : "/guilds"}
-            label="Custom Groups"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("custom_groups"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("custom_groups")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
+          {isFeatureVisible("custom_groups") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/members` : "/guilds"}
+              label="Custom Groups"
+              rightIcon={shouldShowCrown("custom_groups") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/members`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("custom_groups"))}
+              guildSelected={!!guildId}
+              premiumRequired={shouldShowCrown("custom_groups")}
+              hasPremium={true} // Always true since we're checking feature access individually
+            />
+          )}
         </CollapsibleSection>
         
-        {/* FiveM Frameworks (premium, collapsible) */}
-        <CollapsibleSection title={<span className="font-bold">FiveM</span>} defaultOpen>
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/esx` : "/guilds"}
-            label="ESX"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/esx`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("fivem_esx"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("fivem_esx")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/qbcore` : "/guilds"}
-            label="QBcore"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/qbcore`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("fivem_qbcore"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("fivem_qbcore")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
-        </CollapsibleSection>
+        {/* FiveM Frameworks (only show section if any features are visible) */}
+        {(isFeatureVisible("fivem_esx") || isFeatureVisible("fivem_qbcore")) && (
+          <CollapsibleSection title={<span className="font-bold">FiveM</span>} defaultOpen>
+            {isFeatureVisible("fivem_esx") && (
+              <NavLeaf
+                href={guildId ? `/guilds/${guildId}/esx` : "/guilds"}
+                label="ESX"
+                rightIcon={shouldShowCrown("fivem_esx") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+                active={guildId ? pathname.startsWith(`/guilds/${guildId}/esx`) : false}
+                featureEnabled={!!(guildId && isFeatureAccessible("fivem_esx"))}
+                guildSelected={!!guildId}
+                premiumRequired={shouldShowCrown("fivem_esx")}
+                hasPremium={true} // Always true since we're checking feature access individually
+              />
+            )}
+            {isFeatureVisible("fivem_qbcore") && (
+              <NavLeaf
+                href={guildId ? `/guilds/${guildId}/qbcore` : "/guilds"}
+                label="QBcore"
+                rightIcon={shouldShowCrown("fivem_qbcore") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+                active={guildId ? pathname.startsWith(`/guilds/${guildId}/qbcore`) : false}
+                featureEnabled={!!(guildId && isFeatureAccessible("fivem_qbcore"))}
+                guildSelected={!!guildId}
+                premiumRequired={shouldShowCrown("fivem_qbcore")}
+                hasPremium={true} // Always true since we're checking feature access individually
+              />
+            )}
+          </CollapsibleSection>
+        )}
         
-        {/* Tools section (collapsible) */}
-        <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/embedded-messages` : "/guilds"}
-            label="Embedded Messages"
-            rightIcon={shouldShowCrown("embedded_messages") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/embedded-messages`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("embedded_messages"))}
-            guildSelected={!!guildId}
-            premiumRequired={false} // embedded_messages is free, so no premium required
-            hasPremium={true}
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/reaction-roles` : "/guilds"}
-            label="Reaction Roles"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/reaction-roles`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("reaction_roles"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("reaction_roles")} // Only require premium if it's actually premium
-            hasPremium={true}
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/custom-commands` : "/guilds"}
-            label="Custom Commands"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-commands`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("custom_commands"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("custom_commands")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/bot-customization` : "/guilds"}
-            label="Bot Customization"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/bot-customization`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("bot_customisation"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("bot_customisation")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
-        </CollapsibleSection>
+        {/* Tools section (only show if any features are visible) */}
+        {(isFeatureVisible("embedded_messages") || isFeatureVisible("reaction_roles") || isFeatureVisible("custom_commands") || isFeatureVisible("bot_customisation")) && (
+          <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
+          {isFeatureVisible("embedded_messages") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/embedded-messages` : "/guilds"}
+              label="Embedded Messages"
+              rightIcon={shouldShowCrown("embedded_messages") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/embedded-messages`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("embedded_messages"))}
+              guildSelected={!!guildId}
+              premiumRequired={false} // embedded_messages is free, so no premium required
+              hasPremium={true}
+            />
+          )}
+          {isFeatureVisible("reaction_roles") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/reaction-roles` : "/guilds"}
+              label="Reaction Roles"
+              rightIcon={shouldShowCrown("reaction_roles") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/reaction-roles`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("reaction_roles"))}
+              guildSelected={!!guildId}
+              premiumRequired={shouldShowCrown("reaction_roles")} // Only require premium if it's actually premium
+              hasPremium={true}
+            />
+          )}
+          {isFeatureVisible("custom_commands") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/custom-commands` : "/guilds"}
+              label="Custom Commands"
+              rightIcon={shouldShowCrown("custom_commands") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/custom-commands`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("custom_commands"))}
+              guildSelected={!!guildId}
+              premiumRequired={shouldShowCrown("custom_commands")}
+              hasPremium={true} // Always true since we're checking feature access individually
+            />
+          )}
+          {isFeatureVisible("bot_customisation") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/bot-customization` : "/guilds"}
+              label="Bot Customization"
+              rightIcon={shouldShowCrown("bot_customisation") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/bot-customization`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("bot_customisation"))}
+              guildSelected={!!guildId}
+              premiumRequired={shouldShowCrown("bot_customisation")}
+              hasPremium={true} // Always true since we're checking feature access individually
+            />
+          )}
+          </CollapsibleSection>
+        )}
         
-        {/* Creator Alerts (consolidated) */}
-        <CollapsibleSection title={<span className="font-bold">Creator Alerts</span>} defaultOpen>
-          <NavLeaf
-            href={guildId ? `/guilds/${guildId}/creator-alerts` : "/guilds"}
-            label="Manage Creator Alerts"
-            rightIcon={<Crown className="h-3.5 w-3.5 text-yellow-400" />}
-            active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts`) : false}
-            featureEnabled={!!(guildId && isFeatureAccessible("creator_alerts"))}
-            guildSelected={!!guildId}
-            premiumRequired={shouldShowCrown("creator_alerts")}
-            hasPremium={true} // Always true since we're checking feature access individually
-          />
-        </CollapsibleSection>
+        {/* Creator Alerts (only show if visible) */}
+        {isFeatureVisible("creator_alerts") && (
+          <CollapsibleSection title={<span className="font-bold">Creator Alerts</span>} defaultOpen>
+          {isFeatureVisible("creator_alerts") && (
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/creator-alerts` : "/guilds"}
+              label="Manage Creator Alerts"
+              rightIcon={shouldShowCrown("creator_alerts") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/creator-alerts`) : false}
+              featureEnabled={!!(guildId && isFeatureAccessible("creator_alerts"))}
+              guildSelected={!!guildId}
+              premiumRequired={shouldShowCrown("creator_alerts")}
+              hasPremium={true} // Always true since we're checking feature access individually
+            />
+          )}
+          </CollapsibleSection>
+        )}
 
         {/* Development moved to Admin; hidden from guild users */}
       </nav>

@@ -5,6 +5,104 @@ import { headers } from 'next/headers';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+/**
+ * Automatically enables all premium features for a guild based on what's in the features table
+ */
+async function autoEnablePremiumFeatures(connection: any, guildId: string) {
+  try {
+    console.log(`Starting auto-enable for guild ${guildId}...`);
+    
+    // Get all premium features from the features table
+    const [premiumFeatures] = await connection.execute(`
+      SELECT feature_key, feature_name 
+      FROM features 
+      WHERE minimum_package = 'premium' AND is_active = 1
+    `);
+    
+    console.log(`Found ${premiumFeatures.length} premium features:`, premiumFeatures);
+    
+    if (!Array.isArray(premiumFeatures) || premiumFeatures.length === 0) {
+      console.log('No premium features found to enable');
+      return;
+    }
+    
+    // Create guild_features table if it doesn't exist
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS guild_features (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        guild_id varchar(255) NOT NULL,
+        feature_name varchar(255) NOT NULL,
+        enabled tinyint(1) NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY guild_feature (guild_id, feature_name),
+        KEY guild_id (guild_id),
+        KEY feature_name (feature_name)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    // Enable each premium feature
+    for (const feature of premiumFeatures) {
+      const featureName = feature.feature_key || feature.feature_name;
+      console.log(`Enabling feature: ${featureName} for guild ${guildId}`);
+      
+      await connection.execute(`
+        INSERT INTO guild_features (guild_id, feature_name, enabled) 
+        VALUES (?, ?, 1) 
+        ON DUPLICATE KEY UPDATE enabled = 1, updated_at = CURRENT_TIMESTAMP
+      `, [guildId, featureName]);
+    }
+    
+    console.log(`Successfully auto-enabled ${premiumFeatures.length} premium features for guild ${guildId}`);
+    
+  } catch (error) {
+    console.error('Error in autoEnablePremiumFeatures:', error);
+    // Don't throw - we don't want to fail the entire webhook if feature enabling fails
+  }
+}
+
+/**
+ * Automatically disables all premium features for a guild when subscription is cancelled
+ */
+async function autoDisablePremiumFeatures(connection: any, guildId: string) {
+  try {
+    console.log(`Starting auto-disable for guild ${guildId}...`);
+    
+    // Get all premium features from the features table
+    const [premiumFeatures] = await connection.execute(`
+      SELECT feature_key, feature_name 
+      FROM features 
+      WHERE minimum_package = 'premium' AND is_active = 1
+    `);
+    
+    console.log(`Found ${premiumFeatures.length} premium features to disable:`, premiumFeatures);
+    
+    if (!Array.isArray(premiumFeatures) || premiumFeatures.length === 0) {
+      console.log('No premium features found to disable');
+      return;
+    }
+    
+    // Disable each premium feature
+    for (const feature of premiumFeatures) {
+      const featureName = feature.feature_key || feature.feature_name;
+      console.log(`Disabling feature: ${featureName} for guild ${guildId}`);
+      
+      await connection.execute(`
+        INSERT INTO guild_features (guild_id, feature_name, enabled) 
+        VALUES (?, ?, 0) 
+        ON DUPLICATE KEY UPDATE enabled = 0, updated_at = CURRENT_TIMESTAMP
+      `, [guildId, featureName]);
+    }
+    
+    console.log(`Successfully auto-disabled ${premiumFeatures.length} premium features for guild ${guildId}`);
+    
+  } catch (error) {
+    console.error('Error in autoDisablePremiumFeatures:', error);
+    // Don't throw - we don't want to fail the entire webhook if feature disabling fails
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log('=== WEBHOOK RECEIVED ===');
   console.log('Request received at:', new Date().toISOString());
@@ -114,6 +212,11 @@ export async function POST(request: NextRequest) {
         
         console.log('Database update result:', result);
         console.log(`Guild ${guildId} upgraded to premium plan: ${planId}`);
+        
+        // Auto-enable all premium features for this guild
+        console.log('Auto-enabling premium features...');
+        await autoEnablePremiumFeatures(connection, guildId);
+        
       } catch (dbError) {
         console.error('Database error:', dbError);
         throw dbError;
@@ -166,9 +269,14 @@ export async function POST(request: NextRequest) {
                UPDATE guilds 
                SET 
                  subscription_status = ?,
-                 cancel_at_period_end = '0'
+                 cancel_at_period_end = '0',
+                 premium = '1'
                WHERE guild_id = ?
              `, [subscription.status, guildId]);
+             
+             // Auto-enable premium features when reactivated
+             console.log('Re-enabling premium features after reactivation...');
+             await autoEnablePremiumFeatures(connection, guildId);
            }
         } finally {
           await connection.end();
@@ -210,6 +318,11 @@ export async function POST(request: NextRequest) {
               subscription_status = 'canceled'
             WHERE guild_id = ?
           `, [guildId]);
+          
+          // Disable all premium features when subscription ends
+          console.log('Disabling premium features after cancellation...');
+          await autoDisablePremiumFeatures(connection, guildId);
+          
         } finally {
           await connection.end();
         }
