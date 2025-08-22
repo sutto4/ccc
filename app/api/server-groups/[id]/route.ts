@@ -4,11 +4,12 @@ import { query } from '@/lib/db';
 
 export const GET = withAuth(async (
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
   auth
 ) => {
   try {
-    const groupId = parseInt(params.id);
+    const { id } = await params;
+    const groupId = parseInt(id);
     if (isNaN(groupId)) {
       return NextResponse.json(
         { error: 'Invalid group ID' },
@@ -60,11 +61,12 @@ export const GET = withAuth(async (
 
 export const PUT = withAuth(async (
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
   auth
 ) => {
   try {
-    const groupId = parseInt(params.id);
+    const { id } = await params;
+    const groupId = parseInt(id);
     if (isNaN(groupId)) {
       return NextResponse.json(
         { error: 'Invalid group ID' },
@@ -114,11 +116,12 @@ export const PUT = withAuth(async (
 
 export const DELETE = withAuth(async (
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
   auth
 ) => {
   try {
-    const groupId = parseInt(params.id);
+    const { id } = await params;
+    const groupId = parseInt(id);
     if (isNaN(groupId)) {
       return NextResponse.json(
         { error: 'Invalid group ID' },

@@ -66,7 +66,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
       const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
 
       if (hasAllowedRole) {
-        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter((roleId: string) => allowedRoleIds.includes(roleId)).join(', ')}`);
         return true;
       }
 
@@ -83,9 +83,9 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
 }
 
 // GET: Fetch subscription data for a guild
-export const GET = withAuth(async (req: Request, { params }: { params: { id: string } }, auth: any) => {
+export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   try {
-    const { id: guildId } = params;
+    const { id: guildId } = await params;
     const userId = auth?.discordId;
 
     if (!userId) {

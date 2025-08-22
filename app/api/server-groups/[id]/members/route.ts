@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/authz';
 import { query } from '@/lib/db';
 
-export const POST = withAuth(async (req, { params }: { params: { id: string } }, { discordId }) => {
+export const POST = withAuth(async (req, { params }: { params: Promise<{ id: string }> }, { discordId }) => {
   try {
-    const groupId = parseInt(params.id);
+    const { id } = await params;
+    const groupId = parseInt(id);
     if (isNaN(groupId)) {
       return NextResponse.json({ error: 'Invalid group ID' }, { status: 400 });
     }
@@ -63,9 +64,10 @@ export const POST = withAuth(async (req, { params }: { params: { id: string } },
   }
 });
 
-export const DELETE = withAuth(async (req, { params }: { params: { id: string } }, { discordId }) => {
+export const DELETE = withAuth(async (req, { params }: { params: Promise<{ id: string }> }, { discordId }) => {
   try {
-    const groupId = parseInt(params.id);
+    const { id } = await params;
+    const groupId = parseInt(id);
     if (isNaN(groupId)) {
       return NextResponse.json({ error: 'Invalid group ID' }, { status: 400 });
     }
