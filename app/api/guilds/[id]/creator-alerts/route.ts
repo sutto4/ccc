@@ -3,8 +3,8 @@ import { withAuth } from "@/lib/authz";
 import { query } from "@/lib/db";
 
 // GET list
-export const GET = withAuth(async (_req, { params }: { params: { id: string } }) => {
-  const guildId = params.id;
+export const GET = withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
+  const { id: guildId } = await params;
   const rows = await query(
     `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, notes, enabled
      FROM creator_alert_rules WHERE guild_id = ? ORDER BY id DESC`,
