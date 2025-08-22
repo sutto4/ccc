@@ -56,7 +56,26 @@ export const DELETE = withAuth(async (req, { params }: { params: { id: string } 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await query(`DELETE FROM creator_alert_rules WHERE id = ? AND guild_id = ?`, [id, guildId]);
+  
+  // Get the creator name before deleting the rule
+  const [rule] = await query(
+    `SELECT creator FROM creator_alert_rules WHERE id = ? AND guild_id = ?`,
+    [id, guildId]
+  );
+  
+  if (rule) {
+    // Delete the rule
+    await query(`DELETE FROM creator_alert_rules WHERE id = ? AND guild_id = ?`, [id, guildId]);
+    
+    // Clear the cache for this creator
+    await query(
+      `DELETE FROM creator_alert_cache WHERE cache_key LIKE ?`,
+      [`creator_alert_${guildId}_%`]
+    );
+    
+    console.log(`[CREATOR-ALERTS] Deleted rule ${id} for creator ${rule.creator} and cleared cache`);
+  }
+  
   return NextResponse.json({ ok: true });
 });
 

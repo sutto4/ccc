@@ -1,70 +1,44 @@
 
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { isAdmin } from "@/lib/db";
-import mysql from "mysql2/promise";
+import { withAuth } from "@/lib/authz";
+import { query } from "@/lib/db";
 
-export async function GET() {
+export const GET = withAuth(async (req, { auth }) => {
   try {
-    if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 });
-    }
-    const connection = await mysql.createConnection({
-      host: env.DB_HOST,
-      user: env.DB_USER,
-      password: env.DB_PASS,
-      database: env.DB_NAME,
-    });
-
-    const [rows] = await connection.execute(`
-      SELECT 
-        g.guild_id,
-        g.guild_name,
-        g.created_at,
-        g.premium
-      FROM guilds g
-    `);
-
-    await connection.end();
-
-    const discordBotToken = env.DISCORD_BOT_TOKEN;
-    async function fetchDiscordGuild(guild_id: string) {
-      const res = await fetch(`https://discord.com/api/v10/guilds/${guild_id}?with_counts=true`, {
-        headers: {
-          Authorization: `Bot ${discordBotToken}`,
-        },
-      });
-      if (!res.ok) return null;
-      return res.json();
+    // Check if user is admin
+    if (auth?.role !== 'admin' && auth?.role !== 'owner') {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
-    const guilds = await Promise.all((rows as any[]).map(async g => {
-      const discord = await fetchDiscordGuild(g.guild_id);
-      let owner_name = null;
-      if (discord?.owner_id) {
-        const res = await fetch(`https://discord.com/api/v10/users/${discord.owner_id}`, {
-          headers: { Authorization: `Bot ${discordBotToken}` },
-        });
-        if (res.ok) {
-          const owner = await res.json();
-          owner_name = owner.global_name || owner.username || null;
-        }
-      }
-      return {
-        ...g,
-        premium: !!g.premium,
-        owner_name,
-        guild_icon_url: discord?.icon
-          ? `https://cdn.discordapp.com/icons/${g.guild_id}/${discord.icon}.png`
-          : "/placeholder-logo.png",
-        member_count: discord?.approximate_member_count ?? null,
-        role_count: discord?.roles?.length ?? null,
-      };
+    // Get all guilds with status information
+    const rows = await query(
+      `SELECT guild_id, guild_name, premium, status, created_at, updated_at 
+       FROM guilds 
+       ORDER BY guild_name`
+    );
+
+    // Transform the data
+    let guilds = rows;
+    if (Array.isArray(rows) && rows.length > 0 && Array.isArray(rows[0])) {
+      guilds = rows[0];
+    }
+
+    const transformedGuilds = guilds.map((row: any) => ({
+      guild_id: row.guild_id,
+      guild_name: row.guild_name,
+      premium: Boolean(row.premium),
+      status: row.status || 'active', // Default to 'active' if status is NULL
+      created_at: row.created_at,
+      updated_at: row.updated_at
     }));
 
-    return NextResponse.json(guilds);
-  } catch (error: any) {
-    console.error("[API /admin/guilds]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ guilds: transformedGuilds });
+
+  } catch (error) {
+    console.error('[ADMIN-GUILDS] Error fetching guilds:', error);
+    return NextResponse.json({ 
+      error: "Failed to fetch guilds",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
-}
+});

@@ -38,11 +38,27 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
       }
 
       // Check if user's current Discord roles grant access
-      // ALWAYS validate against Discord API - no fallbacks
       const botToken = env.DISCORD_BOT_TOKEN;
       if (!botToken) {
         console.error('Bot token not configured for role validation');
-        return false; // Fail secure - no access without validation
+        return false;
+      }
+
+      // First, check if user is the server owner by fetching guild info
+      try {
+        const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
+          headers: { Authorization: `Bot ${botToken}` }
+        });
+        
+        if (guildResponse.ok) {
+          const guildData = await guildResponse.json();
+          if (guildData.owner_id === userId) {
+            console.log(`User ${userId} is confirmed owner of guild ${guildId}`);
+            return true;
+          }
+        }
+      } catch (error) {
+        console.log(`Could not verify guild ownership for user ${userId} in guild ${guildId}:`, error);
       }
 
       // Fetch user's current roles from Discord
@@ -52,7 +68,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
 
       if (!userRolesResponse.ok) {
         console.log(`User ${userId} not found in guild ${guildId} or bot lacks permissions`);
-        return false; // User not in guild or bot can't see them
+        return false;
       }
 
       const userMember = await userRolesResponse.json();
@@ -82,7 +98,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
     }
   } catch (error) {
     console.error('Database or Discord API error checking user access:', error);
-    return false; // Fail secure - deny access if anything fails
+    return false;
   }
 }
 

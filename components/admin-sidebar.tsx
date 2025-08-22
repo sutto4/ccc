@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, Server, Settings, FileText } from "lucide-react";
+import { Shield, Server, Settings, FileText, Zap } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<any> };
 
 const ADMIN_ITEMS: NavItem[] = [
 	{ href: "/admin", label: "Dashboard", icon: Shield },
+	{ href: "/admin/features", label: "Features", icon: Zap },
 	{ href: "/guilds", label: "Guilds", icon: Settings },
 	{ href: "/design-system", label: "Design System", icon: FileText },
 ];

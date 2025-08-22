@@ -3,14 +3,16 @@
 export type AuthContext = { 
   accessToken: string;
   discordId?: string;
+  role?: string;
 };
 
-export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string }> {
+export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string; role?: string }> {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
   console.log('Auth header:', header ? 'Present' : 'Missing');
   
   let accessToken: string | null = null;
   let discordId: string | undefined;
+  let role: string | undefined;
   
   if (header) {
     const match = /^Bearer\s+(.+)$/i.exec(header.trim());
@@ -35,15 +37,18 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       discordId = (session as any)?.user?.discordId as string | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role = (session as any)?.role as string | undefined;
       console.log('Access token from session:', accessToken ? 'Present' : 'Missing');
       console.log('Discord ID from session:', discordId ? 'Present' : 'Missing');
+      console.log('User role from session:', role || 'Not set');
       console.log('Session user:', (session as any)?.user);
     }
   } catch (error) {
     console.error('Error getting session from cookie:', error);
   }
   
-  return { accessToken, discordId };
+  return { accessToken, discordId, role };
 }
 
 export function authHeader(accessToken: string): Record<string, string> {
@@ -51,19 +56,19 @@ export function authHeader(accessToken: string): Record<string, string> {
 }
 
 // Wrap a Next.js App Router handler to enforce presence of an access token in the Authorization header
-// Usage: export const GET = withAuth(async (req, ctx, { accessToken, discordId }) => { ... })
+// Usage: export const GET = withAuth(async (req, ctx, { accessToken, discordId, role }) => { ... })
 export function withAuth<TCtx = any>(
   handler: (req: Request, ctx: TCtx, auth: AuthContext) => Promise<Response> | Response
 ) {
   return async (req: Request, ctx: TCtx) => {
-    const { accessToken, discordId } = await getAccessTokenFromRequest(req);
+    const { accessToken, discordId, role } = await getAccessTokenFromRequest(req);
     if (!accessToken) {
       return new Response(JSON.stringify({ error: "No access token" }), {
         status: 401,
         headers: { "content-type": "application/json" },
       });
     }
-    return handler(req, ctx, { accessToken, discordId });
+    return handler(req, ctx, { accessToken, discordId, role });
   };
 }
 

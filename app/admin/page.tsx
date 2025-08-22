@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
+import { Crown, Settings, Shield } from "lucide-react";
 
 // Fetches all guilds from the admin API
 async function fetchGuilds() {
@@ -72,83 +73,154 @@ export default function AdminGuildsPage() {
           {!loading && !error && filtered.length === 0 && (
             <div className="col-span-full py-6 text-muted-foreground text-center">No guilds found.</div>
           )}
-          {!loading && !error && filtered.map(g => (
-            <Link
-              key={g.guild_id}
-              href={`/guilds/${g.guild_id}/settings`}
-              className="relative flex flex-col items-center p-4 gap-2 bg-card border shadow-sm rounded-xl transition group focus:outline-none cursor-pointer hover:bg-primary/10 hover:shadow-md focus:ring-2 focus:ring-primary/50"
-              tabIndex={0}
-              aria-label={`Configure guild ${g.guild_name}`}
-            >
-              <div className="absolute top-2 right-2">
-                {g.premium ? <GuildPremiumBadge /> : null}
+          {!loading && !error && filtered.map((g) => (
+            <div key={g.guild_id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {g.guild_name}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {g.premium && (
+                    <Crown className="w-5 h-5 text-yellow-500" />
+                  )}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    g.status === 'left' 
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : g.status === 'active' || !g.status
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                  }`}>
+                    {g.status === 'left' ? 'Left' : g.status === 'active' || !g.status ? 'Active' : g.status}
+                  </span>
+                </div>
               </div>
-              <Image
-                src={g.guild_icon_url || "/placeholder-logo.png"}
-                alt={g.guild_name || "Guild"}
-                width={64}
-                height={64}
-                className="w-16 h-16 rounded-full object-cover border"
-              />
-              <div className="font-semibold text-base truncate whitespace-nowrap w-full text-center group-hover:underline">{g.guild_name || <span className="italic text-muted-foreground">Unnamed</span>}</div>
-              {g.owner_name && (
-                <div className="text-xs text-muted-foreground mt-1">👑 Owner: {g.owner_name}</div>
-              )}
-              <div className="text-xs text-muted-foreground font-mono">ID: {g.guild_id}</div>
-              <div className="text-xs">Users: <span className="font-mono">{(typeof g.member_count === 'number' && g.member_count > 0) ? g.member_count : (g.approximate_member_count ?? "—")}</span></div>
-              <div className="text-xs">Roles: <span className="font-mono">{typeof g.role_count === 'number' && g.role_count >= 0 ? g.role_count : "—"}</span></div>
-              <div className="text-xs">Created: {g.created_at ? new Date(g.created_at).toLocaleDateString() : "—"}</div>
-            </Link>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">ID:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{g.guild_id}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Premium:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
+                    {g.premium ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Created:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
+                    {new Date(g.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Updated:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
+                    {new Date(g.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                {g.status !== 'left' && (
+                  <>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/admin/guilds/${g.guild_id}`}>
+                        <Settings className="w-4 h-4 mr-2" />
+                        Admin Settings
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/guilds/${g.guild_id}/settings`}>
+                        <Shield className="w-4 h-4 mr-2" />
+                        Guild Settings
+                      </Link>
+                    </Button>
+                  </>
+                )}
+                {g.status === 'left' && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    Bot was removed from this server
+                  </span>
+                )}
+              </div>
+            </div>
           ))}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <table className="min-w-full divide-y divide-border text-xs">
             <thead>
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">Guild Name</th>
-                <th className="px-3 py-2 text-left font-semibold">Owner</th>
-                <th className="px-3 py-2 text-left font-semibold">Guild ID</th>
-                <th className="px-3 py-2 text-left font-semibold">Users</th>
-                <th className="px-3 py-2 text-left font-semibold">Roles</th>
-                <th className="px-3 py-2 text-left font-semibold">Premium</th>
-                <th className="px-3 py-2 text-left font-semibold">Created</th>
+              <tr className="border-b">
+                <th className="text-left p-3 font-medium">Guild</th>
+                <th className="text-left p-3 font-medium">ID</th>
+                <th className="text-left p-3 font-medium">Premium</th>
+                <th className="text-left p-3 font-medium">Status</th>
+                <th className="text-left p-3 font-medium">Created</th>
+                <th className="text-left p-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={7} className="py-6 text-muted-foreground text-center">Loading...</td></tr>
+                <tr><td colSpan={8} className="py-6 text-muted-foreground text-center">Loading...</td></tr>
               )}
               {error && (
-                <tr><td colSpan={7} className="py-6 text-red-600 text-center">{error}</td></tr>
+                <tr><td colSpan={8} className="py-6 text-red-600 text-center">{error}</td></tr>
               )}
               {!loading && !error && filtered.length === 0 && (
-                <tr><td colSpan={7} className="py-6 text-muted-foreground text-center">No guilds found.</td></tr>
+                <tr><td colSpan={8} className="py-6 text-muted-foreground text-center">No guilds found.</td></tr>
               )}
-              {!loading && !error && filtered.map(g => (
-                <tr
-                  key={g.guild_id}
-                  className="border-b last:border-0 group cursor-pointer transition hover:bg-primary/10 hover:shadow-md focus-within:bg-primary/10"
-                  tabIndex={0}
-                  onClick={e => {
-                    if (e.target === e.currentTarget) {
-                      window.location.href = `/guilds/${g.guild_id}/settings`;
-                    }
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      window.location.href = `/guilds/${g.guild_id}/settings`;
-                    }
-                  }}
-                  aria-label={`Configure guild ${g.guild_name}`}
-                >
-                  <td className="px-3 py-2 font-semibold truncate whitespace-nowrap max-w-[180px] group-hover:underline">{g.guild_name}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{g.owner_name ? `👑 ${g.owner_name}` : <span className="text-muted-foreground">—</span>}</td>
-                  <td className="px-3 py-2 font-mono">{g.guild_id}</td>
-                  <td className="px-3 py-2 font-mono">{(typeof g.member_count === 'number' && g.member_count > 0) ? g.member_count : (g.approximate_member_count ?? "—")}</td>
-                  <td className="px-3 py-2 font-mono">{typeof g.role_count === 'number' && g.role_count >= 0 ? g.role_count : "—"}</td>
-                  <td className="px-3 py-2">{g.premium ? <GuildPremiumBadge /> : <span className="text-muted-foreground">Free</span>}</td>
-                  <td className="px-3 py-2">{g.created_at ? new Date(g.created_at).toLocaleDateString() : "—"}</td>
+              {!loading && !error && filtered.map((g) => (
+                <tr key={g.guild_id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="font-medium">{g.guild_name}</div>
+                      {g.premium && <Crown className="w-4 h-4 text-yellow-500" />}
+                    </div>
+                  </td>
+                  <td className="p-3 font-mono text-sm">{g.guild_id}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      g.premium ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {g.premium ? 'Yes' : 'No'}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      g.status === 'left' 
+                        ? 'bg-red-100 text-red-800'
+                        : g.status === 'active' || !g.status
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {g.status === 'left' ? 'Left' : g.status === 'active' || !g.status ? 'Active' : g.status}
+                    </span>
+                  </td>
+                  <td className="p-3 text-sm">
+                    {new Date(g.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="p-3">
+                    {g.status !== 'left' ? (
+                      <div className="flex gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/admin/guilds/${g.guild_id}`}>
+                            <Settings className="w-4 h-4 mr-2" />
+                            Admin
+                          </Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/guilds/${g.guild_id}/settings`}>
+                            <Shield className="w-4 h-4 mr-2" />
+                            Guild
+                          </Link>
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-500 italic">
+                        Bot removed
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
