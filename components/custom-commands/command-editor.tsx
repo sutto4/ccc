@@ -77,11 +77,11 @@ export default function CommandEditor({ command, channels, roles, onSave, onCanc
   const [formData, setFormData] = useState<Partial<CustomCommand>>(command || {
     name: "",
     description: "",
-    trigger: "",
+    trigger: "message",
     responseType: "message",
     messageContent: "",
-    allowedChannels: [],
-    allowedRoles: [],
+    allowedChannels: undefined,
+    allowedRoles: undefined,
     buttons: [],
     enabled: true
   });
@@ -565,22 +565,73 @@ export default function CommandEditor({ command, channels, roles, onSave, onCanc
       {/* Permissions */}
       <div className={`bg-gray-50 rounded-lg p-4 ${inline ? 'space-y-4' : ''}`}>
         <h4 className="font-medium text-gray-900 mb-4">Permissions</h4>
-        <div className={`grid ${compact ? 'grid-cols-1 gap-4' : 'grid-cols-1 gap-6'}`}>
+        <div className={`grid ${compact ? 'grid-cols-1 gap-4' : 'grid-cols-2 gap-6'}`}>
+          {/* Channel Permissions - Only show for Channel Message and Embed Message */}
+          {(formData.responseType === "message" || formData.responseType === "embed") ? (
+            <div>
+              <label className="block text-sm font-medium mb-2">Allowed Channels</label>
+              <div className={`overflow-y-auto border rounded-lg p-3 space-y-2 ${compact ? 'max-h-32' : 'max-h-40'}`}>
+                                 <label className="flex items-center gap-2 text-sm font-medium">
+                   <input
+                     type="checkbox"
+                     checked={formData.allowedChannels !== undefined && formData.allowedChannels.length === 0}
+                     onChange={(e) => {
+                       if (e.target.checked) {
+                         setFormData(prev => ({ ...prev, allowedChannels: [] }));
+                       } else {
+                         setFormData(prev => ({ ...prev, allowedChannels: undefined }));
+                       }
+                     }}
+                   />
+                   📢 All Channels
+                 </label>
+                {channels.map((channel) => (
+                  <label key={channel.channelId} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={formData.allowedChannels?.includes(channel.channelId) || false}
+                      onChange={(e) => {
+                        const channelId = channel.channelId;
+                        setFormData(prev => ({
+                          ...prev,
+                          allowedChannels: e.target.checked
+                            ? [...(prev.allowedChannels || []), channelId]
+                            : prev.allowedChannels?.filter(id => id !== channelId) || []
+                        }));
+                      }}
+                    />
+                    <span className="text-gray-600">#{channel.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-center">
+              <span className="text-sm text-gray-500">Channel permissions not available for Direct Message commands</span>
+            </div>
+          )}
+          
+          {/* Role Permissions - Always show */}
           <div>
             <label className="block text-sm font-medium mb-2">Allowed Roles</label>
             <div className={`overflow-y-auto border rounded-lg p-3 space-y-2 ${compact ? 'max-h-32' : 'max-h-40'}`}>
               <label className="flex items-center gap-2 text-sm font-medium">
                 <input
                   type="checkbox"
-                  checked={formData.allowedRoles?.length === 0}
+                  checked={formData.allowedRoles !== undefined && formData.allowedRoles.length === 0}
                   onChange={(e) => {
                     if (e.target.checked) {
                       setFormData(prev => ({ ...prev, allowedRoles: [] }));
+                    } else {
+                      setFormData(prev => ({ ...prev, allowedRoles: undefined }));
                     }
                   }}
                 />
                 👥 Everyone
               </label>
+              
+
+              
               {roles.map((role) => (
                 <label key={role.roleId} className="flex items-center gap-2 text-sm">
                   <input
@@ -604,6 +655,16 @@ export default function CommandEditor({ command, channels, roles, onSave, onCanc
                 </label>
               ))}
             </div>
+            
+            {/* Subtle warning when @everyone is selected (outside the dropdown) */}
+            {((formData.allowedRoles !== undefined && formData.allowedRoles.length === 0) || roles.some(role => role.name === '@everyone' && formData.allowedRoles?.includes(role.roleId))) && (
+              <div className="mt-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center gap-1">
+                <svg className="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>Security note: @everyone access allows any user to use this command</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
