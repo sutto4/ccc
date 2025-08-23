@@ -113,3 +113,4 @@ export async function hasDefaultFeaturesSetup(guildId: string): Promise<boolean>
     return false;
   }
 }
+

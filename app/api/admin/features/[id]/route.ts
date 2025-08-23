@@ -89,3 +89,4 @@ export const DELETE = withAuth(async (_req, { params }, auth) => {
     }, { status: 500 });
   }
 });
+

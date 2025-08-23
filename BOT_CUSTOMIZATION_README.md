@@ -142,3 +142,4 @@ For issues or questions about Bot Customization:
 2. Review bot logs for error messages
 3. Verify database table exists and has correct schema
 4. Ensure bot has proper Discord permissions
+

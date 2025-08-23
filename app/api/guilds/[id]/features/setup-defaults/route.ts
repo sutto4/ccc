@@ -84,3 +84,4 @@ export const POST = withAuth(async (_req, { params }, auth) => {
     }, { status: 500 });
   }
 });
+

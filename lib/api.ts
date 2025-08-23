@@ -197,6 +197,17 @@ export async function fetchRoles(guildId: string, accessToken?: string): Promise
   return []
 }
 
+export async function fetchChannels(guildId: string, accessToken?: string): Promise<{ id: string; name: string; type: number }[]> {
+  const headers: Record<string, string> = {}
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+  
+  const res = await j<any>(`/guilds/${guildId}/channels`, { headers })
+  
+  if (res && Array.isArray(res.channels)) return res.channels
+  if (Array.isArray(res)) return res
+  return []
+}
+
 export const fetchMembersLegacy = (guildId: string, accessToken?: string) => {
   const headers: Record<string, string> = {}
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
