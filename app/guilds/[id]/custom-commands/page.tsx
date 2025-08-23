@@ -236,14 +236,6 @@ export default function CustomCommandsPage() {
           </div>
 
           {/* Editor */}
-          <div className="rounded-xl border p-4 bg-card space-y-4 flex-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Settings className="w-4 h-4"/> Configure your custom command.
-            </div>
-            
-            {/* Basic command information will be handled by CommandEditor below */}
-          </div>
-          
           <CommandEditor
             command={editingCommand}
             channels={channels}
