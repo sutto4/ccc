@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Bot, Shield, Users, Zap, Crown, CheckCircle, ArrowRight, Play, Sparkles, Rocket } from "lucide-react";
@@ -12,15 +12,62 @@ export default function Page() {
   const router = useRouter();
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   
-  // If user is authenticated, redirect to My Servers
-  useEffect(() => {
-    if (session && status === "authenticated") {
-      router.push('/guilds');
-    }
-  }, [session, status, router]);
+  // Remove automatic redirect - allow users to stay on home page even when logged in
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: "/" });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-black">
+      {/* Navigation Header */}
+      <nav className="absolute top-0 left-0 right-0 z-50 p-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img
+              src="/brand/sh-logo.png"
+              alt="ServerMate"
+              className="h-8 w-auto object-contain"
+            />
+            <span className="text-white font-semibold text-lg">ServerMate</span>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {session ? (
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/guilds"
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
+                  My Servers
+                </Link>
+                {(session.role === "admin" || session.role === "owner") && (
+                  <Link
+                    href="/admin"
+                    className="text-gray-300 hover:text-white transition-colors"
+                  >
+                    Admin
+                  </Link>
+                )}
+                <button
+                  onClick={handleSignOut}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setSignInModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors font-medium"
+              >
+                Login
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-emerald-600/10"></div>
@@ -49,14 +96,27 @@ export default function Page() {
             </p>
         
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <button
-                onClick={() => setSignInModalOpen(true)}
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-              >
-                <Rocket className="h-5 w-5" />
-                Get Started Free
-                <ArrowRight className="h-5 w-5" />
-              </button>
+              {session ? (
+                // Logged in user - show My Servers button
+                <Link
+                  href="/guilds"
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
+                >
+                  <Shield className="h-5 w-5" />
+                  My Servers
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              ) : (
+                // Not logged in - show Get Started button
+                <button
+                  onClick={() => setSignInModalOpen(true)}
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
+                >
+                  <Rocket className="h-5 w-5" />
+                  Get Started Free
+                  <ArrowRight className="h-5 w-5" />
+                </button>
+              )}
               
               <Link
                 href="#features"
