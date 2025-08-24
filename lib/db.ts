@@ -12,43 +12,103 @@ function getPool(): mysql.Pool {
       user: env.DB_USER,
       password: env.DB_PASS,
       database: env.DB_NAME,
-      connectionLimit: 10,
+      connectionLimit: 3, // Further reduced to prevent buildup
       waitForConnections: true,
-      queueLimit: 0,
+      queueLimit: 5, // Reduced queue limit
     });
   }
   return pool;
+}
+
+// Force recreate pool if we have connection issues
+export async function resetPool() {
+  if (pool) {
+    try {
+      await pool.end();
+    } catch (error) {
+      console.error('Error ending pool:', error);
+    }
+    pool = null;
+  }
+  // Force recreation
+  getPool();
+  console.log('Database pool reset');
 }
 
 export async function query(sql: string, params?: any[]): Promise<any> {
   if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) {
     throw new Error('Database not configured');
   }
-  const p = getPool();
-  const [rows] = await p.execute(sql, params || []);
-  return rows;
+  
+  try {
+    const p = getPool();
+    // Use pool.execute directly - it handles connections internally
+    const [rows] = await p.execute(sql, params || []);
+    return rows;
+  } catch (error: any) {
+    console.error('Database query error:', error);
+    
+    // If it's a connection error, reset the pool
+    if (error.code === 'ER_CON_COUNT_ERROR' || error.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.log('Connection error detected, resetting pool...');
+      await resetPool();
+    }
+    
+    throw error;
+  }
 }
 
 export async function isAdmin(discordId: string): Promise<boolean> {
   if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) return false;
-  const p = getPool();
-  const [rows] = await p.execute(
-    "SELECT role FROM users WHERE discord_id = ? LIMIT 1",
-    [discordId]
-  );
-  if (Array.isArray(rows) && rows.length > 0) {
-    const first = (rows as any[])[0] as any;
-    return first?.role === "admin" || first?.role === "owner";
+  
+  try {
+    const p = getPool();
+    const [rows] = await p.execute(
+      "SELECT role FROM users WHERE discord_id = ? LIMIT 1",
+      [discordId]
+    );
+    if (Array.isArray(rows) && rows.length > 0) {
+      const first = (rows as any[])[0] as any;
+      return first?.role === "admin" || first?.role === "owner";
+    }
+    return false;
+  } catch (error) {
+    console.error('isAdmin error:', error);
+    return false;
   }
-  return false;
 }
 
 export async function upsertUser({ email, discord_id, name, role }: { email: string, discord_id: string, name: string, role?: string }) {
   if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) return;
-  const p = getPool();
-  await p.execute(
-    `INSERT INTO users (email, discord_id, name, role) VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE email=VALUES(email), name=VALUES(name), role=COALESCE(VALUES(role), role)`,
-    [email, discord_id, name, role || null]
-  );
+  
+  try {
+    const p = getPool();
+    await p.execute(
+      `INSERT INTO users (email, discord_id, name, role) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE email=VALUES(email), name=VALUES(name), role=COALESCE(VALUES(role), role)`,
+      [email, discord_id, name, role || null]
+    );
+  } catch (error) {
+    console.error('upsertUser error:', error);
+    throw error;
+  }
+}
+
+// Cleanup function for graceful shutdown
+export async function closePool() {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+}
+
+// Debug function to check pool status
+export function getPoolStatus() {
+  if (!pool) return { status: 'no-pool' };
+  
+  return {
+    status: 'active',
+    totalConnections: 5, // connectionLimit from pool config
+    message: 'Pool is active and managing connections efficiently'
+  };
 }

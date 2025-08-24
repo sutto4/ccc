@@ -44,12 +44,23 @@ export async function GET(request: NextRequest) {
       SELECT 
         guild_id,
         guild_name,
-        premium
+        premium,
+        created_at
       FROM guilds 
       LIMIT 100
     `);
 
     console.log('Guilds query result:', guilds);
+
+    // Debug: Check what created_at values look like
+    if (guilds.length > 0) {
+      console.log('Sample created_at values:', guilds.slice(0, 3).map((g: any) => ({
+        guild_id: g.guild_id,
+        created_at: g.created_at,
+        created_at_type: typeof g.created_at,
+        parsed_date: g.created_at ? new Date(g.created_at) : null
+      })));
+    }
 
     // Transform the data to match the dashboard interface
     const transformedGuilds = guilds.map((guild: any) => ({
@@ -59,7 +70,7 @@ export async function GET(request: NextRequest) {
       member_count: 0, // We'll add this later when we have member count data
       premium: Boolean(guild.premium),
       status: 'active', // Default to active for now
-      joined_at: new Date().toISOString(), // Default to now for now
+      created_at: guild.created_at || new Date().toISOString(), // Use actual database value
       features: [] // We'll add features later
     }));
 

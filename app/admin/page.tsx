@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Info
 } from "lucide-react";
+import PremiumModal from "@/components/premium-modal";
 
 interface Guild {
   id: string;
@@ -31,7 +32,7 @@ interface Guild {
   member_count: number;
   premium: boolean;
   status: string;
-  joined_at: string;
+  created_at: string;
   features: string[];
 }
 
@@ -59,14 +60,6 @@ interface HealthStatus {
     bot: { status: string; message: string };
     api: { status: string; message: string };
   };
-}
-
-interface ActivityItem {
-  id: string;
-  type: "server_joined" | "server_left" | "premium_upgrade" | "command_used" | "error";
-  message: string;
-  timestamp: string;
-  severity: "info" | "warning" | "error";
 }
 
 export default function AdminDashboard() {
@@ -97,16 +90,19 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
-  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [testModalOpen, setTestModalOpen] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    // Remove automatic refresh to prevent connection issues
+    // const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
+    // return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
     try {
+      setError(null);
       const [guildsRes, statsRes, healthRes] = await Promise.all([
         fetch('/api/admin/guilds'),
         fetch('/api/admin/stats'),
@@ -119,108 +115,144 @@ export default function AdminDashboard() {
         
         // Calculate stats from guilds data
         const now = new Date();
-        const newServers24h = guildsData.filter((g: Guild) => {
-          const joinedAt = new Date(g.joined_at);
-          return (now.getTime() - joinedAt.getTime()) <= 24 * 60 * 60 * 1000;
-        }).length;
+        const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000);
         
         const newServers48h = guildsData.filter((g: Guild) => {
-          const joinedAt = new Date(g.joined_at);
-          return (now.getTime() - joinedAt.getTime()) <= 48 * 60 * 60 * 1000;
+          const createdAt = new Date(g.created_at);
+          return createdAt.getTime() > cutoff48h;
         }).length;
 
         setStats({
           totalServers: guildsData.length,
-          totalUsers: guildsData.reduce((sum: number, g: Guild) => sum + (g.member_count || 0), 0),
-          newServers24h,
+          totalUsers: 0, // Will be set from stats API
+          newServers24h: newServers48h, // Keep name for stats but use 48h value
           newServers48h,
           activeServers: guildsData.filter((g: Guild) => g.status === 'active').length,
           premiumServers: guildsData.filter((g: Guild) => g.premium).length,
           totalCommands: 0, // Will be fetched separately
           totalEmbeds: 0, // Will be fetched separately
           conversionRate: guildsData.length > 0 ? ((guildsData.filter((g: Guild) => g.premium).length / guildsData.length) * 100).toFixed(1) : "0",
-          averageUsersPerServer: guildsData.length > 0 ? Math.round(guildsData.reduce((sum: number, g: Guild) => sum + (g.member_count || 0), 0) / guildsData.length) : 0
+          averageUsersPerServer: 0 // Will be calculated from API stats
         });
+      } else {
+        const errorData = await guildsRes.json().catch(() => ({}));
+        console.error('Guilds API error:', errorData);
+        setError(`Failed to load servers: ${errorData.error || 'Unknown error'}`);
       }
 
       if (statsRes.ok) {
         const statsData = await statsRes.json();
-        setStats(prev => ({ ...prev, ...statsData }));
+        console.log('Stats data received:', statsData);
+        setStats(prev => ({ 
+          ...prev, 
+          ...statsData,
+          // Ensure totalUsers comes from the API, not calculated from guilds
+          totalUsers: statsData.totalUsers || 0,
+          // Calculate average users per server from API data
+          averageUsersPerServer: statsData.totalUsers && statsData.totalServers ? 
+            Math.round(statsData.totalUsers / statsData.totalServers) : 0
+        }));
+      } else {
+        const errorData = await statsRes.json().catch(() => ({}));
+        console.error('Stats API error:', errorData);
+        setError(`Failed to load stats: ${errorData.error || 'Unknown error'}`);
       }
 
       if (healthRes.ok) {
         const healthData = await healthRes.json();
         setHealth(healthData);
+      } else {
+        const errorData = await healthRes.json().catch(() => ({}));
+        console.error('Health API error:', errorData);
+        setError(`Failed to load health status: ${errorData.error || 'Unknown error'}`);
       }
-
-      // Generate mock activity feed (replace with real data later)
-      generateActivityFeed();
 
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
     }
   };
 
-  const generateActivityFeed = () => {
-    const mockActivities: ActivityItem[] = [
-      {
-        id: '1',
-        type: 'server_joined',
-        message: 'New server "Gaming Community" joined',
-        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-        severity: 'info'
-      },
-      {
-        id: '2',
-        type: 'premium_upgrade',
-        message: 'Server "Tech Hub" upgraded to Premium',
-        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        severity: 'info'
-      },
-      {
-        id: '3',
-        type: 'command_used',
-        message: 'High command usage detected on "Music Bot Server"',
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        severity: 'warning'
-      },
-      {
-        id: '4',
-        type: 'server_left',
-        message: 'Server "Test Server" removed the bot',
-        timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-        severity: 'warning'
-      }
-    ];
-    setActivityFeed(mockActivities);
-  };
-
   const getFilteredGuilds = () => {
     const now = new Date();
-    const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000);
+    const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000); // Use 48 hours consistently
     
     switch (filter) {
       case "new":
-        return guilds.filter(g => new Date(g.joined_at).getTime() > cutoff48h);
+        return guilds.filter(g => {
+          const createdAt = new Date(g.created_at);
+          return createdAt.getTime() > cutoff48h;
+        });
       case "existing":
-        return guilds.filter(g => new Date(g.joined_at).getTime() <= cutoff48h);
+        return guilds.filter(g => {
+          const createdAt = new Date(g.created_at);
+          return createdAt.getTime() <= cutoff48h;
+        });
       default:
         return guilds;
     }
   };
 
+  // Calculate actual counts for the filter buttons
+  const getActualFilterCounts = () => {
+    const now = new Date();
+    const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000);
+    
+    // Debug: Log the first few guilds to see their data structure
+    console.log('Sample guilds data:', guilds.slice(0, 3).map(g => ({
+      id: g.id,
+      name: g.name,
+      created_at: g.created_at,
+      created_at_type: typeof g.created_at,
+      parsed_date: new Date(g.created_at),
+      is_valid_date: !isNaN(new Date(g.created_at).getTime())
+    })));
+    
+    const newCount = guilds.filter(g => {
+      const createdAt = new Date(g.created_at);
+      const isValidDate = !isNaN(createdAt.getTime());
+      if (!isValidDate) {
+        console.warn('Invalid date for guild:', g.id, g.created_at);
+        return false; // Skip invalid dates
+      }
+      return createdAt.getTime() > cutoff48h;
+    }).length;
+    
+    const existingCount = guilds.filter(g => {
+      const createdAt = new Date(g.created_at);
+      const isValidDate = !isNaN(createdAt.getTime());
+      if (!isValidDate) {
+        return false; // Skip invalid dates
+      }
+      return createdAt.getTime() <= cutoff48h;
+    }).length;
+    
+    // Debug logging
+    console.log('Filter counts:', { 
+      total: guilds.length, 
+      new: newCount, 
+      existing: existingCount,
+      cutoff48h: new Date(cutoff48h).toISOString(),
+      now: now.toISOString()
+    });
+    
+    return { newCount, existingCount };
+  };
+
+  const { newCount, existingCount } = getActualFilterCounts();
+
   const getHealthIcon = (status: string) => {
     switch (status) {
       case "healthy":
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
       case "warning":
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+        return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       case "error":
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
     }
   };
 
@@ -234,23 +266,6 @@ export default function AdminDashboard() {
         return "text-red-600 bg-red-50 border-red-200";
       default:
         return "text-green-600 bg-green-50 border-green-200";
-    }
-  };
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "server_joined":
-        return <Server className="w-4 h-4 text-green-500" />;
-      case "server_left":
-        return <Server className="w-4 h-4 text-red-500" />;
-      case "premium_upgrade":
-        return <Shield className="w-4 h-4 text-purple-500" />;
-      case "command_used":
-        return <MessageSquare className="w-4 h-4 text-blue-500" />;
-      case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return <Info className="w-4 h-4 text-gray-500" />;
     }
   };
 
@@ -293,20 +308,85 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
+        {/* Header with Health Status */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
             <p className="text-gray-600 mt-1">Monitor your bot's performance and manage servers</p>
           </div>
-          <button
-            onClick={fetchDashboardData}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Compact Health Status */}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${getHealthColor(health.overall)}`}>
+              {getHealthIcon(health.overall)}
+              <span className="font-medium capitalize">{health.overall}</span>
+            </div>
+            <button
+              onClick={fetchDashboardData}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/admin/reset-db', { method: 'POST' });
+                  if (response.ok) {
+                    // Wait a moment then refresh data
+                    setTimeout(fetchDashboardData, 1000);
+                  }
+                } catch (error) {
+                  console.error('Failed to reset database:', error);
+                }
+              }}
+              className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+              title="Reset database connections if you're having connection issues"
+            >
+              <Database className="w-4 h-4" />
+              Reset DB
+            </button>
+            <a
+              href="https://discord.gg/nrSjZByddw"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-[#5865F2] text-white px-4 py-2 rounded-lg hover:bg-[#4752C4] transition-colors"
+              title="Join our Discord server for support and updates"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0786-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0786.0105c.1202.099.2462.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.0189 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1568 2.4189Z"/>
+              </svg>
+              Discord
+            </a>
+            <button
+              onClick={() => setTestModalOpen(true)}
+              className="flex items-center gap-2 bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors"
+              title="Test the premium modal functionality"
+            >
+              🧪 Test Modal
+            </button>
+          </div>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Connection Error</h3>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <div className="mt-3">
+                  <button
+                    onClick={fetchDashboardData}
+                    className="text-sm text-red-800 hover:text-red-900 underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -322,7 +402,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 flex items-center text-sm text-gray-500">
               <TrendingUp className="w-4 h-4 mr-1" />
-              +{stats.newServers24h} in 24h
+              +{stats.newServers48h} in 48h
             </div>
           </div>
 
@@ -375,52 +455,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Health Status and Activity Feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Health Status */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">System Health</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`flex items-center p-4 rounded-lg border ${getHealthColor(health.bot)}`}>
-                {getHealthIcon(health.bot)}
-                <div className="ml-3">
-                  <p className="font-medium">Bot Status</p>
-                  <p className="text-sm capitalize">{health.bot}</p>
-                </div>
-              </div>
-              <div className={`flex items-center p-4 rounded-lg border ${getHealthColor(health.database)}`}>
-                {getHealthIcon(health.database)}
-                <div className="ml-3">
-                  <p className="font-medium">Database</p>
-                  <p className="text-sm capitalize">{health.database}</p>
-                </div>
-              </div>
-              <div className={`flex items-center p-4 rounded-lg border ${getHealthColor(health.api)}`}>
-                {getHealthIcon(health.api)}
-                <div className="ml-3">
-                  <p className="text-sm text-gray-500">Last checked: {formatDate(health.lastCheck)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Activity Feed */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
-            <div className="space-y-3">
-              {activityFeed.slice(0, 5).map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
-                  {getActivityIcon(activity.type)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">{activity.message}</p>
-                    <p className="text-xs text-gray-500">{formatDate(activity.timestamp)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Performance Metrics */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Performance Metrics</h2>
@@ -468,7 +502,7 @@ export default function AdminDashboard() {
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  New ({stats.newServers48h})
+                  New ({newCount})
                 </button>
                 <button
                   onClick={() => setFilter("existing")}
@@ -478,7 +512,7 @@ export default function AdminDashboard() {
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  Existing ({guilds.length - stats.newServers48h})
+                  Existing ({existingCount})
                 </button>
               </div>
             </div>
@@ -491,7 +525,7 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Features</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -542,7 +576,7 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(guild.joined_at)}
+                      {formatDate(guild.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex flex-wrap gap-1">
@@ -563,15 +597,27 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <button className="text-blue-600 hover:text-blue-900" title="Server Settings">
+                        <a 
+                          href={`/admin/guilds/${guild.id}`}
+                          className="text-blue-600 hover:text-blue-900 transition-colors"
+                          title="Admin Settings - Manage guild features and overrides"
+                        >
                           <Settings className="w-4 h-4" />
-                        </button>
-                        <button className="text-green-600 hover:text-green-900" title="View Commands">
+                        </a>
+                        <a 
+                          href={`/guilds/${guild.id}/settings`}
+                          className="text-green-600 hover:text-green-900 transition-colors"
+                          title="Guild Settings - Server configuration and preferences"
+                        >
+                          <Shield className="w-4 h-4" />
+                        </a>
+                        <a 
+                          href={`/guilds/${guild.id}/custom-commands`}
+                          className="text-purple-600 hover:text-purple-900 transition-colors"
+                          title="Custom Commands - Create and manage bot commands"
+                        >
                           <MessageSquare className="w-4 h-4" />
-                        </button>
-                        <button className="text-purple-600 hover:text-purple-900" title="Server Dashboard">
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
+                        </a>
                       </div>
                     </td>
                   </tr>
@@ -584,38 +630,57 @@ export default function AdminDashboard() {
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <Bot className="w-5 h-5 text-blue-600 mr-3" />
-              <div className="text-left">
-                <p className="font-medium text-gray-900">Bot Status</p>
-                <p className="text-sm text-gray-500">Check bot health</p>
-              </div>
-            </button>
-            <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <a
+              href="/api/admin/test-db"
+              target="_blank"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
               <Database className="w-5 h-5 text-green-600 mr-3" />
               <div className="text-left">
-                <p className="font-medium text-gray-900">Database</p>
-                <p className="text-sm text-gray-500">View stats</p>
+                <p className="font-medium text-gray-900">Test Database</p>
+                <p className="text-sm text-gray-500">Check DB connectivity</p>
               </div>
-            </button>
-            <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <Globe className="w-5 h-5 text-purple-600 mr-3" />
+            </a>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/admin/reset-db', { method: 'POST' });
+                  if (response.ok) {
+                    setTimeout(fetchDashboardData, 1000);
+                  }
+                } catch (error) {
+                  console.error('Failed to reset database:', error);
+                }
+              }}
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-5 h-5 text-blue-600 mr-3" />
               <div className="text-left">
-                <p className="font-medium text-gray-900">API Status</p>
-                <p className="text-sm text-gray-500">Monitor endpoints</p>
+                <p className="font-medium text-gray-900">Reset DB Pool</p>
+                <p className="text-sm text-gray-500">Clear connections</p>
               </div>
             </button>
-            <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <BarChart3 className="w-5 h-5 text-yellow-600 mr-3" />
+            <a
+              href="https://discord.gg/nrSjZByddw"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5 text-[#5865F2] mr-3" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0786-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0786.0105c.1202.099.2462.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.0189 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1568 2.4189Z"/>
+              </svg>
               <div className="text-left">
-                <p className="font-medium text-gray-900">Analytics</p>
-                <p className="text-sm text-gray-500">View detailed metrics</p>
+                <p className="font-medium text-gray-900">Discord Support</p>
+                <p className="text-sm text-gray-500">Get help & updates</p>
               </div>
-            </button>
+            </a>
           </div>
         </div>
       </div>
+      
+      {/* Test Premium Modal */}
+      <PremiumModal open={testModalOpen} onOpenChange={setTestModalOpen} />
     </div>
   );
 }
