@@ -111,7 +111,7 @@ export default function BotCustomisationPage() {
                 maxLength={32}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                This will replace "ServerHub Bot" in all bot messages. Leave empty to use default.
+                This will replace "ServerMate Bot" in all bot messages. Leave empty to use default.
               </p>
             </div>
 
@@ -174,7 +174,7 @@ export default function BotCustomisationPage() {
                   <div className="flex-1 min-w-0">
                     <div className="mb-1 text-sm">
                       <span className="font-semibold">
-                        {botName.trim() || "ServerHub Bot"}
+                        {botName.trim() || "ServerMate Bot"}
                       </span>
                       <span className="ml-2 text-xs text-muted-foreground">
                         {new Date().toLocaleTimeString()}

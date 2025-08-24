@@ -17,7 +17,7 @@ export default function Topbar() {
       <div className="flex items-center gap-2 md:gap-3">
         <img
           src={broken ? "/placeholder-logo.svg" : "/brand/sm-light.png"}
-          alt="ServerHub"
+          alt="ServerMate"
           className="h-12 md:h-18 w-auto object-contain"
           onError={() => setBroken(true)}
         />

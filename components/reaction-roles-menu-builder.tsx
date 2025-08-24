@@ -162,14 +162,14 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
       };
       if (typeof window !== 'undefined') {
         // Debug client-side payload
-        try { console.debug('[ServerHub] publish-menu payload', body); } catch {}
+        try { console.debug('[ServerMate] publish-menu payload', body); } catch {}
       }
       const res = await fetch(`/api/guilds/${guildId}/reaction-roles/publish-menu`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
       });
       const data = await res.json().catch(() => ({}));
       if (typeof window !== 'undefined') {
-        try { console.debug('[ServerHub] publish-menu response', res.status, data); } catch {}
+        try { console.debug('[ServerMate] publish-menu response', res.status, data); } catch {}
       }
       if (!res.ok) {
         setPublishMsg(data?.error || `Failed (${res.status})`);
@@ -484,7 +484,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
                     <div className="min-w-0 flex-1">
                       {/* Username + timestamp */}
                       <div className="mb-1 text-sm flex items-center gap-3">
-                        <span className="font-semibold">{customBotName || "ServerHub Bot"}</span>
+                        <span className="font-semibold">{customBotName || "ServerMate Bot"}</span>
                         {showTimestamp && (
                           <span className="ml-2 text-xs text-muted-foreground">{new Date().toLocaleTimeString()}</span>
                         )}

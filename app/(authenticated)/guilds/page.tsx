@@ -42,7 +42,7 @@ export default async function GuildsPage() {
                   <Bot className="h-8 w-8 text-white" />
                 </div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                  Welcome to ServerHub!
+                  Welcome to ServerMate!
                 </h2>
                 <p className="text-lg text-gray-600 mb-8">
                   You haven't added any Discord servers yet. Let's get you started with powerful server management tools.
@@ -82,7 +82,7 @@ export default async function GuildsPage() {
                   <Star className="h-5 w-5 text-yellow-500" />
                 </div>
                 <p className="text-gray-700 mb-4">
-                  To add your first server, you'll need to invite the ServerHub bot to your Discord server.
+                  To add your first server, you'll need to invite the ServerMate bot to your Discord server.
                 </p>
                 <div className="flex justify-center">
                   <Link

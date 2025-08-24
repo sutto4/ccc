@@ -1,5 +1,31 @@
 # ServerMate.gg TODO List
 
+- Leave Server option in Guild Settings
+- Remove bot from server option - Admin Settings
+- Update TOS to cover right to remove
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 🐛 Critical Bugs & Issues
 
 ### Stripe Integration

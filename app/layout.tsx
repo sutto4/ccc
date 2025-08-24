@@ -7,8 +7,8 @@ import ConsoleShell from "@/components/console-shell";
 const fontSans = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "ServerHub - Discord Server Management",
-  description: "ServerHub: Manage roles, users, and features with powerful tools designed for modern Discord communities.",
+  title: "ServerMate - Discord Server Management",
+  description: "ServerMate: Manage roles, users, and features with powerful tools designed for modern Discord communities.",
   icons: {
     icon: '/brand/favicon.ico',
   },
