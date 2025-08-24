@@ -9,6 +9,9 @@ const fontSans = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap" });
 export const metadata: Metadata = {
   title: "ServerHub - Discord Server Management",
   description: "ServerHub: Manage roles, users, and features with powerful tools designed for modern Discord communities.",
+  icons: {
+    icon: '/brand/favicon.ico',
+  },
 };
 
 export default function RootLayout({
