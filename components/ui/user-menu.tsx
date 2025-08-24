@@ -66,13 +66,6 @@ export default function UserMenu() {
             </div>
           </div>
           <div className="my-1 h-px bg-[hsl(var(--border))]" />
-          <a href="/profile" className="block rounded-md px-3 py-2 text-sm hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] transition-colors duration-200" role="menuitem">
-            My Profile
-          </a>
-          <a href="/settings" className="block rounded-md px-3 py-2 text-sm hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] transition-colors duration-200" role="menuitem">
-            Settings
-          </a>
-          <div className="my-1 h-px bg-[hsl(var(--border))]" />
           <button
             onClick={() => signOut({ callbackUrl: "/guilds" })}
             className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-red-500/10 hover:text-red-600 transition-colors duration-200"
