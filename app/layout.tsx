@@ -21,15 +21,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Conditional CSP for development */}
-        {process.env.NODE_ENV === "development" && (
-          <meta
-            httpEquiv="Content-Security-Policy"
-            content="script-src 'self' 'unsafe-eval' 'unsafe-inline';"
-          />
-        )}
-      </head>
       <body className={`${fontSans.className} min-h-screen bg-background text-foreground antialiased`}>
         <Providers>
           {children}
