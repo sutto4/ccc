@@ -1,7 +1,7 @@
 "use client";
 
 import { Crown, Check, Star, Zap, Shield, Users, Bot, Command, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ServerSelectionModal from "@/components/ui/server-selection-modal";
 
 interface Plan {
@@ -90,6 +90,9 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
   const [isLoading, setIsLoading] = useState(false);
   const [showServerSelection, setShowServerSelection] = useState(false);
   const [selectedGuildIds, setSelectedGuildIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"subscribe" | "manage">("subscribe");
+  const [existingSubscriptions, setExistingSubscriptions] = useState<any[]>([]);
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
 
   const handleSubscribe = async (planId: string) => {
     if (planId === 'network') {
@@ -146,6 +149,31 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
 
   const selectedPlanData = plans.find(p => p.id === selectedPlan);
 
+  // Fetch existing subscriptions when manage tab is active
+  useEffect(() => {
+    if (activeTab === "manage") {
+      fetchExistingSubscriptions();
+    }
+  }, [activeTab]);
+
+  const fetchExistingSubscriptions = async () => {
+    setIsLoadingSubscriptions(true);
+    try {
+      // This would need to be implemented - fetch user's active subscriptions
+      // For now, we'll show a placeholder
+      setExistingSubscriptions([]);
+    } catch (error) {
+      console.error('Failed to fetch subscriptions:', error);
+    } finally {
+      setIsLoadingSubscriptions(false);
+    }
+  };
+
+  const handleManageSubscription = async (subscriptionId: string, action: 'add' | 'remove', guildId?: string) => {
+    // This would handle adding/removing servers from existing subscriptions
+    console.log('Manage subscription:', { subscriptionId, action, guildId });
+  };
+
     if (!open) return null;
 
   return (
@@ -184,6 +212,32 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <div className="flex">
+              <button
+                onClick={() => setActiveTab("subscribe")}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === "subscribe"
+                    ? "text-yellow-600 border-b-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                }`}
+              >
+                Subscribe
+              </button>
+              <button
+                onClick={() => setActiveTab("manage")}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === "manage"
+                    ? "text-yellow-600 border-b-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                }`}
+              >
+                Manage Subscription
+              </button>
             </div>
           </div>
 

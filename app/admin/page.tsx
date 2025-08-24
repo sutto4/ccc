@@ -518,6 +518,29 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Guild Status Information */}
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-1">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="text-sm text-blue-800">
+                <div className="font-medium mb-1">Guild Status System</div>
+                <div className="space-y-1 text-blue-700">
+                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 mr-2">Active</span> Server is connected and accessible</div>
+                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 mr-2">Left</span> Bot was removed from server (hidden from users)</div>
+                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 mr-2">Null</span> No status set (treated as active)</div>
+                </div>
+                <div className="mt-2 text-blue-600">
+                  <strong>Note:</strong> When a server rejoins the bot, its status is automatically reset to 'active'. 
+                  Use the "Check & Fix All" button below to fix any stuck statuses.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -618,6 +641,70 @@ export default function AdminDashboard() {
                         >
                           <MessageSquare className="w-4 h-4" />
                         </a>
+                        {guild.premium && (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Are you sure you want to remove premium access from guild ${guild.id}?`)) {
+                                try {
+                                  const response = await fetch('/api/admin/cleanup-premium', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ guildId: guild.id })
+                                  });
+                                  if (response.ok) {
+                                    const result = await response.json();
+                                    alert(`Premium access cleaned up successfully!\n\nBefore: ${JSON.stringify(result.before, null, 2)}\nAfter: ${JSON.stringify(result.after, null, 2)}\nFeatures disabled: ${result.featuresDisabled}`);
+                                    fetchDashboardData(); // Refresh the dashboard
+                                  } else {
+                                    const error = await response.json();
+                                    alert(`Failed to cleanup premium access: ${error.error || 'Unknown error'}`);
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to cleanup premium access:', error);
+                                  alert('Failed to cleanup premium access. Check console for details.');
+                                }
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900 transition-colors"
+                            title="Remove premium access from this guild"
+                          >
+                            <Zap className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Status Fix Button - only show for 'left' status guilds */}
+                        {guild.status === 'left' && (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Are you sure you want to reset the status of guild ${guild.id} from 'left' to 'active'? This will make it visible again.`)) {
+                                try {
+                                  const response = await fetch('/api/admin/guilds/fix-status', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ 
+                                      guildId: guild.id, 
+                                      action: 'reset-left-status' 
+                                    })
+                                  });
+                                  if (response.ok) {
+                                    const result = await response.json();
+                                    alert(`Guild status fixed successfully!\n\n${result.message}`);
+                                    fetchDashboardData(); // Refresh the dashboard
+                                  } else {
+                                    const error = await response.json();
+                                    alert(`Failed to fix guild status: ${error.error || 'Unknown error'}`);
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to fix guild status:', error);
+                                  alert('Failed to fix guild status. Check console for details.');
+                                }
+                              }
+                            }}
+                            className="text-orange-600 hover:text-orange-900 transition-colors"
+                            title="Reset guild status from 'left' to 'active'"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -659,6 +746,120 @@ export default function AdminDashboard() {
               <div className="text-left">
                 <p className="font-medium text-gray-900">Reset DB Pool</p>
                 <p className="text-sm text-gray-500">Clear connections</p>
+              </div>
+            </button>
+            <button
+              onClick={async () => {
+                const guildId = prompt('Enter Guild ID to cleanup premium access:');
+                if (guildId && confirm(`Are you sure you want to remove premium access from guild ${guildId}?`)) {
+                  try {
+                    const response = await fetch('/api/admin/cleanup-premium', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ guildId })
+                    });
+                    if (response.ok) {
+                      const result = await response.json();
+                      alert(`Premium access cleaned up successfully!\n\nBefore: ${JSON.stringify(result.before, null, 2)}\nAfter: ${JSON.stringify(result.after, null, 2)}\nFeatures disabled: ${result.featuresDisabled}`);
+                      fetchDashboardData(); // Refresh the dashboard
+                    } else {
+                      const error = await response.json();
+                      alert(`Failed to cleanup premium access: ${error.error || 'Unknown error'}`);
+                    }
+                  } catch (error) {
+                    console.error('Failed to cleanup premium access:', error);
+                    alert('Failed to cleanup premium access. Check console for details.');
+                  }
+                }
+              }}
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <Zap className="w-5 h-5 text-red-600 mr-3" />
+              <div className="text-left">
+                <p className="font-medium text-gray-900">Cleanup Premium</p>
+                <p className="text-sm text-gray-500">Remove premium access</p>
+              </div>
+            </button>
+            <button
+              onClick={async () => {
+                const guildId = prompt('Enter Guild ID to fix status (reset from "left" to "active"):');
+                if (guildId && confirm(`Are you sure you want to reset the status of guild ${guildId} from 'left' to 'active'? This will make it visible again.`)) {
+                  try {
+                    const response = await fetch('/api/admin/guilds/fix-status', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        guildId, 
+                        action: 'reset-left-status' 
+                      })
+                    });
+                    if (response.ok) {
+                      const result = await response.json();
+                      alert(`Guild status fixed successfully!\n\n${result.message}`);
+                      fetchDashboardData(); // Refresh the dashboard
+                    } else {
+                      const error = await response.json();
+                      alert(`Failed to fix guild status: ${error.error || 'Unknown error'}`);
+                    }
+                  } catch (error) {
+                    console.error('Failed to fix guild status:', error);
+                    alert('Failed to fix guild status. Check console for details.');
+                  }
+                }
+              }}
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-5 h-5 text-orange-600 mr-3" />
+              <div className="text-left">
+                <p className="font-medium text-gray-900">Fix Guild Status</p>
+                <p className="text-sm text-gray-500">Reset 'left' to 'active'</p>
+              </div>
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  // First check current status
+                  const checkResponse = await fetch('/api/admin/guilds/check-status');
+                  if (checkResponse.ok) {
+                    const statusData = await checkResponse.json();
+                    const message = `Current Guild Status Summary:\n\n` +
+                      `Total Guilds: ${statusData.summary.totalGuilds}\n` +
+                      `Active: ${statusData.summary.totalActive}\n` +
+                      `Left: ${statusData.summary.totalLeft}\n\n` +
+                      `Left Guilds:\n${statusData.leftGuilds.map((g: any) => `- ${g.guild_name || g.guild_id} (${g.guild_id})`).join('\n')}\n\n` +
+                      `Would you like to fix all ${statusData.summary.totalLeft} guild(s) with 'left' status?`;
+                    
+                    if (confirm(message)) {
+                      const fixResponse = await fetch('/api/admin/guilds/check-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'fix-all-left' })
+                      });
+                      
+                      if (fixResponse.ok) {
+                        const result = await fixResponse.json();
+                        alert(`Bulk status fix completed!\n\n${result.message}`);
+                        fetchDashboardData(); // Refresh the dashboard
+                      } else {
+                        const error = await fixResponse.json();
+                        alert(`Failed to fix guild statuses: ${error.error || 'Unknown error'}`);
+                      }
+                    }
+                  } else {
+                    const error = await checkResponse.json();
+                    alert(`Failed to check guild statuses: ${error.error || 'Unknown error'}`);
+                  }
+                } catch (error) {
+                  console.error('Failed to check/fix guild statuses:', error);
+                  alert('Failed to check/fix guild statuses. Check console for details.');
+                }
+              }}
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <Database className="w-5 h-5 text-purple-600 mr-3" />
+              <div className="text-left">
+                <p className="font-medium text-gray-900">Check & Fix All</p>
+                <p className="text-sm text-gray-500">Bulk status fix</p>
               </div>
             </button>
             <a

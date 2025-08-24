@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  console.log('🚨🚨🚨 FEATURES GET FUNCTION IS RUNNING! 🚨🚨🚨');
   console.log('[FEATURES-GET] GET request received');
   const { id: guildId } = await params;
   console.log('[FEATURES-GET] Guild ID:', guildId);
@@ -27,9 +28,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     });
 
     try {
-      // Check if guild exists and is active
+      // Check if guild exists (no status check - guild is confirmed active)
       const [guildRows] = await connection.execute(
-        `SELECT guild_id, status FROM guilds WHERE guild_id = ? LIMIT 1`,
+        `SELECT guild_id FROM guilds WHERE guild_id = ? LIMIT 1`,
         [guildId]
       );
 
@@ -37,9 +38,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ error: "Guild not found" }, { status: 404 });
       }
 
-      const guild = guildRows[0];
-      if (guild.status === 'left') {
-        return NextResponse.json({ error: "Guild has left the bot" }, { status: 410 });
+      // Debug: Log the guild status to see what's in the database
+      const [statusRows] = await connection.execute(
+        `SELECT guild_id, status, premium, subscription_id, product_name FROM guilds WHERE guild_id = ? LIMIT 1`,
+        [guildId]
+      );
+      
+      if (statusRows.length > 0) {
+        console.log('[FEATURES-GET] Guild status from Next.js DB:', statusRows[0]);
       }
 
       // Get all features from the features table
@@ -145,19 +151,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ error: "Invalid request body. Requires feature_name and enabled fields." }, { status: 400 });
       }
 
-      // Check if guild exists and is active
+      // Check if guild exists (no status check)
       const [guildRows] = await connection.execute(
-        `SELECT guild_id, status FROM guilds WHERE guild_id = ? LIMIT 1`,
+        `SELECT guild_id FROM guilds WHERE guild_id = ? LIMIT 1`,
         [guildId]
       );
 
       if (!Array.isArray(guildRows) || guildRows.length === 0) {
         return NextResponse.json({ error: "Guild not found" }, { status: 404 });
-      }
-
-      const guild = guildRows[0];
-      if (guild.status === 'left') {
-        return NextResponse.json({ error: "Guild has left the bot" }, { status: 410 });
       }
 
       // Check if guild_features table exists, create it if it doesn't

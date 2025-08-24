@@ -111,33 +111,74 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Subscription ID required" }, { status: 400 });
     }
 
+    console.log(`Getting allocation for subscription ${subscriptionId} for user ${session.user.id}`);
+
+    // First, let's check ALL allocations for this subscription (for debugging)
+    const allAllocationsResult = await query(
+      "SELECT * FROM subscription_allocations WHERE subscription_id = ? AND user_id = ?",
+      [subscriptionId, session.user.id]
+    );
+    console.log(`All allocations for subscription ${subscriptionId}:`, allAllocationsResult);
+
     // Get current allocation for this subscription
     const allocationResult = await query(
-      "SELECT guild_id FROM subscription_allocations WHERE subscription_id = ? AND user_id = ? AND is_active = TRUE",
+      "SELECT guild_id FROM subscription_allocations WHERE subscription_id = ? AND user_id = ? AND is_active = 1",
       [subscriptionId, session.user.id]
     );
 
-    const allocatedGuildIds = allocationResult.map(row => row.guild_id);
+    console.log(`Active allocation result:`, allocationResult);
 
-    // Get subscription details
+    const allocatedGuildIds = allocationResult.map(row => row.guild_id);
+    console.log(`Allocated guild IDs:`, allocatedGuildIds);
+
+    // Get subscription details from subscription_limits
     const subscriptionResult = await query(
       "SELECT plan_type, max_servers, used_servers FROM subscription_limits WHERE subscription_id = ?",
       [subscriptionId]
     );
 
-    if (!subscriptionResult || subscriptionResult.length === 0) {
-      return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+    console.log(`Subscription limits result:`, subscriptionResult);
+
+    // If no limits data exists, try to determine from the subscription ID or provide defaults
+    let planType = 'unknown';
+    let maxServers = 1;
+    let usedServers = allocatedGuildIds.length;
+
+    if (subscriptionResult && subscriptionResult.length > 0) {
+      const subscription = subscriptionResult[0];
+      planType = subscription.plan_type || 'unknown';
+      maxServers = subscription.max_servers || 1;
+      usedServers = subscription.used_servers || allocatedGuildIds.length;
+    } else {
+      // Try to determine plan type from subscription ID or provide defaults
+      // This handles legacy subscriptions that don't have limits data yet
+      console.log(`No subscription limits found for ${subscriptionId}, using defaults`);
+      
+      // You could add logic here to determine plan type from subscription metadata
+      // For now, we'll use the allocation count as a hint
+      if (allocatedGuildIds.length > 3) {
+        planType = 'enterprise';
+        maxServers = 10;
+      } else if (allocatedGuildIds.length > 1) {
+        planType = 'squad';
+        maxServers = 3;
+      } else {
+        planType = 'solo';
+        maxServers = 1;
+      }
+      
+      usedServers = allocatedGuildIds.length;
     }
 
-    const subscription = subscriptionResult[0];
+    console.log(`Final allocation data:`, { planType, maxServers, usedServers, allocatedGuildIds });
 
     return NextResponse.json({
       success: true,
       allocation: {
         subscriptionId,
-        planType: subscription.plan_type,
-        maxServers: subscription.max_servers,
-        usedServers: subscription.used_servers,
+        planType,
+        maxServers,
+        usedServers,
         allocatedGuildIds
       }
     });

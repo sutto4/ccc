@@ -5,6 +5,9 @@
 - Update TOS to cover right to remove
 
 
+- Check logic on rolesync. - We need to be able to specific what specific servers that runs on
+- Probably do this when we set-up role sync for server groups
+
 
 
 

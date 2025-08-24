@@ -33,9 +33,28 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
         return true;
       }
 
+      // Check if user is the guild owner (owners always have access)
+      const botToken = env.DISCORD_BOT_TOKEN;
+      if (botToken) {
+        try {
+          const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
+            headers: { Authorization: `Bot ${botToken}` }
+          });
+          
+          if (guildResponse.ok) {
+            const guildData = await guildResponse.json();
+            if (guildData.owner_id === userId) {
+              console.log(`User ${userId} is confirmed owner of guild ${guildId}`);
+              return true;
+            }
+          }
+        } catch (error) {
+          console.log(`Could not verify guild ownership for user ${userId} in guild ${guildId}:`, error);
+        }
+      }
+
       // Check if user's current Discord roles grant access
       // ALWAYS validate against Discord API - no fallbacks
-      const botToken = env.DISCORD_BOT_TOKEN;
       if (!botToken) {
         console.error('Bot token not configured for role validation');
         return false; // Fail secure - no access without validation
@@ -66,7 +85,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
       const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
 
       if (hasAllowedRole) {
-        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter((id: string) => allowedRoleIds.includes(id)).join(', ')}`);
         return true;
       }
 
@@ -84,7 +103,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
 
 // GET: Fetch current role permissions for a guild
 export const GET = withAuth(async (
-  request: NextRequest,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
   auth: any
 ) => {
@@ -131,7 +150,7 @@ export const GET = withAuth(async (
 
 // PUT: Update role permissions for a guild
 export const PUT = withAuth(async (
-  request: NextRequest,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
   auth: any
 ) => {
@@ -149,7 +168,7 @@ export const PUT = withAuth(async (
       return NextResponse.json({ error: 'Access denied to this guild' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const { permissions } = body;
 
     console.log('Received request:', { guildId, permissionsCount: permissions?.length, permissions });

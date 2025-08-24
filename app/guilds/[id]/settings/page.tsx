@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder } from "lucide-react";
+import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles } from "@/lib/api";
 import type { Role } from "@/lib/api";
@@ -61,8 +61,27 @@ export default function GuildSettingsPage() {
     }
   });
 
+  // Server allocation state
+  const [serverAllocation, setServerAllocation] = useState({
+    subscriptionId: "",
+    planType: "",
+    maxServers: 0,
+    usedServers: 0,
+    allocatedGuildIds: [] as string[],
+    availableSlots: 0
+  });
+
+  // Guild names state for server allocation display
+  const [guildNames, setGuildNames] = useState<Record<string, string>>({});
+
   // Premium modal state
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
+  const [addServerModalOpen, setAddServerModalOpen] = useState(false);
+
+  // State for available servers to add
+  const [availableServers, setAvailableServers] = useState<{ id: string; name: string }[]>([]);
+  const [loadingAvailableServers, setLoadingAvailableServers] = useState(false);
+  const [addingServerId, setAddingServerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -77,6 +96,13 @@ export default function GuildSettingsPage() {
     }
   }, [status, session, guildId]);
 
+  // Load server allocation when subscription is loaded
+  useEffect(() => {
+    if (subscription.stripeSubscriptionId && subscription.status === 'active') {
+      loadServerAllocation();
+    }
+  }, [subscription.stripeSubscriptionId, subscription.status]);
+
   // Load permissions after roles are loaded
   useEffect(() => {
     if (roles.length > 0) {
@@ -89,9 +115,33 @@ export default function GuildSettingsPage() {
       const response = await fetch(`/api/guilds/${guildId}/subscription`);
       if (response.ok) {
         const data = await response.json();
+        console.log('Subscription data loaded:', data);
+        
+        // Map package names to display names
+        const getPackageDisplayName = (packageName: string) => {
+          switch (packageName?.toLowerCase()) {
+            case 'solo':
+              return 'Solo';
+            case 'squad':
+              return 'Squad';
+            case 'city':
+              return 'City';
+            case 'enterprise':
+              return 'Enterprise';
+            case 'free':
+            case 'none':
+            case '':
+            case null:
+            case undefined:
+              return 'Free';
+            default:
+              return packageName || 'Free';
+          }
+        };
+        
         setSubscription({
           status: data.status || "inactive",
-          package: data.package || "Free",
+          package: getPackageDisplayName(data.package),
           currentPeriodEnd: data.currentPeriodEnd || "",
           cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
           stripeCustomerId: data.stripeCustomerId || "",
@@ -134,6 +184,83 @@ export default function GuildSettingsPage() {
           name: ""
         }
       });
+    }
+  };
+
+  const loadServerAllocation = async () => {
+    if (!subscription.stripeSubscriptionId) {
+      console.log('No stripeSubscriptionId, skipping server allocation load');
+      return;
+    }
+    
+    try {
+      console.log('Loading server allocation for subscription:', subscription.stripeSubscriptionId);
+      const response = await fetch(`/api/subscriptions/allocate?subscriptionId=${subscription.stripeSubscriptionId}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Server allocation data:', data);
+        if (data.success) {
+          // Map plan type to display name
+          const getPlanTypeDisplayName = (planType: string) => {
+            switch (planType?.toLowerCase()) {
+              case 'solo':
+                return 'Solo';
+              case 'squad':
+                return 'Squad';
+              case 'city':
+                return 'City';
+              case 'enterprise':
+                return 'Enterprise';
+              default:
+                return planType || 'Unknown';
+            }
+          };
+          
+          setServerAllocation({
+            subscriptionId: data.allocation.subscriptionId,
+            planType: getPlanTypeDisplayName(data.allocation.planType),
+            maxServers: data.allocation.maxServers,
+            usedServers: data.allocation.usedServers,
+            allocatedGuildIds: data.allocation.allocatedGuildIds,
+            availableSlots: data.allocation.maxServers - data.allocation.usedServers
+          });
+          
+          // Fetch guild names for the allocated servers
+          if (data.allocation.allocatedGuildIds.length > 0) {
+            loadGuildNames(data.allocation.allocatedGuildIds);
+          }
+        }
+      } else {
+        console.log('Failed to load server allocation, status:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to load server allocation:', error);
+    }
+  };
+
+  const loadGuildNames = async (guildIds: string[]) => {
+    try {
+      const guildNamesMap: Record<string, string> = {};
+      
+      // Fetch guild names for each allocated server
+      for (const guildId of guildIds) {
+        try {
+          const response = await fetch(`/api/guilds/${guildId}`);
+          if (response.ok) {
+            const guildData = await response.json();
+            guildNamesMap[guildId] = guildData.name || `Server ${guildId}`;
+          } else {
+            guildNamesMap[guildId] = `Server ${guildId}`;
+          }
+        } catch (error) {
+          console.error(`Failed to fetch guild name for ${guildId}:`, error);
+          guildNamesMap[guildId] = `Server ${guildId}`;
+        }
+      }
+      
+      setGuildNames(guildNamesMap);
+    } catch (error) {
+      console.error('Failed to load guild names:', error);
     }
   };
 
@@ -286,6 +413,119 @@ export default function GuildSettingsPage() {
       title: "Success",
       description: "General settings saved successfully",
     });
+  };
+
+  const handleRemoveServer = async (guildIdToRemove: string) => {
+    if (!confirm(`Are you sure you want to remove server ${guildNames[guildIdToRemove] || guildIdToRemove} from allocation?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/subscriptions/remove-server/${subscription.stripeSubscriptionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ guildId: guildIdToRemove }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          toast({
+            title: "Success",
+            description: `Server ${guildNames[guildIdToRemove] || guildIdToRemove} removed from allocation. Available slots: ${data.availableSlots}`,
+          });
+          loadServerAllocation(); // Reload allocation to update available slots and guild names
+        } else {
+          throw new Error('Failed to remove server from allocation');
+        }
+      } else {
+        throw new Error('Failed to remove server from allocation');
+      }
+    } catch (error) {
+      console.error('Error removing server from allocation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove server from allocation",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddServer = async (serverId: string) => {
+    if (!serverId) {
+      toast({
+        title: "Error",
+        description: "Please select a server to add.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setAddingServerId(serverId);
+      const response = await fetch(`/api/subscriptions/add-server/${subscription.stripeSubscriptionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ serverId: serverId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          toast({
+            title: "Success",
+            description: `Server ${serverId} added to allocation. Available slots: ${data.availableSlots}`,
+          });
+          setAddServerModalOpen(false);
+          loadServerAllocation(); // Reload allocation to update available slots and guild names
+        } else {
+          throw new Error('Failed to add server to allocation');
+        }
+      } else {
+        throw new Error('Failed to add server to allocation');
+      }
+    } catch (error) {
+      console.error('Error adding server to allocation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add server to allocation",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingServerId(null);
+    }
+  };
+
+  const loadAvailableServers = async () => {
+    try {
+      setLoadingAvailableServers(true);
+      // Get all guilds the user has access to
+      const response = await fetch('/api/guilds');
+      if (response.ok) {
+        const userGuilds = await response.json();
+        
+        // Filter out guilds that are already allocated to this subscription
+        const allocatedGuildIds = serverAllocation.allocatedGuildIds || [];
+        const availableGuilds = userGuilds.filter((guild: any) => 
+          !allocatedGuildIds.includes(guild.id)
+        );
+        
+        setAvailableServers(availableGuilds);
+      }
+    } catch (error) {
+      console.error('Error loading available servers:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load available servers",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingAvailableServers(false);
+    }
   };
 
   if (status === "loading" || loading) {
@@ -665,7 +905,35 @@ export default function GuildSettingsPage() {
                   {/* Stripe Customer Portal - show if they have a customer ID (even if inactive) */}
                   {subscription.stripeCustomerId && (
                     <Button 
-                      onClick={() => window.open('https://billing.stripe.com/p/login/test', '_blank')}
+                      onClick={async () => {
+                        try {
+                          // Create a customer portal session
+                          const response = await fetch('/api/stripe/create-portal-session', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              customerId: subscription.stripeCustomerId,
+                              returnUrl: window.location.href
+                            }),
+                          });
+                          
+                          if (response.ok) {
+                            const { url } = await response.json();
+                            if (url) {
+                              window.open(url, '_blank');
+                            }
+                          } else {
+                            // Fallback to direct Stripe billing portal
+                            window.open(`https://billing.stripe.com/p/login/test`, '_blank');
+                          }
+                        } catch (error) {
+                          console.error('Failed to create portal session:', error);
+                          // Fallback to direct Stripe billing portal
+                          window.open(`https://billing.stripe.com/p/login/test`, '_blank');
+                        }
+                      }}
                       className="w-full md:w-auto"
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
@@ -684,44 +952,93 @@ export default function GuildSettingsPage() {
                 </div>
               </div>
 
-              {/* Subscription Features */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">What's Included</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
-                      Advanced role management
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
-                      Custom commands
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
-                      Priority support
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      subscription.package !== "Free" ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                    <span className={subscription.package !== "Free" ? '' : 'text-muted-foreground'}>
-                      Analytics dashboard
-                    </span>
+              {/* Server Allocation Management */}
+              {subscription.status === 'active' && subscription.stripeSubscriptionId && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Server Allocation</h3>
+                  <div className="space-y-4">
+                    {/* Allocation Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{serverAllocation.usedServers}</div>
+                        <div className="text-sm text-gray-600">Servers Used</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{serverAllocation.availableSlots}</div>
+                        <div className="text-sm text-gray-600">Available Slots</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-purple-600">{serverAllocation.maxServers}</div>
+                        <div className="text-sm text-gray-600">Total Capacity</div>
+                      </div>
+                    </div>
+
+                    {/* Current Allocation */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Currently Allocated Servers</h4>
+                      {serverAllocation.allocatedGuildIds.length > 0 ? (
+                        <div className="space-y-2">
+                          {serverAllocation.allocatedGuildIds.map((guildId) => (
+                            <div key={guildId} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <span className="font-medium">{guildNames[guildId] || guildId}</span>
+                                {guildId === params.id && (
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Current Server</span>
+                                )}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRemoveServer(guildId)}
+                                disabled={serverAllocation.usedServers <= 1}
+                                className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500">
+                          No servers currently allocated
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add Server Button */}
+                    {serverAllocation.availableSlots > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="font-medium">Add More Servers</h4>
+                        <Button 
+                          onClick={() => {
+                            setAddServerModalOpen(true);
+                            loadAvailableServers();
+                          }}
+                          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Server ({serverAllocation.availableSlots} slot{serverAllocation.availableSlots !== 1 ? 's' : ''} available)
+                        </Button>
+                        <p className="text-sm text-muted-foreground">
+                          You can allocate this subscription to {serverAllocation.availableSlots} more server{serverAllocation.availableSlots !== 1 ? 's' : ''}.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Plan Information */}
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm text-blue-800">
+                        <div className="font-medium mb-1">Plan Details</div>
+                        <p className="text-blue-700">
+                          You're on the <strong>{serverAllocation.planType}</strong> plan, which allows up to {serverAllocation.maxServers} Discord server{serverAllocation.maxServers !== 1 ? 's' : ''}.
+                          You can reallocate servers anytime without additional charges.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Support Info */}
               <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
@@ -775,6 +1092,99 @@ export default function GuildSettingsPage() {
         open={premiumModalOpen}
         onOpenChange={setPremiumModalOpen}
       />
+
+      {/* Add Server Modal */}
+      {addServerModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Add Server to Subscription</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadAvailableServers}
+                  disabled={loadingAvailableServers}
+                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  title="Refresh available servers"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loadingAvailableServers ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setAddServerModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Select a Discord server from your available servers to add to your subscription.
+              </p>
+              
+              {/* Available Servers List */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-gray-900">Available Servers</h4>
+                {loadingAvailableServers ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                    Loading available servers...
+                  </div>
+                ) : availableServers.length > 0 ? (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {availableServers.map((server) => (
+                      <div
+                        key={server.id}
+                        className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                          <div>
+                            <div className="font-medium">{server.name}</div>
+                            <div className="text-sm text-gray-500">ID: {server.id}</div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleAddServer(server.id)}
+                          disabled={addingServerId === server.id}
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {addingServerId === server.id ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Adding...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No available servers found.</p>
+                    <p className="text-sm mt-1">Make sure the bot is invited to the servers you want to add.</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setAddServerModalOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

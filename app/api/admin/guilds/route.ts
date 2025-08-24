@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
         guild_id,
         guild_name,
         premium,
+        status,
         created_at
       FROM guilds 
       LIMIT 100
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       icon_url: null, // We'll add this later when we confirm the column exists
       member_count: 0, // We'll add this later when we have member count data
       premium: Boolean(guild.premium),
-      status: 'active', // Default to active for now
+      status: guild.status || 'active', // Use actual database status, default to 'active' if null
       created_at: guild.created_at || new Date().toISOString(), // Use actual database value
       features: [] // We'll add features later
     }));
