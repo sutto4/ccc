@@ -498,33 +498,32 @@ export async function POST(request: NextRequest) {
         metadata: subscription.metadata
       });
       
-      // Now we can use the preserved metadata from the subscription
-      const guildIds = subscription.metadata?.guildIds;
-      const planId = subscription.metadata?.planId;
-      const userId = subscription.metadata?.userId;
+      // Dynamically import MySQL driver
+      const { default: mysqlDriver3 } = await import('mysql2/promise');
       
-      console.log('Extracted metadata from subscription:', { guildIds, planId, userId });
-
-      if (guildIds && planId && userId) {
-        // Parse guild IDs (they're stored as comma-separated string)
-        const guildIdArray = guildIds.split(',').map(id => id.trim());
-        console.log(`Processing deletion for ${guildIdArray.length} guild(s):`, guildIdArray);
+      // Connect to MySQL database using the same env vars as your bot
+      const connection = await mysqlDriver3.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'admin_user',
+        password: process.env.DB_PASS || '',
+        database: process.env.DB_NAME || 'chester_bot',
+        port: 3306
+      });
+      
+      try {
+        // Query subscription_allocations to find ALL guilds for this subscription
+        const [allocatedGuilds] = await connection.execute(`
+          SELECT guild_id 
+          FROM subscription_allocations 
+          WHERE subscription_id = ? AND is_active = TRUE
+        `, [subscription.id]);
         
-        // Dynamically import MySQL driver
-        const { default: mysqlDriver3 } = await import('mysql2/promise');
+        console.log(`Found ${allocatedGuilds.length} allocated guilds for subscription ${subscription.id}`);
         
-        // Connect to MySQL database using the same env vars as your bot
-        const connection = await mysqlDriver3.createConnection({
-          host: process.env.DB_HOST || 'localhost',
-          user: process.env.DB_USER || 'admin_user',
-          password: process.env.DB_PASS || '',
-          database: process.env.DB_NAME || 'chester_bot',
-          port: 3306
-        });
-        
-        try {
-          // Remove premium status from all associated guilds
-          for (const guildId of guildIdArray) {
+        if (allocatedGuilds.length > 0) {
+          // Remove premium status from ALL allocated guilds
+          for (const row of allocatedGuilds) {
+            const guildId = row.guild_id;
             console.log(`Removing premium status from guild ${guildId}...`);
             
             // Use the comprehensive premium removal function
@@ -538,22 +537,27 @@ export async function POST(request: NextRequest) {
             WHERE subscription_id = ?
           `, [subscription.id]);
           
-          // Update subscription usage count
-          await connection.execute(`
-            UPDATE subscription_limits 
-            SET used_servers = GREATEST(used_servers - ?, 0)
-            WHERE subscription_id = ?
-          `, [guildIdArray.length, planId]);
+          // Get plan ID from metadata for subscription limits update
+          const planId = subscription.metadata?.planId;
+          if (planId) {
+            // Update subscription usage count
+            await connection.execute(`
+              UPDATE subscription_limits 
+              SET used_servers = GREATEST(used_servers - ?, 0)
+              WHERE subscription_id = ?
+            `, [allocatedGuilds.length, planId]);
+          }
           
-          console.log(`Successfully removed premium status from ${guildIdArray.length} guild(s)`);
-        } catch (dbError) {
-          console.error('Database error during subscription deletion:', dbError);
-          throw dbError;
-        } finally {
-          await connection.end();
+          console.log(`Successfully removed premium status from ${allocatedGuilds.length} guild(s)`);
+        } else {
+          console.log(`No active allocations found for subscription ${subscription.id}`);
         }
-      } else {
-        console.log('No metadata found on deleted subscription, skipping guild updates');
+        
+      } catch (dbError) {
+        console.error('Database error during subscription deletion:', dbError);
+        throw dbError;
+      } finally {
+        await connection.end();
       }
     }
 
