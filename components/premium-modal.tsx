@@ -2,6 +2,7 @@
 
 import { Crown, Check, Star, Zap, Shield, Users, Bot, Command, X } from "lucide-react";
 import { useState } from "react";
+import ServerSelectionModal from "@/components/ui/server-selection-modal";
 
 interface Plan {
   id: string;
@@ -12,6 +13,7 @@ interface Plan {
   features: string[];
   popular?: boolean;
   icon: React.ReactNode;
+  maxServers: number;
 }
 
 const plans: Plan[] = [
@@ -30,7 +32,8 @@ const plans: Plan[] = [
       "Early Access to New Features"
     ],
          popular: false,
-     icon: <Users className="h-5 w-5" />
+     icon: <Users className="h-5 w-5" />,
+     maxServers: 1
   },
      {
      id: "squad",
@@ -45,7 +48,8 @@ const plans: Plan[] = [
       "All Premium features included"
     ],
          popular: true,
-     icon: <Crown className="h-5 w-5" />
+     icon: <Crown className="h-5 w-5" />,
+     maxServers: 3
   },
      {
      id: "city",
@@ -60,7 +64,8 @@ const plans: Plan[] = [
       "Premium tools at locked price"
     ],
          popular: false,
-     icon: <Command className="h-5 w-5" />
+     icon: <Command className="h-5 w-5" />,
+     maxServers: 10
   },
         {
      id: "network",
@@ -75,13 +80,16 @@ const plans: Plan[] = [
       "Locked-lifetime pricing"
     ],
          popular: false,
-     icon: <Bot className="h-5 w-5" />
+     icon: <Bot className="h-5 w-5" />,
+     maxServers: 999
   }
 ];
 
 export default function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [selectedPlan, setSelectedPlan] = useState<string>("squad");
   const [isLoading, setIsLoading] = useState(false);
+  const [showServerSelection, setShowServerSelection] = useState(false);
+  const [selectedGuildIds, setSelectedGuildIds] = useState<string[]>([]);
 
   const handleSubscribe = async (planId: string) => {
     if (planId === 'network') {
@@ -90,27 +98,31 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
       return;
     }
 
+    // Show server selection modal first
+    setShowServerSelection(true);
+  };
+
+  const handleServerSelectionConfirm = async (guildIds: string[]) => {
+    setSelectedGuildIds(guildIds);
+    setShowServerSelection(false);
+    
+    // Now proceed with subscription
     setIsLoading(true);
     
     try {
-      // Get guild ID from current URL
-      const pathParts = window.location.pathname.split('/');
-      const guildIdIndex = pathParts.indexOf('guilds') + 1;
-      const guildId = pathParts[guildIdIndex];
-      
-      if (!guildId) {
-        console.error('Could not find guild ID in URL');
-        return;
-      }
+      const selectedPlanData = plans.find(p => p.id === selectedPlan);
+      if (!selectedPlanData) return;
 
+      // Create checkout session with selected servers
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          planId,
-          guildId,
+          planId: selectedPlan,
+          guildIds: guildIds,
+          maxServers: selectedPlanData.maxServers
         }),
       });
 
@@ -137,115 +149,116 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
     if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={() => onOpenChange(false)}
-      />
-      
-      {/* Modal */}
-      <div className="relative rounded-2xl w-full max-w-6xl max-h-[90vh] text-black bg-white dark:bg-gray-900 shadow-2xl dark:text-white overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 p-4 md:p-6 text-white relative">
-          {/* Close Button */}
-          <button
-            onClick={() => onOpenChange(false)}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          
-          <div className="text-center pr-8">
-            <div className="flex flex-col md:flex-row items-center justify-center gap-3 mb-2">
-              <div className="p-2 bg-white/20 rounded-full">
-                <Crown className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold">Unlock Premium Features</h2>
-                <p className="text-yellow-100 text-sm md:text-base">
-                  Early Adopter Pricing - Locked for Life
-                </p>
-                <p className="text-yellow-100 text-xs opacity-90 hidden md:block">
-                  Choose your plan based on how many Discord servers you need
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4 md:p-6">
-            {/* Feature Highlights */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <div className="text-center p-3 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
-                <Bot className="h-6 w-6 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
-                <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Custom Commands</p>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
-                <Users className="h-6 w-6 mx-auto mb-1 text-green-600 dark:text-green-400" />
-                <p className="text-xs font-medium text-green-800 dark:text-green-200">Reaction Roles</p>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
-                <Command className="h-6 w-6 mx-auto mb-1 text-purple-600 dark:text-purple-400" />
-                <p className="text-xs font-medium text-purple-800 dark:text-purple-200">FiveM Integration</p>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20">
-                <Shield className="h-6 w-6 mx-auto mb-1 text-orange-600 dark:text-orange-400" />
-                <p className="text-xs font-medium text-orange-800 dark:text-orange-200">Advanced Security</p>
-              </div>
-            </div>
-
-            {/* Subscription Plans */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
-            {plans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`relative p-4 md:p-6 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                  selectedPlan === plan.id
-                    ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 shadow-lg"
-                    : "border-gray-200 dark:border-gray-700 hover:border-yellow-300 dark:hover:border-yellow-600"
-                }`}
-                onClick={() => setSelectedPlan(plan.id)}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-2 left-4">
-                    <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                      ⭐ POPULAR
-                    </span>
-                  </div>
-                )}
-                
-                <div className="flex flex-col gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-                      {plan.icon}
-                    </div>
-                    <div>
-                      <h3 className="text-sm md:text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{plan.period}</span>
-                      </div>
-                      {plan.originalPrice && (
-                        <span className="text-sm text-gray-400 line-through">{plan.originalPrice}</span>
-                      )}
-                    </div>
-                  </div>
+    <>
+      <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+          onClick={() => onOpenChange(false)}
+        />
+        
+        {/* Modal */}
+        <div className="relative rounded-2xl w-full max-w-6xl max-h-[90vh] text-black bg-white dark:bg-gray-900 shadow-2xl dark:text-white overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 p-4 md:p-6 text-white relative">
+            {/* Close Button */}
+            <button
+              onClick={() => onOpenChange(false)}
+              className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            
+            <div className="text-center pr-8">
+              <div className="flex flex-col md:flex-row items-center justify-center gap-3 mb-2">
+                <div className="p-2 bg-white/20 rounded-full">
+                  <Crown className="h-6 w-6 text-white" />
                 </div>
-
-                <ul className="space-y-2 mb-4">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-300">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold">Unlock Premium Features</h2>
+                  <p className="text-yellow-100 text-sm md:text-base">
+                    Early Adopter Pricing - Locked for Life
+                  </p>
+                  <p className="text-yellow-100 text-xs opacity-90 hidden md:block">
+                    Choose your plan based on how many Discord servers you need
+                  </p>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
+
+          {/* Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 md:p-6">
+              {/* Feature Highlights */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+                  <Bot className="h-6 w-6 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
+                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Custom Commands</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
+                  <Users className="h-6 w-6 mx-auto mb-1 text-green-600 dark:text-green-400" />
+                  <p className="text-xs font-medium text-green-800 dark:text-green-200">Reaction Roles</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
+                  <Command className="h-6 w-6 mx-auto mb-1 text-purple-600 dark:text-purple-400" />
+                  <p className="text-xs font-medium text-purple-800 dark:text-purple-200">FiveM Integration</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20">
+                  <Shield className="h-6 w-6 mx-auto mb-1 text-orange-600 dark:text-orange-400" />
+                  <p className="text-xs font-medium text-orange-800 dark:text-orange-200">Advanced Security</p>
+                </div>
+              </div>
+
+              {/* Subscription Plans */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+              {plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className={`relative p-4 md:p-6 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                    selectedPlan === plan.id
+                      ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 shadow-lg"
+                      : "border-gray-200 dark:border-gray-700 hover:border-yellow-300 dark:hover:border-yellow-600"
+                  }`}
+                  onClick={() => setSelectedPlan(plan.id)}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-2 left-4">
+                      <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                        ⭐ POPULAR
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-col gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
+                        {plan.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-sm md:text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h3>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{plan.period}</span>
+                        </div>
+                        {plan.originalPrice && (
+                          <span className="text-sm text-gray-400 line-through">{plan.originalPrice}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2 mb-4">
+                    {plan.features.map((feature, index) => (
+                      <li key={index} className="flex items-start gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-300">
+                        <Check className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
 
             {/* Selected Plan Summary */}
             {selectedPlanData && (
@@ -255,6 +268,9 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
                     <p className="text-sm text-gray-600 dark:text-gray-400">Selected Plan:</p>
                     <p className="font-semibold text-gray-900 dark:text-white">
                       {selectedPlanData.name} - {selectedPlanData.price}{selectedPlanData.period}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Up to {selectedPlanData.maxServers} Discord server{selectedPlanData.maxServers !== 1 ? 's' : ''}
                     </p>
                   </div>
                   {selectedPlanData.originalPrice && (
@@ -313,5 +329,16 @@ export default function PremiumModal({ open, onOpenChange }: { open: boolean; on
         </div>
        </div>
      </div>
-   );
- }
+
+     {/* Server Selection Modal */}
+     <ServerSelectionModal
+       isOpen={showServerSelection}
+       onClose={() => setShowServerSelection(false)}
+       onConfirm={handleServerSelectionConfirm}
+       planType={selectedPlan as 'solo' | 'squad' | 'enterprise'}
+       maxServers={selectedPlanData?.maxServers || 1}
+       title={`Select Servers for ${selectedPlanData?.name}`}
+     />
+   </>
+ );
+}

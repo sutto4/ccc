@@ -10,7 +10,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { planId, guildId } = await request.json();
+    const { planId, guildIds, maxServers } = await request.json();
+
+    // Validate guildIds array
+    if (!guildIds || !Array.isArray(guildIds) || guildIds.length === 0) {
+      return NextResponse.json({ error: 'No guilds selected' }, { status: 400 });
+    }
 
     // Define your product plans
     const plans = {
@@ -36,6 +41,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
+    // Validate server count against plan limits
+    if (guildIds.length > plan.maxServers) {
+      return NextResponse.json({ 
+        error: `Plan allows maximum ${plan.maxServers} servers, but ${guildIds.length} were selected` 
+      }, { status: 400 });
+    }
+
     // Create Stripe checkout session
     const checkoutSession = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -45,7 +57,7 @@ export async function POST(request: NextRequest) {
             currency: 'aud',
             product_data: {
               name: plan.name,
-              description: `Up to ${plan.maxServers} Discord servers`,
+              description: `Premium access for ${guildIds.length} Discord server${guildIds.length !== 1 ? 's' : ''} (${guildIds.join(', ')})`,
             },
             unit_amount: plan.price,
             recurring: {
@@ -56,13 +68,14 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: `${process.env.NEXTAUTH_URL}/guilds/${guildId}/settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXTAUTH_URL}/guilds/${guildId}/settings?canceled=true`,
+      success_url: `${process.env.NEXTAUTH_URL}/guilds?success=true&session_id={CHECKOUT_SESSION_ID}&plan=${planId}&guilds=${guildIds.join(',')}`,
+      cancel_url: `${process.env.NEXTAUTH_URL}/guilds?canceled=true`,
       metadata: {
-        guildId,
+        guildIds: guildIds.join(','),
         planId,
         userId: session.user.id,
-        maxServers: plan.maxServers.toString()
+        maxServers: plan.maxServers.toString(),
+        selectedServers: guildIds.length.toString()
       },
     });
 

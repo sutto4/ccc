@@ -103,6 +103,65 @@ async function autoDisablePremiumFeatures(connection: any, guildId: string) {
   }
 }
 
+/**
+ * Completely removes premium access from a guild, clearing all premium-related data
+ */
+async function removePremiumAccess(connection: any, guildId: string) {
+  try {
+    console.log(`Starting complete premium removal for guild ${guildId}...`);
+    
+    // Begin transaction to ensure all operations succeed or fail together
+    await connection.beginTransaction();
+    
+    try {
+      // 1. Update guilds table - remove all premium-related fields
+      console.log(`Updating guilds table for ${guildId}...`);
+      await connection.execute(`
+        UPDATE guilds 
+        SET 
+          premium = '0',
+          stripe_customer_id = NULL,
+          customer_email = NULL,
+          customer_name = NULL,
+          subscription_id = NULL,
+          subscription_status = NULL,
+          current_period_start = NULL,
+          current_period_end = NULL,
+          cancel_at_period_end = '0',
+          premium_expires_at = NULL
+        WHERE guild_id = ?
+      `, [guildId]);
+      
+      // 2. Disable all premium features in guild_features table
+      console.log(`Disabling premium features for ${guildId}...`);
+      await autoDisablePremiumFeatures(connection, guildId);
+      
+      // 3. Remove any active subscription allocations
+      console.log(`Removing subscription allocations for ${guildId}...`);
+      await connection.execute(`
+        UPDATE subscription_allocations 
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE guild_id = ? AND is_active = TRUE
+      `, [guildId]);
+      
+      // 4. Clear any cached premium data (if you have caching)
+      // This would depend on your caching implementation
+      
+      await connection.commit();
+      console.log(`Successfully removed all premium access from guild ${guildId}`);
+      
+    } catch (error) {
+      await connection.rollback();
+      console.error(`Error during premium removal for guild ${guildId}:`, error);
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error(`Failed to remove premium access from guild ${guildId}:`, error);
+    // Don't throw - we don't want to fail the entire webhook if feature removal fails
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log('=== WEBHOOK RECEIVED ===');
   console.log('Request received at:', new Date().toISOString());
@@ -124,30 +183,31 @@ export async function POST(request: NextRequest) {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      console.log('=== CHECKOUT SESSION COMPLETED ===');
-      console.log('Full session object:', JSON.stringify(session, null, 2));
-      console.log('Session metadata:', session.metadata);
-      console.log('Session subscription:', session.subscription);
-      
-      const { guildId, planId, userId, maxServers } = session.metadata || {};
-      console.log('Extracted metadata:', { guildId, planId, userId, maxServers });
+      console.log('Processing checkout.session.completed:', {
+        guildId: session.metadata?.guildId,
+        planId: session.metadata?.planId,
+        userId: session.metadata?.userId,
+        maxServers: session.metadata?.maxServers
+      });
 
-      // Store guildId in subscription metadata for future webhook events
-      if (session.subscription) {
-        console.log('Updating subscription metadata with guildId:', guildId);
-        await stripe.subscriptions.update(session.subscription as string, {
-          metadata: { guildId }
-        });
-        console.log('Subscription metadata updated successfully');
-        
-        // Small delay to ensure metadata is saved
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Extract metadata - handle both old single guild and new multiple guilds format
+      const guildIds = session.metadata?.guildIds;
+      const planId = session.metadata?.planId;
+      const userId = session.metadata?.userId;
+      const maxServers = session.metadata?.maxServers;
+
+      if (!guildIds || !planId || !userId) {
+        console.log('Missing required metadata for checkout.session.completed');
+        return NextResponse.json({ received: true });
       }
 
-      console.log('Processing checkout.session.completed:', { guildId, planId, userId, maxServers });
+      // Parse guild IDs (they're stored as comma-separated string)
+      const guildIdArray = guildIds.split(',').map(id => id.trim());
+      console.log('Processing guild IDs:', guildIdArray);
 
-      // Get customer details from Stripe
-      const customer = await stripe.customers.retrieve(session.customer as string);
+      // Get customer and subscription details
+      const customerResponse = await stripe.customers.retrieve(session.customer as string);
+      const customer = customerResponse;
       const subscription = await stripe.subscriptions.list({
         customer: session.customer as string,
         limit: 1,
@@ -177,12 +237,18 @@ export async function POST(request: NextRequest) {
       });
       console.log('Database connection successful');
       
-              try {
-          console.log('About to execute database update...');
+      try {
+        // Process each guild
+        for (const guildId of guildIdArray) {
+          console.log(`Processing guild ${guildId}...`);
+          
+          const customerEmail = typeof customer === 'object' ? customer.email : null;
+          const customerName = typeof customer === 'object' ? customer.name : null;
+          
           console.log('Update parameters:', {
             customerId: customer.id,
-            customerEmail: customer.email,
-            customerName: customer.name,
+            customerEmail: customerEmail,
+            customerName: customerName,
             subscriptionId: sub.id,
             subscriptionStatus: sub.status,
             periodStart: new Date(sub.current_period_start * 1000),
@@ -205,23 +271,163 @@ export async function POST(request: NextRequest) {
               current_period_end = ?,
               cancel_at_period_end = ?
             WHERE guild_id = ?
-          `, [customer.id, customer.email, customer.name, sub.id, sub.status, 
+          `, [customer.id, customerEmail, customerName, sub.id, sub.status, 
                new Date(sub.current_period_start * 1000), 
                new Date(sub.current_period_end * 1000), 
                sub.cancel_at_period_end, guildId]);
         
-        console.log('Database update result:', result);
-        console.log(`Guild ${guildId} upgraded to premium plan: ${planId}`);
+          console.log('Database update result:', result);
+          console.log(`Guild ${guildId} upgraded to premium plan: ${planId}`);
+          
+          // Auto-enable all premium features for this guild
+          console.log('Auto-enabling premium features...');
+          await autoEnablePremiumFeatures(connection, guildId);
+        }
         
-        // Auto-enable all premium features for this guild
-        console.log('Auto-enabling premium features...');
-        await autoEnablePremiumFeatures(connection, guildId);
+        // Create subscription allocation records
+        console.log('Creating subscription allocation records...');
+        for (const guildId of guildIdArray) {
+          await connection.execute(`
+            INSERT INTO subscription_allocations (user_id, subscription_id, guild_id)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE guild_id = VALUES(guild_id)
+          `, [userId, sub.id, guildId]);
+        }
+        
+        // Update subscription usage count
+        await connection.execute(`
+          UPDATE subscription_limits 
+          SET used_servers = ? 
+          WHERE subscription_id = ?
+        `, [guildIdArray.length, planId]);
+        
+        // Copy metadata from checkout session to subscription for future webhook events
+        console.log('Copying metadata to subscription record...');
+        await stripe.subscriptions.update(sub.id, {
+          metadata: {
+            guildIds: guildIds,
+            planId: planId,
+            userId: userId,
+            maxServers: maxServers
+          }
+        });
+        console.log('Subscription metadata updated successfully');
         
       } catch (dbError) {
         console.error('Database error:', dbError);
         throw dbError;
       } finally {
         await connection.end();
+      }
+    }
+
+    if (event.type === 'customer.subscription.created') {
+      const subscription = event.data.object;
+      console.log('Subscription created event:', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer,
+        metadata: subscription.metadata,
+        status: subscription.status
+      });
+      
+      const guildIds = subscription.metadata?.guildIds;
+      const planId = subscription.metadata?.planId;
+      const userId = subscription.metadata?.userId;
+      
+      console.log('Extracted metadata:', { guildIds, planId, userId });
+
+      if (guildIds && planId && userId) {
+        // Parse guild IDs (they're stored as comma-separated string)
+        const guildIdArray = guildIds.split(',').map(id => id.trim());
+        
+        console.log('Parsed guild IDs:', guildIdArray);
+        
+        // Dynamically import MySQL driver
+        const { default: mysqlDriver } = await import('mysql2/promise');
+        
+        // Connect to MySQL database using the same env vars as your bot
+        const connection = await mysqlDriver.createConnection({
+          host: process.env.DB_HOST || 'localhost',
+          user: process.env.DB_USER || 'admin_user',
+          password: process.env.DB_PASS || '',
+          database: process.env.DB_NAME || 'chester_bot',
+          port: 3306
+        });
+        
+        try {
+          // Get customer details from Stripe
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          const customerEmail = typeof customer === 'object' ? customer.email : null;
+          const customerName = typeof customer === 'object' ? customer.name : null;
+          
+          console.log('Customer details:', { email: customerEmail, name: customerName });
+          
+          // Begin transaction for multiple guild updates
+          await connection.beginTransaction();
+          
+          try {
+            // Update each guild with premium status
+            for (const guildId of guildIdArray) {
+              console.log(`Updating guild ${guildId} with premium status...`);
+              
+              const result = await connection.execute(`
+                UPDATE guilds 
+                SET 
+                  premium = '1',
+                  customer_id = ?,
+                  customer_email = ?,
+                  customer_name = ?,
+                  subscription_id = ?,
+                  subscription_status = ?,
+                  current_period_start = ?,
+                  current_period_end = ?,
+                  cancel_at_period_end = ?
+                WHERE guild_id = ?
+              `, [customer.id, customerEmail, customerName, subscription.id, subscription.status, 
+                   new Date(subscription.current_period_start * 1000), 
+                   new Date(subscription.current_period_end * 1000), 
+                   subscription.cancel_at_period_end, guildId]);
+              
+              console.log(`Guild ${guildId} update result:`, result);
+              
+              // Auto-enable all premium features for this guild
+              console.log(`Auto-enabling premium features for guild ${guildId}...`);
+              await autoEnablePremiumFeatures(connection, guildId);
+            }
+            
+            // Create subscription allocation records
+            for (const guildId of guildIdArray) {
+              await connection.execute(`
+                INSERT INTO subscription_allocations (user_id, subscription_id, guild_id) 
+                VALUES (?, ?, ?) 
+                ON DUPLICATE KEY UPDATE 
+                  is_active = TRUE, 
+                  updated_at = CURRENT_TIMESTAMP
+              `, [userId, subscription.id, guildId]);
+            }
+            
+            // Update subscription usage count
+            await connection.execute(`
+              UPDATE subscription_limits 
+              SET used_servers = ? 
+              WHERE subscription_id = ?
+            `, [guildIdArray.length, planId]);
+            
+            await connection.commit();
+            console.log(`Successfully allocated subscription ${subscription.id} to ${guildIdArray.length} guild(s)`);
+            
+          } catch (dbError) {
+            await connection.rollback();
+            console.error('Database transaction error:', dbError);
+            throw dbError;
+          }
+          
+        } catch (dbError) {
+          console.error('Database error:', dbError);
+          throw dbError;
+        } finally {
+          await connection.end();
+        }
       }
     }
 
@@ -289,14 +495,21 @@ export async function POST(request: NextRequest) {
       console.log('Subscription deleted event:', {
         subscriptionId: subscription.id,
         customerId: subscription.customer,
-        metadata: subscription.metadata,
-        allFields: Object.keys(subscription)
+        metadata: subscription.metadata
       });
       
-      const guildId = subscription.metadata?.guildId;
-      console.log('Extracted guildId:', guildId);
+      // Now we can use the preserved metadata from the subscription
+      const guildIds = subscription.metadata?.guildIds;
+      const planId = subscription.metadata?.planId;
+      const userId = subscription.metadata?.userId;
+      
+      console.log('Extracted metadata from subscription:', { guildIds, planId, userId });
 
-      if (guildId) {
+      if (guildIds && planId && userId) {
+        // Parse guild IDs (they're stored as comma-separated string)
+        const guildIdArray = guildIds.split(',').map(id => id.trim());
+        console.log(`Processing deletion for ${guildIdArray.length} guild(s):`, guildIdArray);
+        
         // Dynamically import MySQL driver
         const { default: mysqlDriver3 } = await import('mysql2/promise');
         
@@ -310,25 +523,38 @@ export async function POST(request: NextRequest) {
         });
         
         try {
-          // Remove premium status when subscription is cancelled
+          // Remove premium status from all associated guilds
+          for (const guildId of guildIdArray) {
+            console.log(`Removing premium status from guild ${guildId}...`);
+            
+            // Use the comprehensive premium removal function
+            await removePremiumAccess(connection, guildId);
+          }
+          
+          // Mark allocation records as inactive
           await connection.execute(`
-            UPDATE guilds 
-            SET 
-              premium = '0',
-              subscription_status = 'canceled'
-            WHERE guild_id = ?
-          `, [guildId]);
+            UPDATE subscription_allocations 
+            SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+            WHERE subscription_id = ?
+          `, [subscription.id]);
           
-          // Disable all premium features when subscription ends
-          console.log('Disabling premium features after cancellation...');
-          await autoDisablePremiumFeatures(connection, guildId);
+          // Update subscription usage count
+          await connection.execute(`
+            UPDATE subscription_limits 
+            SET used_servers = GREATEST(used_servers - ?, 0)
+            WHERE subscription_id = ?
+          `, [guildIdArray.length, planId]);
           
+          console.log(`Successfully removed premium status from ${guildIdArray.length} guild(s)`);
+        } catch (dbError) {
+          console.error('Database error during subscription deletion:', dbError);
+          throw dbError;
         } finally {
           await connection.end();
         }
+      } else {
+        console.log('No metadata found on deleted subscription, skipping guild updates');
       }
-
-      console.log(`Guild ${guildId} premium status removed`);
     }
 
     return NextResponse.json({ received: true });
