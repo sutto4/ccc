@@ -1,115 +1,80 @@
 
-import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { env } from "@/lib/env";
-import { getGuildsForUser } from "@/lib/guilds-server";
 
-export const GET = withAuth(async (_req, _params, auth) => {
+export async function GET(request: NextRequest) {
   try {
-    // Check if user is admin
-    if (auth?.role !== 'admin' && auth?.role !== 'owner') {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get all guilds with status information from admin DB
-    const rows = await query(
-      `SELECT guild_id, guild_name, premium, status, created_at, updated_at 
-       FROM guilds 
-       ORDER BY guild_name`
+    // Check if user is admin
+    const userResult = await query(
+      "SELECT role FROM users WHERE email = ? LIMIT 1",
+      [session.user.email]
     );
 
-    // Transform the data
-    let guilds = rows as any;
-    if (Array.isArray(rows) && rows.length > 0 && Array.isArray((rows as any)[0])) {
-      guilds = (rows as any)[0];
+    if (!Array.isArray(userResult) || userResult.length === 0 || userResult[0]?.role !== 'admin') {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let transformedGuilds = (guilds as any[]).map((row: any) => ({
-      guild_id: row.guild_id,
-      guild_name: row.guild_name,
-      premium: Boolean(row.premium),
-      status: row.status || 'active', // Default to 'active' if status is NULL
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      icon_url: null as string | null,
+    // First, let's test basic guilds table access with minimal columns
+    try {
+      const testGuilds = await query("SELECT guild_id, guild_name FROM guilds LIMIT 5");
+      console.log('Basic guilds test result:', testGuilds);
+      
+      // Test if we can get more columns
+      const testExtended = await query("SELECT guild_id, guild_name, premium FROM guilds LIMIT 1");
+      console.log('Extended guilds test result:', testExtended);
+      
+    } catch (testError) {
+      console.error('Table structure test failed:', testError);
+      return NextResponse.json({
+        error: "Database structure test failed",
+        details: testError instanceof Error ? testError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+
+    // Fetch guilds with only the columns we know exist - no ORDER BY for now
+    const guilds = await query(`
+      SELECT 
+        guild_id,
+        guild_name,
+        premium
+      FROM guilds 
+      LIMIT 100
+    `);
+
+    console.log('Guilds query result:', guilds);
+
+    // Transform the data to match the dashboard interface
+    const transformedGuilds = guilds.map((guild: any) => ({
+      id: guild.guild_id,
+      name: guild.guild_name || guild.guild_id,
+      icon_url: null, // We'll add this later when we confirm the column exists
+      member_count: 0, // We'll add this later when we have member count data
+      premium: Boolean(guild.premium),
+      status: 'active', // Default to active for now
+      joined_at: new Date().toISOString(), // Default to now for now
+      features: [] // We'll add features later
     }));
 
-    // Enrich with normalized guild data (names and icons) from the existing helper
-    try {
-      const normalizedGuilds = await getGuildsForUser(auth.accessToken);
-      const guildMap = new Map();
-      
-      // Create a map of normalized guild data by guild_id
-      for (const guild of normalizedGuilds) {
-        if (guild.id) {
-          guildMap.set(guild.id, {
-            name: guild.name,
-            iconUrl: guild.iconUrl
-          });
-        }
-      }
+    console.log('Transformed guilds:', transformedGuilds.length);
 
-      // Merge the normalized data with admin data
-      transformedGuilds = transformedGuilds.map(g => {
-        const normalized = guildMap.get(g.guild_id);
-        return {
-          ...g,
-          guild_name: normalized?.name || g.guild_name || 'Unknown Server',
-          icon_url: normalized?.iconUrl || g.icon_url
-        };
-      });
-    } catch (error) {
-      console.warn('[ADMIN-GUILDS] Failed to enrich with normalized data:', error);
-      
-      // Fallback: Generate Discord icon URLs from guild IDs if we have them
-      transformedGuilds = transformedGuilds.map(g => {
-        // Generate a default Discord avatar based on guild ID (this will always work)
-        const defaultAvatarUrl = `https://cdn.discordapp.com/embed/avatars/${parseInt(g.guild_id) % 5}.png?size=64`;
-        
-        return {
-          ...g,
-          guild_name: g.guild_name || `Server ${g.guild_id.slice(-4)}`, // Use last 4 chars of ID as fallback name
-          icon_url: defaultAvatarUrl
-        };
-      });
-      
-      // Also try to fetch guild info directly from Discord API for better names
-      if (auth.accessToken) {
-        console.log('[ADMIN-GUILDS] Attempting to fetch guild info from Discord API');
-        for (const guild of transformedGuilds) {
-          try {
-            const response = await fetch(`https://discord.com/api/v10/guilds/${guild.guild_id}`, {
-              headers: {
-                'Authorization': `Bot ${env.DISCORD_BOT_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (response.ok) {
-              const guildData = await response.json();
-              if (guildData.name) {
-                guild.guild_name = guildData.name;
-                if (guildData.icon) {
-                  guild.icon_url = `https://cdn.discordapp.com/icons/${guild.guild_id}/${guildData.icon}.png?size=64`;
-                }
-                console.log(`[ADMIN-GUILDS] Updated guild ${guild.guild_id}: name="${guild.guild_name}", icon="${guild.icon_url}"`);
-              }
-            }
-          } catch (error) {
-            console.warn(`[ADMIN-GUILDS] Failed to fetch guild ${guild.guild_id} from Discord API:`, error);
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({ guilds: transformedGuilds });
-
+    return NextResponse.json(transformedGuilds);
   } catch (error) {
-    console.error('[ADMIN-GUILDS] Error fetching guilds:', error);
-    return NextResponse.json({ 
-      error: "Failed to fetch guilds",
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('Error fetching admin guilds:', error);
+    return NextResponse.json(
+      { 
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      },
+      { status: 500 }
+    );
   }
-});
+}
