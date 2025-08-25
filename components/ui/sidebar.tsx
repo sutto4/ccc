@@ -241,7 +241,18 @@ export default function Sidebar() {
         {/* Tools section (only show if any features are visible) */}
         {(isFeatureVisible("embedded_messages") || isFeatureVisible("reaction_roles") || isFeatureVisible("custom_commands") || isFeatureVisible("bot_customisation")) && (
           <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
-          {isFeatureVisible("embedded_messages") && (
+            {/* Moderation - always visible for now */}
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/moderation` : "/guilds"}
+              label="Moderation"
+              rightIcon={undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/moderation`) : false}
+              featureEnabled={!!guildId}
+              guildSelected={!!guildId}
+              premiumRequired={false}
+              hasPremium={true}
+            />
+            {isFeatureVisible("embedded_messages") && (
             <NavLeaf
               href={guildId ? `/guilds/${guildId}/embedded-messages` : "/guilds"}
               label="Embedded Messages"
