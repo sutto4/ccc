@@ -11,12 +11,54 @@ export default function Page() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [signInModalOpen, setSignInModalOpen] = useState(false);
+  const [stats, setStats] = useState({ totalServers: 0, totalMembers: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
   
   // Remove automatic redirect - allow users to stay on home page even when logged in
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/" });
+  // Fetch stats for the home page
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true);
+        const response = await fetch('/api/stats/public');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.warn('Could not fetch stats:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   };
+
+  // Fetch stats for the home page
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true);
+        const response = await fetch('/api/stats/public');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.warn('Could not fetch stats:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-black">
@@ -138,6 +180,38 @@ export default function Page() {
                 <CheckCircle className="h-4 w-4 text-emerald-400" />
                 <span>Setup in 2 minutes</span>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Subtle Stats Section */}
+      <section className="py-4 bg-gray-900">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center gap-8 text-sm text-gray-400">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-blue-400" />
+              <span>
+                {statsLoading ? (
+                  <span className="animate-pulse">...</span>
+                ) : (
+                  <span className="text-white font-medium">{stats.totalServers.toLocaleString()}</span>
+                )}
+                <span className="ml-1">servers</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-emerald-400" />
+              <span>
+                {statsLoading ? (
+                  <span className="animate-pulse">...</span>
+                ) : stats.totalMembers > 0 ? (
+                  <span className="text-white font-medium">{stats.totalMembers.toLocaleString()}</span>
+                ) : (
+                  <span className="text-gray-500">—</span>
+                )}
+                <span className="ml-1">members</span>
+              </span>
             </div>
           </div>
         </div>
