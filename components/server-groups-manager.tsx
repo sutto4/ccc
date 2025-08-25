@@ -72,8 +72,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
       console.log('Starting to load data...');
       
       // Get the session token for authenticated requests
-      const token = (session as any)?.accessToken;
-      console.log('Session token available:', !!token);
+      const token = (session as any)?.accessToken as string;
+      if (!token) return;
       
       const [groupsResponse, guildsResponse] = await Promise.all([
         fetch("/api/server-groups"),

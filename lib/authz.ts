@@ -8,7 +8,6 @@ export type AuthContext = {
 
 export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string; role?: string }> {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
-  console.log('Auth header:', header ? 'Present' : 'Missing');
   
   let accessToken: string | null = null;
   let discordId: string | undefined;
@@ -17,7 +16,6 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
   if (header) {
     const match = /^Bearer\s+(.+)$/i.exec(header.trim());
     if (match) {
-      console.log('Bearer token found in header');
       accessToken = match[1];
     }
   }
@@ -27,7 +25,6 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
     const { getServerSession } = await import("next-auth");
     const { authOptions } = await import("@/lib/auth");
     const session = await getServerSession(authOptions as any);
-    console.log('Session from cookie:', session ? 'Present' : 'Missing');
     
     if (session) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,10 +36,6 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
       discordId = (session as any)?.user?.discordId as string | undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       role = (session as any)?.role as string | undefined;
-      console.log('Access token from session:', accessToken ? 'Present' : 'Missing');
-      console.log('Discord ID from session:', discordId ? 'Present' : 'Missing');
-      console.log('User role from session:', role || 'Not set');
-      console.log('Session user:', (session as any)?.user);
     }
   } catch (error) {
     console.error('Error getting session from cookie:', error);

@@ -21,9 +21,6 @@ export default async function GuildsPage() {
 
   let guilds: Guild[] = [];
   try {
-    console.log('Session access token:', session.accessToken ? 'Present' : 'Missing');
-    console.log('Session object keys:', Object.keys(session));
-    
     // For server-side rendering, call the guilds logic directly instead of going through HTTP
     const { getGuildsForUser } = await import('@/lib/guilds-server');
     guilds = await getGuildsForUser(session.accessToken as string);

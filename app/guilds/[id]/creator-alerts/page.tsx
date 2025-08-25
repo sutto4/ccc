@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Trash2, Edit2, Plus, Save } from "lucide-react";
 
-type Platform = "twitch" | "youtube" | "x" | "tiktok";
+type Platform = "twitch" | "youtube" | "x" | "tiktok" | "kick";
 
 type AlertRule = {
   id: string;
@@ -25,10 +25,11 @@ type AlertRule = {
 };
 
 const PLATFORM_META: Record<Platform, { label: string; color: string; icon: string }> = {
-  twitch: { label: "Twitch", color: "#9146FF", icon: "T" },
-  youtube: { label: "YouTube", color: "#FF0000", icon: "Y" },
-  x: { label: "X", color: "#111111", icon: "X" },
-  tiktok: { label: "TikTok", color: "#00F2EA", icon: "TT" },
+  twitch: { label: "Twitch", color: "#9146FF", icon: "🎮" },
+  youtube: { label: "YouTube", color: "#FF0000", icon: "📺" },
+  x: { label: "X", color: "#111111", icon: "🐦" },
+  tiktok: { label: "TikTok", color: "#00F2EA", icon: "📱" },
+  kick: { label: "Kick", color: "#0077B6", icon: "👋" },
 };
 
 export default function CreatorAlertsPage() {
@@ -200,6 +201,7 @@ export default function CreatorAlertsPage() {
                 <option value="youtube">YouTube</option>
                 <option value="x">X (Twitter)</option>
                 <option value="tiktok">TikTok</option>
+                <option value="kick">Kick</option>
               </Select>
             </div>
 
@@ -207,10 +209,23 @@ export default function CreatorAlertsPage() {
             <div className="space-y-2">
               <Label>Channel / Username</Label>
               <Input
-                placeholder="e.g. twitch.tv/streamer or @handle"
+                placeholder={
+                  form.platform === 'twitch' ? 'e.g. shroud or twitch.tv/shroud' :
+                  form.platform === 'youtube' ? 'e.g. @PewDiePie or youtube.com/@PewDiePie' :
+                  form.platform === 'kick' ? 'e.g. xqc or kick.com/xqc' :
+                  form.platform === 'tiktok' ? 'e.g. @charlidamelio or tiktok.com/@charlidamelio' :
+                  'e.g. username or channel'
+                }
                 value={form.channelOrUser || ""}
                 onChange={(e) => setForm((f) => ({ ...f, channelOrUser: e.target.value }))}
               />
+              <p className="text-xs text-muted-foreground">
+                {form.platform === 'twitch' ? 'Enter the Twitch username (without @)' :
+                 form.platform === 'youtube' ? 'Enter the YouTube channel name or @handle' :
+                 form.platform === 'kick' ? 'Enter the Kick username (without @)' :
+                 form.platform === 'tiktok' ? 'Enter the TikTok username (without @)' :
+                 'Enter the platform username'}
+              </p>
             </div>
 
             {/* Discord User Search */}

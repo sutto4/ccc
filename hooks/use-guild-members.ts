@@ -71,7 +71,6 @@ export function useGuildMembers(guildId: string) {
         const token = (session as any)?.accessToken as string;
         if (!token) return;
         
-        console.log('Loading roles with token:', !!token);
         const rolesData = await fetchRoles(guildId, token);
         console.log('Roles loaded:', rolesData?.length || 0);
         setRoles(rolesData);

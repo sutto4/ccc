@@ -35,6 +35,16 @@ export const PUT = withAuth(async (req, { params }: { params: Promise<{ id: stri
   const body = await req.json();
   const { id, platform, creator, roleId, channelId, discordUserId, notes, enabled } = body || {};
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  
+  // Convert undefined values to null for database
+  const safePlatform = platform !== undefined ? platform : null;
+  const safeCreator = creator !== undefined ? creator : null;
+  const safeRoleId = roleId !== undefined ? roleId : null;
+  const safeChannelId = channelId !== undefined ? channelId : null;
+  const safeDiscordUserId = discordUserId !== undefined ? discordUserId : null;
+  const safeNotes = notes !== undefined ? notes : null;
+  const safeEnabled = enabled !== undefined ? (enabled ? 1 : 0) : null;
+  
   await query(
     `UPDATE creator_alert_rules
      SET platform = COALESCE(?, platform),
@@ -45,7 +55,7 @@ export const PUT = withAuth(async (req, { params }: { params: Promise<{ id: stri
          notes = COALESCE(?, notes),
          enabled = COALESCE(?, enabled)
      WHERE id = ? AND guild_id = ?`,
-    [platform, creator, roleId, channelId, discordUserId, notes, typeof enabled === "boolean" ? (enabled ? 1 : 0) : null, id, guildId]
+    [safePlatform, safeCreator, safeRoleId, safeChannelId, safeDiscordUserId, safeNotes, safeEnabled, id, guildId]
   );
   return NextResponse.json({ ok: true });
 });

@@ -39,8 +39,6 @@ export type Role = {
 
 // Direct server-side guild fetching without HTTP layer
 export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
-  console.log('getGuildsForUser called with token length:', accessToken?.length || 0);
-  
   if (!accessToken) {
     throw new Error("No access token provided");
   }
@@ -54,7 +52,6 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
     if (userResponse.ok) {
       const userData = await userResponse.json();
       userId = userData.id;
-      console.log('User ID from token:', userId);
     }
   } catch (error) {
     console.error('Failed to get user ID:', error);
@@ -62,7 +59,6 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
-  console.log('Bot API base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord
   // Use user ID + token hash to ensure unique per-user caching
@@ -81,8 +77,8 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
   
   // Add user isolation logging
-  console.log('User token key:', tokenKey.substring(0, 20) + '...');
-  console.log('Cache key:', ugCacheKey);
+  // console.log('User token key:', tokenKey.substring(0, 20) + '...');
+  // console.log('Cache key:', ugCacheKey);
 
   if (userGuilds.length === 0) {
     // In-flight de-duplication to avoid concurrent double fetches
@@ -97,14 +93,14 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
   }
 
   if (userGuilds.length === 0) {
-    console.log('Fetching guilds from Discord API...');
+    // console.log('Fetching guilds from Discord API...');
     const promise = (async () => {
       let userGuildsRes: Response;
       try {
         userGuildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
-        console.log('Discord API response status:', userGuildsRes.status);
+        // console.log('Discord API response status:', userGuildsRes.status);
       } catch (err: any) {
         console.error('Discord API fetch error:', err);
         throw new Error(err?.message || "Failed to reach Discord");
@@ -135,13 +131,13 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
         throw new Error(body || `Failed to fetch user guilds (${userGuildsRes.status})`);
       }
              const guilds = await userGuildsRes.json() as any[];
-       console.log('Discord API returned guilds:', guilds.length);
+       // console.log('Discord API returned guilds:', guilds.length);
        
        // Log each guild with its permissions for debugging
-       guilds.forEach((guild: any) => {
-         const perms = BigInt(guild.permissions || '0');
-         console.log(`  Guild: ${guild.name} (${guild.id}) - Permissions: ${perms.toString()}`);
-       });
+       // guilds.forEach((guild: any) => {
+       //   const perms = BigInt(guild.permissions || '0');
+       //   console.log(`  Guild: ${guild.name} (${guild.id}) - Permissions: ${perms.toString()}`);
+       // });
        
        return guilds;
     })();
@@ -162,7 +158,7 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
   }
 
   const result = await intersectAndNormalize(userGuilds, botBase);
-  console.log('Final result from intersectAndNormalize:', result.length, 'guilds');
+  // console.log('Final result from intersectAndNormalize:', result.length, 'guilds');
   
   // CRITICAL: Double-check that we're only returning guilds this user has access to AND can use the app
   const verifiedResult = await Promise.all(
@@ -177,7 +173,7 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
       const canUseApp = await checkUserCanUseApp(guild.id, userId, userGuild);
       
       if (!canUseApp) {
-        console.log('Filtering out guild', guild.id, '- user lacks app access permissions');
+        // console.log('Filtering out guild', guild.id, '- user lacks app access permissions');
         return null;
       }
       
@@ -186,13 +182,13 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
   );
   
   const finalResult = verifiedResult.filter(guild => guild !== null) as Guild[];
-  console.log('Database permissions verified result:', finalResult.length, 'guilds');
+  // console.log('Database permissions verified result:', finalResult.length, 'guilds');
   return finalResult;
 }
 
 // Helper functions (copied from the API route)
 async function intersectAndNormalize(userGuilds: any[], botBase: string): Promise<Guild[]> {
-  console.log('intersectAndNormalize called with:', userGuilds.length, 'user guilds, botBase:', botBase);
+  // console.log('intersectAndNormalize called with:', userGuilds.length, 'user guilds, botBase:', botBase);
   
   // Get installed guilds from bot API
   let installedGuilds: any[] = [];
@@ -207,27 +203,27 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
   
   for (const endpoint of possibleEndpoints) {
     try {
-      console.log('Trying bot endpoint:', `${botBase}${endpoint}`);
+      // console.log('Trying bot endpoint:', `${botBase}${endpoint}`);
       const botRes = await fetch(`${botBase}${endpoint}`);
-      console.log('Bot API response status:', botRes.status);
+      // console.log('Bot API response status:', botRes.status);
       
       if (botRes.ok) {
         installedGuilds = await botRes.json();
-        console.log('Bot API returned guilds:', installedGuilds.length);
+        // console.log('Bot API returned guilds:', installedGuilds.length);
         break; // Found working endpoint
       } else {
-        console.log('Bot API endpoint failed:', endpoint, botRes.status);
+        // console.log('Bot API endpoint failed:', endpoint, botRes.status);
       }
     } catch (e) {
-      console.log('Bot API endpoint error:', endpoint, e.message);
+      // console.log('Bot API endpoint error:', endpoint, e.message);
     }
   }
   
   if (installedGuilds.length === 0) {
-    console.log('No working bot API endpoints found, using empty installed guilds list');
+    // console.log('No working bot API endpoints found, using empty installed guilds list');
     
     // Fallback: if no bot API, show all user guilds with basic info
-    console.log('Falling back to showing all user guilds (no bot data)');
+    // console.log('Falling back to showing all user guilds (no bot data)');
     return userGuilds.map(guild => ({
       id: guild.id,
       name: guild.name,
@@ -240,7 +236,7 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
   }
 
   const installedGuildIds = new Set(installedGuilds.map((g: any) => g.guild_id || g.id));
-  console.log('Installed guild IDs:', Array.from(installedGuildIds));
+  // console.log('Installed guild IDs:', Array.from(installedGuildIds));
 
   // Process user guilds
   const results: Guild[] = [];
@@ -302,12 +298,12 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
           const status = guildStatuses.get(g.id) || 'active';
           const isActive = status !== 'left';
           if (!isActive) {
-            console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
+            // console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
           }
           return isActive;
         });
         
-        console.log(`Filtered ${results.length - activeResults.length} guilds with 'left' status`);
+        // console.log(`Filtered ${results.length - activeResults.length} guilds with 'left' status`);
         return activeResults;
       } finally {
         await connection.end();
@@ -316,12 +312,12 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
   } catch (e) {
     console.error('Failed to enrich guilds with group info:', e);
     // If database fails, return original results (no filtering)
-    console.log('Processed results (DB error):', results.length, 'guilds');
+    // console.log('Processed results (DB error):', results.length, 'guilds');
     return results;
   }
 
   // If we get here without returning from the try block, return original results
-  console.log('Processed results (fallback):', results.length, 'guilds');
+  // console.log('Processed results (fallback):', results.length, 'guilds');
   return results;
 }
 
@@ -381,12 +377,12 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
               const status = guildStatuses.get(g.id) || 'active';
               const isActive = status !== 'left';
               if (!isActive) {
-                console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
+                // console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
               }
               return isActive;
             });
             
-            console.log(`Filtered ${basic.length - activeBasic.length} guilds with 'left' status`);
+            // console.log(`Filtered ${basic.length - activeBasic.length} guilds with 'left' status`);
             return activeBasic;
           } finally {
             await connection.end();
@@ -409,7 +405,7 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
 
 // Direct server-side role fetching without HTTP layer
 export async function getRolesForGuild(guildId: string, accessToken: string): Promise<Role[]> {
-  console.log('getRolesForGuild called for guild:', guildId);
+  // console.log('getRolesForGuild called for guild:', guildId);
   
   if (!accessToken) {
     throw new Error("No access token provided");
@@ -452,7 +448,7 @@ export async function getRolesForGuild(guildId: string, accessToken: string): Pr
       return [];
     }
 
-    console.log('User access and app permissions verified for guild:', guildId);
+    // console.log('User access and app permissions verified for guild:', guildId);
   } catch (error) {
     console.error('Failed to verify user guild access:', error);
     return [];
@@ -473,7 +469,7 @@ export async function getRolesForGuild(guildId: string, accessToken: string): Pr
     }
 
     const roles = await response.json();
-    console.log('Discord API returned roles:', roles.length);
+    // console.log('Discord API returned roles:', roles.length);
     
     // Transform Discord roles to our Role type
     return roles.map((role: any) => ({
@@ -511,7 +507,7 @@ async function checkUserCanUseApp(guildId: string, userId: string, userGuild: an
     const isOwner = userGuild.owner === true;
     
     if (isOwner) {
-      console.log(`User ${userId} is owner of guild ${guildId} - allowing access`);
+      // console.log(`User ${userId} is owner of guild ${guildId} - allowing access`);
       return true;
     }
     
@@ -534,11 +530,11 @@ async function checkUserCanUseApp(guildId: string, userId: string, userGuild: an
            );
            
            const allowedRoleIds = (rows as any[]).map(row => row.role_id);
-           console.log(`Allowed role IDs for guild ${guildId}:`, allowedRoleIds);
+           // console.log(`Allowed role IDs for guild ${guildId}:`, allowedRoleIds);
            
            if (allowedRoleIds.length === 0) {
              // No roles are allowed - deny access
-             console.log(`No roles are allowed for guild ${guildId} - denying access`);
+             // console.log(`No roles are allowed for guild ${guildId} - denying access`);
              hasRoleAccess = false;
            } else {
              // Check if user has any of the allowed roles
@@ -551,13 +547,13 @@ async function checkUserCanUseApp(guildId: string, userId: string, userGuild: an
                if (userRolesResponse.ok) {
                  const memberData = await userRolesResponse.json();
                  const userRoleIds = memberData.roles || [];
-                 console.log(`User ${userId} has roles in guild ${guildId}:`, userRoleIds);
+                 // console.log(`User ${userId} has roles in guild ${guildId}:`, userRoleIds);
                  
                  // Check if any of user's roles are in the allowed list
-                 hasRoleAccess = userRoleIds.some(roleId => allowedRoleIds.includes(roleId));
-                 console.log(`User role access check result:`, hasRoleAccess);
+                 hasRoleAccess = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
+                 // console.log(`User role access check result:`, hasRoleAccess);
                } else {
-                 console.log(`Failed to fetch user roles for guild ${guildId}:`, userRolesResponse.status);
+                 // console.log(`Failed to fetch user roles for guild ${guildId}:`, userRolesResponse.status);
                  hasRoleAccess = false;
                }
              } catch (roleError) {
@@ -567,7 +563,7 @@ async function checkUserCanUseApp(guildId: string, userId: string, userGuild: an
            }
          } else {
           // If no permissions table exists, allow access to all authenticated users
-          console.log(`No server_role_permissions table found for guild ${guildId} - allowing access`);
+          // console.log(`No server_role_permissions table found for guild ${guildId} - allowing access`);
           hasRoleAccess = true;
         }
       } finally {
@@ -581,11 +577,11 @@ async function checkUserCanUseApp(guildId: string, userId: string, userGuild: an
     
     const canUseApp = hasRoleAccess;
     
-    console.log(`Permission check result for guild ${guildId}, user ${userId}:`, {
-      isOwner,
-      hasRoleAccess,
-      canUseApp
-    });
+    // console.log(`Permission check result for guild ${guildId}, user ${userId}:`, {
+    //   isOwner,
+    //   hasRoleAccess,
+    //   canUseApp
+    // });
     
     return canUseApp;
   } catch (error) {
