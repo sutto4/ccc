@@ -29,6 +29,8 @@ type EmbeddedMessageConfig = {
    createdAt?: number;
    updatedAt?: number;
    multiChannel?: boolean;
+   // Multi-channel support
+   channels?: Array<{guildId: string, channelId: string, guildName: string, channelName: string}>;
  };
 
 export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean }) {
@@ -233,20 +235,7 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
     setUserSearchQuery("");
   }, [activeMentionField, mentionPosition, title, description, authorName, footerText]);
 
-     // Check if a message was posted to multiple channels (same title/description within short time)
-   const checkMultiChannel = useCallback((config: EmbeddedMessageConfig) => {
-     if (!config.title || !config.createdAt) return false;
-     
-     const timeWindow = 5 * 60 * 1000; // 5 minutes
-     const similarConfigs = configs.filter(c => 
-       c.id !== config.id &&
-       c.title === config.title &&
-       c.description === config.description &&
-       Math.abs((c.createdAt || 0) - (config.createdAt || 0)) < timeWindow
-     );
-     
-     return similarConfigs.length > 0;
-   }, [configs]);
+
 
    // Filter configs based on search query
    const filteredConfigs = useMemo(() => {
@@ -256,11 +245,20 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
      return configs.filter(config => {
        const title = (config.title || '').toLowerCase();
        const description = (config.description || '').toLowerCase();
+       
+       // Check current channel name
        const channelName = channels.find(ch => String(ch.id) === String(config.channelId))?.name?.toLowerCase() || '';
+       
+       // Check multi-channel information
+       const multiChannelMatch = config.channels?.some(channel => 
+         channel.channelName.toLowerCase().includes(query) ||
+         channel.guildName.toLowerCase().includes(query)
+       ) || false;
        
        return title.includes(query) || 
               description.includes(query) || 
-              channelName.includes(query);
+              channelName.includes(query) ||
+              multiChannelMatch;
      });
    }, [configs, searchQuery, channels]);
 
@@ -349,12 +347,20 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
 
      const startEdit = (config: EmbeddedMessageConfig) => {
      setEditing(config);
-     setSelectedChannels([{
-       guildId: guildId,
-       channelId: String(config.channelId || ""),
-       guildName: "Current Server",
-       channelName: channels.find(ch => String(ch.id) === String(config.channelId))?.name || `#${config.channelId}`
-     }]);
+     
+     // Handle multi-channel messages - if config has channels array, use it; otherwise fall back to single channel
+     if (config.channels && config.channels.length > 0) {
+       setSelectedChannels(config.channels);
+     } else {
+       // Fallback for legacy single-channel messages
+       setSelectedChannels([{
+         guildId: guildId,
+         channelId: String(config.channelId || ""),
+         guildName: "Current Server",
+         channelName: channels.find(ch => String(ch.id) === String(config.channelId))?.name || `#${config.channelId}`
+       }]);
+     }
+     
      setTitle(config.title || "");
      setDescription(config.description || "");
      setColor(config.color ? `#${config.color.toString(16).padStart(6, '0')}` : "#5865F2");
@@ -423,7 +429,11 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
            const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages/${editing.id}`, {
              method: 'PUT',
              headers: { 'content-type': 'application/json', ...authHeader }, 
-             body: JSON.stringify({ ...body, channelId: channel.channelId })
+             body: JSON.stringify({ 
+               ...body, 
+               channelId: channel.channelId,
+               channels: selectedChannels // Store the full channels array
+             })
            });
            return res.ok;
          });
@@ -441,7 +451,11 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
            const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages`, {
              method: 'POST',
              headers: { 'content-type': 'application/json', ...authHeader }, 
-             body: JSON.stringify({ ...body, channelId: channel.channelId })
+             body: JSON.stringify({ 
+               ...body, 
+               channelId: channel.channelId,
+               channels: selectedChannels // Store the full channels array
+             })
            });
            return res.ok ? await res.json() : null;
          });
@@ -1184,11 +1198,24 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                           {c.description || 'No description'} 
                         </div>
                                                  <div className="text-xs text-muted-foreground mt-1">
-                           Channel: {channels.find(ch => String(ch.id) === String(c.channelId))?.name || `#${c.channelId}`}
-                           {checkMultiChannel(c) && (
-                             <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                               Multi-channel
-                             </span>
+                           {/* Show channels information */}
+                           {c.channels && c.channels.length > 0 ? (
+                             <div>
+                               <div className="font-medium">Channels:</div>
+                               <div className="flex flex-wrap gap-1 mt-1">
+                                 {c.channels.map((channel, index) => (
+                                   <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-full">
+                                     <span className="font-medium">{channel.guildName === "Current Server" ? "Current" : channel.guildName}</span>
+                                     <span className="text-blue-600">#{channel.channelName}</span>
+                                   </span>
+                                 ))}
+                               </div>
+                             </div>
+                           ) : (
+                             // Fallback for legacy single-channel messages
+                             <div>
+                               Channel: {channels.find(ch => String(ch.id) === String(c.channelId))?.name || `#${c.channelId}`}
+                             </div>
                            )}
                          </div>
                         <div className="text-xs text-muted-foreground mt-1">
