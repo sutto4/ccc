@@ -27,6 +27,8 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
 
 	// If an upstream bot/backend base is configured, proxy to it
 	const base = env.SERVER_API_BASE_URL?.replace(/\/+$/, "");
+	console.log('🔍 Members API: SERVER_API_BASE_URL =', base);
+	
 	if (base) {
 		const hasApiSuffix = /\/api$/i.test(base);
 		const primaryUrl = hasApiSuffix
@@ -36,19 +38,30 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
 			? `${base.replace(/\/api$/i, "")}/api/guilds/${guildId}/members`
 			: `${base}/guilds/${guildId}/members`;
 		try {
+			console.log('🔍 Members API: Trying primary URL:', primaryUrl);
 			let res = await fetch(primaryUrl, { cache: "no-store" });
+			console.log('🔍 Members API: Primary response status:', res.status);
+			
 			if (!res.ok && (res.status === 404 || res.status === 405)) {
-				// Try alternate path shape
+				console.log('🔍 Members API: Primary failed, trying fallback');
 				res = await fetch(fallbackUrl, { cache: "no-store" });
+				console.log('🔍 Members API: Fallback response status:', res.status);
 			}
+			
 			if (!res.ok) {
 				const errText = await res.text();
+				console.log('🔍 Members API: Error response:', errText);
 				return NextResponse.json({ error: errText || "Upstream error" }, { status: res.status });
 			}
+			
 			const members = await res.json();
+			console.log('🔍 Members API: Successfully fetched members:', members?.length || 0, 'members');
+			console.log('🔍 Members API: First member sample:', members?.[0]);
+			
 			cache.set(cacheKey, members, 60_000);
 			return NextResponse.json(members);
 		} catch (e: any) {
+			console.log('🔍 Members API: Fetch error:', e?.message);
 			return NextResponse.json({ error: e?.message || "Proxy fetch failed" }, { status: 502 });
 		}
 	}
@@ -58,7 +71,7 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
 		{
 			guildId,
 			discordUserId: "111111111111111111",
-			username: "TestUser1",
+			username: "sutto",
 			roleIds: ["role2"],
 			accountid: null,
 			groups: [],

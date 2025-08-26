@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,131 +13,359 @@ import { logAction } from "@/lib/logger";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type EmbeddedMessageConfig = {
-  id: string;
-  channelId: string;
-  messageId?: string | null;
-  title?: string;
-  description?: string;
-  color?: number | null;
-  imageUrl?: string | null;
-  thumbnailUrl?: string | null;
-  author?: { name?: string; iconUrl?: string } | null;
-  footer?: { text?: string; iconUrl?: string } | null;
-  timestamp?: number | null;
-  enabled: boolean | null;
-  createdBy?: string;
-  createdAt?: number;
-  updatedAt?: number;
-};
+   id: string;
+   channelId: string;
+   messageId?: string | null;
+   title?: string;
+   description?: string;
+   color?: number | null;
+   imageUrl?: string | null;
+   thumbnailUrl?: string | null;
+   author?: { name?: string; iconUrl?: string } | null;
+   footer?: { text?: string; iconUrl?: string } | null;
+   timestamp?: number | null;
+   enabled: boolean | null;
+   createdBy?: string;
+   createdAt?: number;
+   updatedAt?: number;
+   multiChannel?: boolean;
+ };
 
 export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean }) {
   const params = useParams<{ id: string }>();
   const guildId = params.id;
   const { data: session } = useSession();
   const { toast } = useToast();
+  
+  // Debug logging for guildId
+  console.log('Current guildId from params:', guildId);
 
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
   const [configs, setConfigs] = useState<EmbeddedMessageConfig[]>([]);
   const [editing, setEditing] = useState<EmbeddedMessageConfig | null>(null);
-  const [channels, setChannels] = useState<any[]>([]);
-  const [tempColor, setTempColor] = useState("#5865F2");
+     const [channels, setChannels] = useState<any[]>([]);
+   const [guilds, setGuilds] = useState<any[]>([]);
+   const [groups, setGroups] = useState<any[]>([]);
+   const [tempColor, setTempColor] = useState("#5865F2");
   const [colorModalOpen, setColorModalOpen] = useState(false);
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [authorIconModalOpen, setAuthorIconModalOpen] = useState(false);
-  const [footerIconModalOpen, setFooterIconModalOpen] = useState(false);
-  const [tempThumbnailUrl, setTempThumbnailUrl] = useState("");
-  const [tempImageUrl, setTempImageUrl] = useState("");
-  const [tempAuthorIconUrl, setTempAuthorIconUrl] = useState("");
-  const [tempFooterIconUrl, setTempFooterIconUrl] = useState("");
+     const [footerIconModalOpen, setFooterIconModalOpen] = useState(false);
+   const [channelSelectorOpen, setChannelSelectorOpen] = useState(false);
+   const [tempThumbnailUrl, setTempThumbnailUrl] = useState("");
+   const [tempImageUrl, setTempImageUrl] = useState("");
+   const [tempAuthorIconUrl, setTempAuthorIconUrl] = useState("");
+   const [tempFooterIconUrl, setTempFooterIconUrl] = useState("");
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Channel selector state
+  const [expandedGuilds, setExpandedGuilds] = useState<Set<string>>(new Set());
+  const [currentServerSearch, setCurrentServerSearch] = useState("");
+  const [groupedServersSearch, setGroupedServersSearch] = useState("");
 
-  // Form fields
-  const [channelId, setChannelId] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState("#5865F2");
-  const [imageUrl, setImageUrl] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [authorName, setAuthorName] = useState("");
-  const [authorIconUrl, setAuthorIconUrl] = useState("");
-  const [footerText, setFooterText] = useState("");
-  const [footerIconUrl, setFooterIconUrl] = useState("");
-  const [showTimestamp, setShowTimestamp] = useState(true);
+     // Form fields
+   const [selectedChannels, setSelectedChannels] = useState<Array<{guildId: string, channelId: string, guildName: string, channelName: string}>>([]);
+   const [title, setTitle] = useState("");
+   const [description, setDescription] = useState("");
+   const [color, setColor] = useState("#5865F2");
+   const [imageUrl, setImageUrl] = useState("");
+   const [thumbnailUrl, setThumbnailUrl] = useState("");
+   const [authorName, setAuthorName] = useState("");
+   const [authorIconUrl, setAuthorIconUrl] = useState("");
+   const [footerText, setFooterText] = useState("");
+   const [footerIconUrl, setFooterIconUrl] = useState("");
+   const [showTimestamp, setShowTimestamp] = useState(true);
+  
+  // User mention state
+  const [guildMembers, setGuildMembers] = useState<any[]>([]);
+  const [showUserSearch, setShowUserSearch] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [activeMentionField, setActiveMentionField] = useState<string | null>(null);
+  const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null);
 
   const authHeader = useMemo(() => (
     (session as any)?.accessToken ? { Authorization: `Bearer ${(session as any).accessToken}` } : {}
   ), [(session as any)?.accessToken]) as HeadersInit;
 
-  // Filter configs based on search query
-  const filteredConfigs = useMemo(() => {
-    if (!searchQuery.trim()) return configs;
+  // Memoize the username lookup map for better performance
+  const usernameMap = useMemo(() => {
+    if (!guildMembers.length) return new Map();
     
-    const query = searchQuery.toLowerCase();
-    return configs.filter(config => {
-      const title = (config.title || '').toLowerCase();
-      const description = (config.description || '').toLowerCase();
-             const channelName = channels.find(ch => String(ch.id) === String(config.channelId))?.name?.toLowerCase() || '';
-      
-      return title.includes(query) || 
-             description.includes(query) || 
-             channelName.includes(query);
-    });
-  }, [configs, searchQuery, channels]);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const [chRes, cRes] = await Promise.all([
-          fetch(`/api/guilds/${guildId}/channels`, { headers: authHeader }).then(r => r.json()),
-          fetch(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).then(r => r.json()).catch(() => ({ configs: [] })),
-        ]);
-        if (!alive) return;
-        const ch = Array.isArray(chRes?.channels) ? chRes.channels : Array.isArray(chRes) ? chRes : [];
-        setChannels(ch);
-        setConfigs(Array.isArray(cRes?.configs) ? cRes.configs : []);
-      } finally {
-        setLoading(false);
+    const map = new Map();
+    guildMembers.forEach(member => {
+      // Index by username (case-insensitive)
+      if (member.username) {
+        map.set(member.username.toLowerCase(), member.discordUserId);
       }
-    })();
-    return () => { alive = false; };
-  }, [guildId, authHeader]);
+      // Index by displayName/nickname if available
+      if (member.displayName) {
+        map.set(member.displayName.toLowerCase(), member.discordUserId);
+      }
+      if (member.nickname) {
+        map.set(member.nickname.toLowerCase(), member.discordUserId);
+      }
+    });
+    return map;
+  }, [guildMembers]);
 
-  const startNew = () => {
-    setEditing(null);
-    setChannelId("");
-    setTitle("");
-    setDescription("");
-    setColor("#5865F2");
-    setImageUrl("");
-    setThumbnailUrl("");
-    setAuthorName("");
-    setAuthorIconUrl("");
-    setFooterText("");
-    setFooterIconUrl("");
-    setShowTimestamp(true);
-  };
+  // Optimized mention conversion function
+  const convertMentions = useCallback((text: string): string => {
+    if (!text || !usernameMap.size) return text;
+    
+    return text.replace(/@(\w+)/g, (match, username) => {
+      const userId = usernameMap.get(username.toLowerCase());
+      return userId ? `<@${userId}>` : match;
+    });
+  }, [usernameMap]);
 
-  const startEdit = (config: EmbeddedMessageConfig) => {
-    setEditing(config);
-    setChannelId(String(config.channelId || ""));
-    setTitle(config.title || "");
-    setDescription(config.description || "");
-    setColor(config.color ? `#${config.color.toString(16).padStart(6, '0')}` : "#5865F2");
-    setImageUrl(config.imageUrl || "");
-    setThumbnailUrl(config.thumbnailUrl || "");
-    setAuthorName(config.author?.name || "");
-    setAuthorIconUrl(config.author?.iconUrl || "");
-    setFooterText(config.footer?.text || "");
-    setFooterIconUrl(config.footer?.iconUrl || "");
-    setShowTimestamp(config.timestamp !== null);
-  };
+  // Filtered users for inline search
+  const filteredUsers = useMemo(() => {
+    if (!userSearchQuery.trim() || !guildMembers.length) return [];
+    
+    const query = userSearchQuery.toLowerCase();
+    return guildMembers
+      .filter(member => 
+        member.username?.toLowerCase().includes(query) ||
+        member.displayName?.toLowerCase().includes(query) ||
+        member.nickname?.toLowerCase().includes(query)
+      )
+      .slice(0, 8); // Limit to 8 results for performance
+  }, [userSearchQuery, guildMembers]);
+
+  // Handle @ key press to show user search
+  const handleInputChange = useCallback((field: string, value: string, setter: (value: string) => void) => {
+    setter(value);
+    
+    // Check for @ symbol to trigger user search
+    const atIndex = value.lastIndexOf('@');
+    if (atIndex !== -1) {
+      const afterAt = value.slice(atIndex + 1);
+      if (!afterAt.includes(' ') && afterAt.length > 0) {
+        setShowUserSearch(true);
+        setUserSearchQuery(afterAt);
+        setActiveMentionField(field);
+        setMentionPosition({ start: atIndex, end: atIndex + afterAt.length + 1 });
+      } else {
+        setShowUserSearch(false);
+      }
+    } else {
+      setShowUserSearch(false);
+    }
+  }, []);
+
+  // Toggle guild expansion
+  const toggleGuildExpansion = useCallback((guildId: string) => {
+    setExpandedGuilds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(guildId)) {
+        newSet.delete(guildId);
+      } else {
+        newSet.add(guildId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Filter channels based on search
+  const filteredCurrentServerChannels = useMemo(() => {
+    if (!currentServerSearch.trim()) return channels;
+    const searchTerm = currentServerSearch.toLowerCase();
+    return channels.filter(ch => ch.name.toLowerCase().includes(searchTerm));
+  }, [channels, currentServerSearch]);
+
+  const filteredGroupedServersChannels = useMemo(() => {
+    if (!groupedServersSearch.trim()) return groups;
+    
+    const searchTerm = groupedServersSearch.toLowerCase();
+    const filteredGroups = groups.map(group => ({
+      ...group,
+      guilds: group.guilds?.map((guild: any) => ({
+        ...guild,
+        channels: guild.channels?.filter((channel: any) => 
+          channel.name.toLowerCase().includes(searchTerm) ||
+          guild.name.toLowerCase().includes(searchTerm)
+        ) || []
+      })).filter((guild: any) => {
+        // Debug logging to see what's happening
+        console.log('Filtering guild:', { 
+          guildId: guild.id, 
+          currentGuildId: guildId, 
+          isEqual: guild.id === guildId,
+          guildName: guild.name 
+        });
+        return guild.channels.length > 0 && guild.id !== guildId;
+      }) || []
+    })).filter(group => group.guilds.length > 0);
+    
+    return filteredGroups;
+  }, [groups, groupedServersSearch, guildId]);
+
+  // Insert user mention into the active field
+  const insertUserMention = useCallback((username: string, userId: string) => {
+    if (!activeMentionField || !mentionPosition) return;
+    
+    const mention = `<@${userId}>`;
+    
+    // Update the appropriate field
+    if (activeMentionField === 'title') {
+      const newTitle = title.slice(0, mentionPosition.start) + mention + title.slice(mentionPosition.end);
+      setTitle(newTitle);
+    } else if (activeMentionField === 'description') {
+      const newDescription = description.slice(0, mentionPosition.start) + mention + description.slice(mentionPosition.end);
+      setDescription(newDescription);
+    } else if (activeMentionField === 'authorName') {
+      const newAuthorName = authorName.slice(0, mentionPosition.start) + mention + authorName.slice(mentionPosition.end);
+      setAuthorName(newAuthorName);
+    } else if (activeMentionField === 'footerText') {
+      const newFooterText = footerText.slice(0, mentionPosition.start) + mention + footerText.slice(mentionPosition.end);
+      setFooterText(newFooterText);
+    }
+    
+    // Close user search
+    setShowUserSearch(false);
+    setActiveMentionField(null);
+    setMentionPosition(null);
+    setUserSearchQuery("");
+  }, [activeMentionField, mentionPosition, title, description, authorName, footerText]);
+
+     // Check if a message was posted to multiple channels (same title/description within short time)
+   const checkMultiChannel = useCallback((config: EmbeddedMessageConfig) => {
+     if (!config.title || !config.createdAt) return false;
+     
+     const timeWindow = 5 * 60 * 1000; // 5 minutes
+     const similarConfigs = configs.filter(c => 
+       c.id !== config.id &&
+       c.title === config.title &&
+       c.description === config.description &&
+       Math.abs((c.createdAt || 0) - (config.createdAt || 0)) < timeWindow
+     );
+     
+     return similarConfigs.length > 0;
+   }, [configs]);
+
+   // Filter configs based on search query
+   const filteredConfigs = useMemo(() => {
+     if (!searchQuery.trim()) return configs;
+     
+     const query = searchQuery.toLowerCase();
+     return configs.filter(config => {
+       const title = (config.title || '').toLowerCase();
+       const description = (config.description || '').toLowerCase();
+       const channelName = channels.find(ch => String(ch.id) === String(config.channelId))?.name?.toLowerCase() || '';
+       
+       return title.includes(query) || 
+              description.includes(query) || 
+              channelName.includes(query);
+     });
+   }, [configs, searchQuery, channels]);
+
+     useEffect(() => {
+     let alive = true;
+     (async () => {
+       try {
+         setLoading(true);
+         const [chRes, cRes, membersRes, guildsRes, groupsRes] = await Promise.all([
+           fetch(`/api/guilds/${guildId}/channels`, { headers: authHeader }).then(r => r.json()),
+           fetch(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).then(r => r.json()).catch(() => ({ configs: [] })),
+           fetch(`/api/guilds/${guildId}/members`, { headers: authHeader }).then(r => r.json()).catch(() => ({ members: [] })),
+           fetch(`/api/guilds/${guildId}/guilds`, { headers: authHeader }).then(r => r.json()).catch(() => ({ guilds: [] })),
+           fetch(`/api/guilds/${guildId}/groups`, { headers: authHeader }).then(r => r.json()).catch(() => ({ groups: [] })),
+         ]);
+         
+         if (!alive) return;
+         
+         const ch = Array.isArray(chRes?.channels) ? chRes.channels : Array.isArray(chRes) ? chRes : [];
+         setChannels(ch);
+         
+         const guildsData = Array.isArray(guildsRes?.guilds) ? guildsRes.guilds : [];
+         setGuilds(guildsData);
+         
+         const groupsData = Array.isArray(groupsRes?.groups) ? groupsRes.groups : [];
+         setGroups(groupsData);
+         
+         // Debug: Log the groups data to see what we're working with
+         console.log('Loaded groups data:', groupsData);
+         console.log('Current guildId:', guildId);
+         
+         setGuildMembers(Array.isArray(membersRes) ? membersRes : []);
+         setConfigs(Array.isArray(cRes?.configs) ? cRes.configs : []);
+       } finally {
+         setLoading(false);
+       }
+     })();
+     return () => { alive = false; };
+   }, [guildId, authHeader]);
+
+   // Debug effect to monitor groups changes
+   useEffect(() => {
+     if (groups.length > 0) {
+       console.log('Groups updated:', groups);
+       groups.forEach(group => {
+         console.log(`Group "${group.name}":`, group);
+         group.guilds?.forEach((guild: any) => {
+           console.log(`  Guild "${guild.name}" (ID: ${guild.id}):`, guild);
+         });
+       });
+     }
+   }, [groups]);
+
+   // Close channel selector when clicking outside
+   useEffect(() => {
+     const handleClickOutside = (event: MouseEvent) => {
+       const target = event.target as Element;
+       if (!target.closest('.channel-selector')) {
+         setChannelSelectorOpen(false);
+       }
+     };
+
+     if (channelSelectorOpen) {
+       document.addEventListener('mousedown', handleClickOutside);
+     }
+
+     return () => {
+       document.removeEventListener('mousedown', handleClickOutside);
+     };
+   }, [channelSelectorOpen]);
+
+     const startNew = () => {
+     setEditing(null);
+     setSelectedChannels([]);
+     setTitle("");
+     setDescription("");
+     setColor("#5865F2");
+     setImageUrl("");
+     setThumbnailUrl("");
+     setAuthorName("");
+     setAuthorIconUrl("");
+     setFooterText("");
+     setFooterIconUrl("");
+     setShowTimestamp(true);
+   };
+
+     const startEdit = (config: EmbeddedMessageConfig) => {
+     setEditing(config);
+     setSelectedChannels([{
+       guildId: guildId,
+       channelId: String(config.channelId || ""),
+       guildName: "Current Server",
+       channelName: channels.find(ch => String(ch.id) === String(config.channelId))?.name || `#${config.channelId}`
+     }]);
+     setTitle(config.title || "");
+     setDescription(config.description || "");
+     setColor(config.color ? `#${config.color.toString(16).padStart(6, '0')}` : "#5865F2");
+     setImageUrl(config.imageUrl || "");
+     setThumbnailUrl(config.thumbnailUrl || "");
+     setAuthorName(config.author?.name || "");
+     setAuthorIconUrl(config.author?.iconUrl || "");
+     setFooterText(config.footer?.text || "");
+     setFooterIconUrl(config.footer?.iconUrl || "");
+     setShowTimestamp(config.timestamp !== null);
+   };
 
   const cancelEdit = () => {
     setEditing(null);
@@ -153,79 +381,107 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
     setConfigs(configsArray);
   };
 
-  const doPublish = async () => {
-    setPublishMsg(null);
-    if (!guildId) { setPublishMsg("Missing guildId"); return; }
-    if (!channelId) { setPublishMsg("Pick a channel"); return; }
-    
-    try {
-      setPublishing(true);
-      const body = {
-        channelId,
-        title: title || undefined,
-        description: description || undefined,
-        color: color ? parseInt(color.replace('#', ''), 16) : undefined,
-        thumbnailUrl: thumbnailUrl || undefined,
-        imageUrl: imageUrl || undefined,
-        author: (authorName || authorIconUrl) ? { name: authorName || undefined, iconUrl: authorIconUrl || undefined } : undefined,
-        footer: (footerText || footerIconUrl) ? { text: footerText || undefined, iconUrl: footerIconUrl || undefined } : undefined,
-        timestamp: showTimestamp ? Date.now() : undefined,
-        enabled: true,
-        createdBy: (session?.user as any)?.name || (session?.user as any)?.username || 'ServerMate Bot',
-      };
+     const doPublish = async () => {
+     setPublishMsg(null);
+     if (!guildId) { setPublishMsg("Missing guildId"); return; }
+     if (selectedChannels.length === 0) { setPublishMsg("Pick at least one channel"); return; }
+     
+     try {
+       setPublishing(true);
+       const convertedTitle = title ? convertMentions(title) : undefined;
+       const convertedDescription = description ? convertMentions(description) : undefined;
+       const convertedAuthorName = authorName ? convertMentions(authorName) : undefined;
+       const convertedFooterText = footerText ? convertMentions(footerText) : undefined;
+       
+       console.log('doPublish: Converting mentions', {
+         original: { title, description, authorName, footerText },
+         converted: { convertedTitle, convertedDescription, convertedAuthorName, convertedFooterText }
+       });
+       
+       const body = {
+         title: convertedTitle,
+         description: convertedDescription,
+         color: color ? parseInt(color.replace('#', ''), 16) : undefined,
+         thumbnailUrl: thumbnailUrl || undefined,
+         imageUrl: imageUrl || undefined,
+         author: (authorName || authorIconUrl) ? { 
+           name: convertedAuthorName, 
+           iconUrl: authorIconUrl || undefined 
+         } : undefined,
+         footer: (footerText || footerIconUrl) ? { 
+           text: convertedFooterText, 
+           iconUrl: footerIconUrl || undefined 
+         } : undefined,
+         timestamp: showTimestamp ? Date.now() : undefined,
+         enabled: true,
+         createdBy: (session?.user as any)?.name || (session?.user as any)?.username || 'ServerMate Bot',
+       };
 
-             const isUpdate = editing && editing.id && editing.id !== "";
-      const url = isUpdate 
-        ? `/api/proxy/guilds/${guildId}/embedded-messages/${editing.id}`
-        : `/api/proxy/guilds/${guildId}/embedded-messages`;
-      const method = isUpdate ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'content-type': 'application/json', ...authHeader }, 
-        body: JSON.stringify(body)
-      });
-      
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setPublishMsg(data?.error || `Failed (${res.status})`); return; }
-      
-      const actionType = isUpdate ? "embedded-message.update" : "embedded-message.create";
-      const toastTitle = isUpdate ? "Updated" : "Published";
-      const toastDescription = isUpdate ? "Embedded message updated" : "Embedded message sent";
-      
-      toast({ title: toastTitle, description: toastDescription, duration: 3000 });
-      await logAction({ 
-        guildId, 
-        userId: (session?.user as any)?.id || "", 
-        actionType, 
-        user: { id: (session?.user as any)?.id || "" }, 
-        actionData: { title: title, id: editing?.id } 
-      });
-      
-             // Clear editing state and form
+       if (editing && editing.id) {
+         // Update existing message across all selected channels
+         const updatePromises = selectedChannels.map(async (channel) => {
+           const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages/${editing.id}`, {
+             method: 'PUT',
+             headers: { 'content-type': 'application/json', ...authHeader }, 
+             body: JSON.stringify({ ...body, channelId: channel.channelId })
+           });
+           return res.ok;
+         });
+         
+         const results = await Promise.all(updatePromises);
+         if (results.some(r => !r)) {
+           setPublishMsg("Some updates failed");
+           return;
+         }
+         
+         toast({ title: "Updated", description: `Updated across ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}`, duration: 3000 });
+       } else {
+         // Create new messages in all selected channels
+         const createPromises = selectedChannels.map(async (channel) => {
+           const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages`, {
+             method: 'POST',
+             headers: { 'content-type': 'application/json', ...authHeader }, 
+             body: JSON.stringify({ ...body, channelId: channel.channelId })
+           });
+           return res.ok ? await res.json() : null;
+         });
+         
+         const results = await Promise.all(createPromises);
+         const successful = results.filter(r => r !== null);
+         
+         if (successful.length === 0) {
+           setPublishMsg("All posts failed");
+           return;
+         }
+         
+         if (successful.length < selectedChannels.length) {
+           setPublishMsg(`${successful.length}/${selectedChannels.length} posts successful`);
+         } else {
+           toast({ title: "Published", description: `Posted to ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}`, duration: 3000 });
+         }
+       }
+       
+       await logAction({ 
+         guildId, 
+         userId: (session?.user as any)?.id || "", 
+         actionType: editing ? "embedded-message.update" : "embedded-message.create", 
+         user: { id: (session?.user as any)?.id || "" }, 
+         actionData: { title: title, id: editing?.id, channels: selectedChannels.length } 
+       });
+       
+       // Clear editing state and form
        setEditing(null);
        startNew();
-       
-       // Update local state with the new messageId if it's a new message
-       if (!isUpdate && data.messageId) {
-         setConfigs(prev => prev.map(c => 
-           c.id === data.id ? { ...c, messageId: data.messageId } : c
-         ));
-       }
        
        // Refresh the list
        await refresh();
        
-       // Debug: Log the response to see what we got back
-       console.log('🔍 Publish response:', data);
-       console.log('🔍 Configs after refresh:', configs);
-      
-    } catch (e:any) {
-      setPublishMsg(e?.message || "Publish failed");
-    } finally {
-      setPublishing(false);
-    }
-  };
+     } catch (e:any) {
+       setPublishMsg(e?.message || "Publish failed");
+     } finally {
+       setPublishing(false);
+     }
+   };
 
   const toggle = async (c: EmbeddedMessageConfig, enable: boolean) => {
     try {
@@ -286,16 +542,217 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
               <LayoutGridIcon className="w-4 h-4"/> Compose an embed-style message.
             </div>
             
-            {/* Channel selector */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Channel</label>
-              <select value={channelId} onChange={e => setChannelId(e.target.value)} className="w-full px-3 py-2 border rounded-md bg-background">
-                <option value="">Select a channel</option>
-                {channels.map(ch => (
-                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
-                ))}
-              </select>
-            </div>
+                         {/* Channel selector */}
+             <div className="space-y-2">
+               <label className="block text-sm font-medium">Channels</label>
+               <div className="relative channel-selector">
+                 <button
+                   type="button"
+                   onClick={() => setChannelSelectorOpen(!channelSelectorOpen)}
+                   className="w-full px-3 py-2 border rounded-md bg-background text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
+                 >
+                   <span className="text-sm">
+                     {selectedChannels.length === 0 
+                       ? "Select channels..." 
+                       : `${selectedChannels.length} channel${selectedChannels.length !== 1 ? 's' : ''} selected`
+                     }
+                   </span>
+                   <svg className={`w-4 h-4 transition-transform ${channelSelectorOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                   </svg>
+                 </button>
+                 
+                 {channelSelectorOpen && (
+                   <div className="absolute z-[9999] w-full mt-1 bg-white border rounded-md shadow-xl max-h-96 overflow-hidden">
+                     <div className="grid grid-cols-2 gap-0 h-full">
+                       {/* Current Server Section */}
+                       <div className="border-r border-gray-200 p-3">
+                         <div className="flex items-center gap-2 mb-3">
+                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                           <span className="text-sm font-semibold text-gray-700">Current Server</span>
+                           <span className="text-xs text-gray-500">({channels.length} channels)</span>
+                         </div>
+                         
+                         {/* Search for current server */}
+                         <div className="mb-3">
+                           <input
+                             type="text"
+                             placeholder="Search channels..."
+                             value={currentServerSearch}
+                             onChange={(e) => setCurrentServerSearch(e.target.value)}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           />
+                         </div>
+                         
+                         {/* Current server channels */}
+                         <div className="space-y-1 max-h-48 overflow-y-auto">
+                           {filteredCurrentServerChannels.map(ch => (
+                             <label key={ch.id} className="flex items-center space-x-2 cursor-pointer px-2 py-1 hover:bg-gray-50 rounded text-sm">
+                               <input
+                                 type="checkbox"
+                                 checked={selectedChannels.some(sc => sc.guildId === guildId && sc.channelId === ch.id)}
+                                 onChange={(e) => {
+                                   if (e.target.checked) {
+                                     setSelectedChannels(prev => [...prev, {
+                                       guildId: guildId,
+                                       channelId: ch.id,
+                                       guildName: "Current Server",
+                                       channelName: ch.name
+                                     }]);
+                                   } else {
+                                     setSelectedChannels(prev => prev.filter(sc => !(sc.guildId === guildId && sc.channelId === ch.id)));
+                                   }
+                                 }}
+                                 className="rounded border-gray-300"
+                               />
+                               <span className="truncate">#{ch.name}</span>
+                             </label>
+                           ))}
+                         </div>
+                       </div>
+                       
+                       {/* Grouped Servers Section */}
+                       <div className="p-3">
+                         <div className="flex items-center gap-2 mb-3">
+                           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                           <span className="text-sm font-semibold text-gray-700">Grouped Servers</span>
+                           <span className="text-xs text-gray-500">({groups.reduce((acc, g) => acc + (g.guilds?.length || 0), 0)} servers)</span>
+                         </div>
+                         
+                         {/* Search for grouped servers */}
+                         <div className="mb-3">
+                           <input
+                             type="text"
+                             placeholder="Search across all servers..."
+                             value={groupedServersSearch}
+                             onChange={(e) => setGroupedServersSearch(e.target.value)}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           />
+                         </div>
+                         
+                         {/* Grouped servers (collapsed by default) */}
+                         <div className="space-y-2 max-h-48 overflow-y-auto">
+                           {filteredGroupedServersChannels.map(group => (
+                             <div key={group.id} className="space-y-2">
+                               <div className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded">
+                                 <span className="text-xs font-medium text-gray-600">{group.name}</span>
+                                 <span className="text-xs text-gray-400">({group.guilds?.length || 0} servers)</span>
+                               </div>
+                               
+                               {group.guilds?.map((guild: any) => (
+                                 <div key={guild.id} className="ml-3 space-y-1">
+                                   <button
+                                     type="button"
+                                     onClick={() => toggleGuildExpansion(guild.id)}
+                                     className="flex items-center gap-2 w-full text-left px-2 py-1 hover:bg-gray-50 rounded text-xs font-medium text-gray-500"
+                                   >
+                                     <svg className={`w-3 h-3 transition-transform ${expandedGuilds.has(guild.id) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6" />
+                                     </svg>
+                                     {guild.name} ({guild.channels?.length || 0} channels)
+                                   </button>
+                                   
+                                   {/* Channels list (collapsed by default) */}
+                                   <div className={`ml-3 space-y-1 ${expandedGuilds.has(guild.id) ? '' : 'hidden'}`}>
+                                     {guild.channels?.map((channel: any) => (
+                                       <label key={channel.id} className="flex items-center space-x-2 cursor-pointer px-2 py-1 hover:bg-gray-50 rounded text-xs">
+                                         <input
+                                           type="checkbox"
+                                           checked={selectedChannels.some(sc => sc.guildId === guild.id && sc.channelId === channel.id)}
+                                           onChange={(e) => {
+                                             if (e.target.checked) {
+                                               setSelectedChannels(prev => [...prev, {
+                                                 guildId: guild.id,
+                                                 channelId: channel.id,
+                                                 guildName: guild.name,
+                                                 channelName: channel.name
+                                               }]);
+                                             } else {
+                                               setSelectedChannels(prev => prev.filter(sc => !(sc.guildId === guild.id && sc.channelId === channel.id)));
+                                             }
+                                           }}
+                                           className="rounded border-gray-300"
+                                         />
+                                         <span className="truncate">#{channel.name}</span>
+                                       </label>
+                                     ))}
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     </div>
+                     
+                     {/* Quick actions footer */}
+                     <div className="border-t border-gray-200 p-3 bg-gray-50">
+                       <div className="flex gap-2">
+                         <button
+                           type="button"
+                           onClick={() => {
+                             const allChannels = [
+                               ...channels.map(ch => ({
+                                 guildId: guildId,
+                                 channelId: ch.id,
+                                 guildName: "Current Server",
+                                 channelName: ch.name
+                               })),
+                               ...groups.flatMap(group => 
+                                 group.guilds?.flatMap((guild: any) => 
+                                   guild.channels?.map((channel: any) => ({
+                                     guildId: guild.id,
+                                     channelId: channel.id,
+                                     guildName: guild.name,
+                                     channelName: channel.name
+                                   })) || []
+                                 ) || []
+                               )
+                             ];
+                             setSelectedChannels(allChannels);
+                           }}
+                           className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                         >
+                           Select All
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => setSelectedChannels([])}
+                           className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                         >
+                           Clear All
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+                 )}
+               </div>
+               
+               {/* Selected channels display */}
+               {selectedChannels.length > 0 && (
+                 <div className="space-y-2">
+                   <div className="text-xs text-muted-foreground">Selected channels:</div>
+                   <div className="flex flex-wrap gap-2">
+                     {selectedChannels.map((channel, index) => (
+                       <span
+                         key={`${channel.guildId}-${channel.channelId}`}
+                         className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-full"
+                       >
+                         <span className="font-medium">{channel.guildName === "Current Server" ? "Current" : channel.guildName}</span>
+                         <span className="text-blue-600">#{channel.channelName}</span>
+                         <button
+                           type="button"
+                           onClick={() => setSelectedChannels(prev => prev.filter((_, i) => i !== index))}
+                           className="ml-1 hover:bg-blue-100 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                         >
+                           ×
+                         </button>
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+             </div>
 
             {/* Inline editor only */}
             <div className="flex items-center justify-between mb-0">
@@ -384,12 +841,157 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                             <ImageIcon className="w-4 h-4" />
                           )}
                         </button>
-                        <Input value={authorName} onChange={e => setAuthorName(e.target.value)} placeholder="Author name" className="flex-1" />
+                                                 <div className="relative">
+                           <Input value={authorName} onChange={e => handleInputChange('authorName', e.target.value, setAuthorName)} placeholder="Author name" className="flex-1" />
+                           {showUserSearch && activeMentionField === 'authorName' && (
+                             <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
+                                  style={{
+                                    top: '100%',
+                                    left: '0',
+                                    marginTop: '4px'
+                                  }}>
+                               <div className="text-xs text-muted-foreground mb-2 px-2">
+                                 Select user to mention:
+                               </div>
+                               {filteredUsers.length > 0 ? (
+                                 filteredUsers.map((user) => (
+                                   <button
+                                     key={user.discordUserId}
+                                     onClick={() => insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId)}
+                                     className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm flex items-center gap-2"
+                                   >
+                                     <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
+                                       {user.username?.charAt(0)?.toUpperCase() || '?'}
+                                     </div>
+                                     <div>
+                                       <div className="font-medium">{user.username}</div>
+                                       {user.displayName && user.displayName !== user.username && (
+                                         <div className="text-xs text-muted-foreground">{user.displayName}</div>
+                                       )}
+                                     </div>
+                                   </button>
+                                 ))
+                               ) : (
+                                 <div className="px-2 py-2 text-sm text-muted-foreground">
+                                   No users found matching "{userSearchQuery}"
+                                 </div>
+                               )}
+                               <button
+                                 onClick={() => setShowUserSearch(false)}
+                                 className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm text-muted-foreground mt-1"
+                               >
+                                 Cancel
+                               </button>
+                             </div>
+                           )}
+                         </div>
                       </div>
 
                       {/* Title / Description */}
-                      <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Embed title" className="font-semibold leading-snug mb-2 w-[24rem]" />
-                      <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Embed description" rows={2} className="text-sm whitespace-pre-wrap text-muted-foreground" />
+                      <div className="text-xs text-muted-foreground mb-2">
+                        💡 Tip: Type @username to mention users (e.g., @sutto)
+                      </div>
+                                             <div className="relative">
+                         <Input 
+                           value={title} 
+                           onChange={e => handleInputChange('title', e.target.value, setTitle)} 
+                           placeholder="Embed title" 
+                           className="font-semibold leading-snug mb-2 w-[24rem]" 
+                         />
+                         {showUserSearch && activeMentionField === 'title' && (
+                           <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
+                                style={{
+                                  top: '100%',
+                                  left: '0',
+                                  marginTop: '4px'
+                                }}>
+                             <div className="text-xs text-muted-foreground mb-2 px-2">
+                               Select user to mention:
+                             </div>
+                             {filteredUsers.length > 0 ? (
+                               filteredUsers.map((user) => (
+                                 <button
+                                   key={user.discordUserId}
+                                   onClick={() => insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId)}
+                                   className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm flex items-center gap-2"
+                                 >
+                                   <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
+                                     {user.username?.charAt(0)?.toUpperCase() || '?'}
+                                   </div>
+                                   <div>
+                                     <div className="font-medium">{user.username}</div>
+                                     {user.displayName && user.displayName !== user.username && (
+                                       <div className="text-xs text-muted-foreground">{user.displayName}</div>
+                                     )}
+                                   </div>
+                                 </button>
+                               ))
+                             ) : (
+                               <div className="px-2 py-2 text-sm text-muted-foreground">
+                                 No users found matching "{userSearchQuery}"
+                               </div>
+                             )}
+                             <button
+                               onClick={() => setShowUserSearch(false)}
+                               className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm text-muted-foreground mt-1"
+                             >
+                               Cancel
+                             </button>
+                           </div>
+                         )}
+                       </div>
+                                             <div className="relative">
+                         <Textarea 
+                           value={description} 
+                           onChange={e => handleInputChange('description', e.target.value, setDescription)} 
+                           placeholder="Embed description" 
+                           rows={2} 
+                           className="text-sm whitespace-pre-wrap text-muted-foreground" 
+                         />
+                         {showUserSearch && activeMentionField === 'description' && (
+                           <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
+                                style={{
+                                  top: '100%',
+                                  left: '0',
+                                  marginTop: '4px'
+                                }}>
+                             <div className="text-xs text-muted-foreground mb-2 px-2">
+                               Select user to mention:
+                             </div>
+                             {filteredUsers.length > 0 ? (
+                               filteredUsers.map((user) => (
+                                 <button
+                                   key={user.discordUserId}
+                                   onClick={() => insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId)}
+                                   className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm flex items-center gap-2"
+                                 >
+                                   <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
+                                     {user.username?.charAt(0)?.toUpperCase() || '?'}
+                                   </div>
+                                   <div>
+                                     <div className="font-medium">{user.username}</div>
+                                     {user.displayName && user.displayName !== user.username && (
+                                       <div className="text-xs text-muted-foreground">{user.displayName}</div>
+                                     )}
+                                   </div>
+                                 </button>
+                               ))
+                             ) : (
+                               <div className="px-2 py-2 text-sm text-muted-foreground">
+                                 No users found matching "{userSearchQuery}"
+                               </div>
+                             )}
+                             <button
+                               onClick={() => setShowUserSearch(false)}
+                               className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm text-muted-foreground mt-1"
+                             >
+                               Cancel
+                             </button>
+                           </div>
+                         )}
+                       </div>
+                      
+
 
                       {/* Large image below */}
                       <div className="mt-3">
@@ -440,12 +1042,55 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                             <ImageIcon className="w-4 h-4" />
                           )}
                         </button>
-                        <input 
-                          className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" 
-                          placeholder="Footer text" 
-                          value={footerText} 
-                          onChange={(e)=>setFooterText(e.target.value)} 
-                        />
+                                                 <div className="relative">
+                           <input 
+                             className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" 
+                             placeholder="Footer text" 
+                             value={footerText} 
+                             onChange={(e) => handleInputChange('footerText', e.target.value, setFooterText)} 
+                           />
+                           {showUserSearch && activeMentionField === 'footerText' && (
+                             <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
+                                  style={{
+                                    top: '100%',
+                                    left: '0',
+                                    marginTop: '4px'
+                                  }}>
+                               <div className="text-xs text-muted-foreground mb-2 px-2">
+                                 Select user to mention:
+                               </div>
+                               {filteredUsers.length > 0 ? (
+                                 filteredUsers.map((user) => (
+                                   <button
+                                     key={user.discordUserId}
+                                     onClick={() => insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId)}
+                                     className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm flex items-center gap-2"
+                                   >
+                                     <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
+                                       {user.username?.charAt(0)?.toUpperCase() || '?'}
+                                     </div>
+                                     <div>
+                                       <div className="font-medium">{user.username}</div>
+                                       {user.displayName && user.displayName !== user.username && (
+                                         <div className="text-xs text-muted-foreground">{user.displayName}</div>
+                                       )}
+                                     </div>
+                                   </button>
+                                 ))
+                               ) : (
+                                 <div className="px-2 py-2 text-sm text-muted-foreground">
+                                   No users found matching "{userSearchQuery}"
+                                 </div>
+                               )}
+                               <button
+                                 onClick={() => setShowUserSearch(false)}
+                                 className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm text-muted-foreground mt-1"
+                               >
+                                 Cancel
+                               </button>
+                             </div>
+                           )}
+                         </div>
                                                  {showTimestamp && <span className="ml-auto">Just now</span>}
                       </div>
                     </div>
@@ -462,19 +1107,19 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
               </label>
             </div>
 
-            {/* Publish button */}
-            <Button
-              onClick={doPublish}
-              disabled={!channelId || publishing}
-              className="w-full bg-gradient-to-r from-blue-500/90 to-blue-400/80 text-white shadow-md hover:shadow-lg hover:from-blue-600/90 hover:to-blue-500/80 focus-visible:ring-blue-400/40"
-            >
-              <SendIcon className="w-4 h-4 mr-2" /> {publishing ? 'Publishing…' : (editing ? 'Update Message' : 'Publish as Embedded Message')}
-            </Button>
+                         {/* Publish button */}
+             <Button
+               onClick={doPublish}
+               disabled={selectedChannels.length === 0 || publishing}
+               className="w-full bg-gradient-to-r from-blue-500/90 to-blue-400/80 text-white shadow-md hover:shadow-lg hover:from-blue-600/90 hover:to-blue-500/80 focus-visible:ring-blue-400/40"
+             >
+               <SendIcon className="w-4 h-4 mr-2" /> {publishing ? 'Publishing…' : (editing ? 'Update Message' : `Publish to ${selectedChannels.length} Channel${selectedChannels.length !== 1 ? 's' : ''}`)}
+             </Button>
             {publishMsg && <div className={`text-sm ${publishMsg.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>{publishMsg}</div>}
           </div>
         </div>
 
-                                                                                                                                                                                                                       {/* Right Column: Embedded Message List */}
+                                                                                                                                                                                                                        {/* Right Column: Embedded Message List */}
              <div className="space-y-6 h-full flex-1">
            {/* Header - matching left column spacing */}
            <div className="flex items-center justify-between">
@@ -484,7 +1129,7 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
              </Button>
            </div>
            
-                                                                                                           {/* List Container - matching left column styling */}
+                                                                                                            {/* List Container - matching left column styling */}
                                                                <div className="rounded-xl border p-4 bg-card space-y-4 flex flex-col h-full max-h-[700px]">
              {/* Search */}
              <div className="relative">
@@ -538,9 +1183,14 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                                                <div className="text-sm text-muted-foreground mt-1 overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                           {c.description || 'No description'} 
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Channel: {channels.find(ch => String(ch.id) === String(c.channelId))?.name || `#${c.channelId}`}
-                        </div>
+                                                 <div className="text-xs text-muted-foreground mt-1">
+                           Channel: {channels.find(ch => String(ch.id) === String(c.channelId))?.name || `#${c.channelId}`}
+                           {checkMultiChannel(c) && (
+                             <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                               Multi-channel
+                             </span>
+                           )}
+                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           Created by: {c.createdBy || 'ServerMate Bot'}
                         </div>
@@ -754,6 +1404,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
            </DialogFooter>
          </DialogContent>
        </Dialog>
+
+
     </Section>
   );
 }
