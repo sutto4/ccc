@@ -424,54 +424,50 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
        };
 
        if (editing && editing.id) {
-         // Update existing message across all selected channels
-         const updatePromises = selectedChannels.map(async (channel) => {
-           const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages/${editing.id}`, {
-             method: 'PUT',
-             headers: { 'content-type': 'application/json', ...authHeader }, 
-             body: JSON.stringify({ 
-               ...body, 
-               channelId: channel.channelId,
-               channels: selectedChannels // Store the full channels array
-             })
-           });
-           return res.ok;
+         // Update existing message - send to current guild's API with all channels
+         const res = await fetch(`/api/proxy/guilds/${guildId}/embedded-messages/${editing.id}`, {
+           method: 'PUT',
+           headers: { 'content-type': 'application/json', ...authHeader }, 
+           body: JSON.stringify({ 
+             ...body, 
+             channelId: selectedChannels[0].channelId, // Primary channel for backward compatibility
+             channels: selectedChannels // All channels to update
+           })
          });
          
-         const results = await Promise.all(updatePromises);
-         if (results.some(r => !r)) {
-           setPublishMsg("Some updates failed");
+         if (!res.ok) {
+           setPublishMsg("Failed to update message");
            return;
          }
          
-         toast({ title: "Updated", description: `Updated across ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}`, duration: 3000 });
-       } else {
-         // Create new messages in all selected channels
-         const createPromises = selectedChannels.map(async (channel) => {
-           const res = await fetch(`/api/proxy/guilds/${channel.guildId}/embedded-messages`, {
-             method: 'POST',
-             headers: { 'content-type': 'application/json', ...authHeader }, 
-             body: JSON.stringify({ 
-               ...body, 
-               channelId: channel.channelId,
-               channels: selectedChannels // Store the full channels array
-             })
-           });
-           return res.ok ? await res.json() : null;
-         });
-         
-         const results = await Promise.all(createPromises);
-         const successful = results.filter(r => r !== null);
-         
-         if (successful.length === 0) {
-           setPublishMsg("All posts failed");
-           return;
-         }
-         
-         if (successful.length < selectedChannels.length) {
-           setPublishMsg(`${successful.length}/${selectedChannels.length} posts successful`);
+         const result = await res.json();
+         if (result.success) {
+           toast({ title: "Updated", description: `Updated across ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}`, duration: 3000 });
          } else {
+           setPublishMsg(result.message || "Failed to update message");
+         }
+       } else {
+         // Create new message - send to current guild's API with all channels
+         const res = await fetch(`/api/proxy/guilds/${guildId}/embedded-messages`, {
+           method: 'POST',
+           headers: { 'content-type': 'application/json', ...authHeader }, 
+           body: JSON.stringify({ 
+             ...body, 
+             channelId: selectedChannels[0].channelId, // Primary channel for backward compatibility
+             channels: selectedChannels // All channels to send to
+           })
+         });
+         
+         if (!res.ok) {
+           setPublishMsg("Failed to publish message");
+           return;
+         }
+         
+         const result = await res.json();
+         if (result.success) {
            toast({ title: "Published", description: `Posted to ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}`, duration: 3000 });
+         } else {
+           setPublishMsg(result.message || "Failed to publish message");
          }
        }
        
