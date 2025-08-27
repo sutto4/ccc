@@ -20,7 +20,7 @@ const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
 export function useGuildMembers(guildId: string) {
   const { data: session } = useSession();
   
-  console.log('useGuildMembers hook called with:', { guildId, hasSession: !!session });
+  // console.log('useGuildMembers hook called with:', { guildId, hasSession: !!session });
   
   // Core state
   const [loading, setLoading] = useState(false);
@@ -61,7 +61,7 @@ export function useGuildMembers(guildId: string) {
 
   // Load roles once
   useEffect(() => {
-    console.log('Roles loading effect triggered:', { guildId, hasSession: !!session });
+    // console.log('Roles loading effect triggered:', { guildId, hasSession: !!session });
     
     if (!guildId || !session) return;
     
@@ -72,7 +72,7 @@ export function useGuildMembers(guildId: string) {
         if (!token) return;
         
         const rolesData = await fetchRoles(guildId, token);
-        console.log('Roles loaded:', rolesData?.length || 0);
+        // console.log('Roles loaded:', rolesData?.length || 0);
         setRoles(rolesData);
       } catch (err: any) {
         console.error('Failed to load roles:', err);
@@ -89,7 +89,7 @@ export function useGuildMembers(guildId: string) {
   const loadMembers = useCallback(async (resetPage = false) => {
     if (!guildId || !session) return;
     
-    console.log('loadMembers called with:', { resetPage, hasLoadedMembers: hasLoadedMembers.current });
+    // console.log('loadMembers called with:', { resetPage, hasLoadedMembers: hasLoadedMembers.current });
     
     try {
       setLoading(true);
@@ -105,7 +105,7 @@ export function useGuildMembers(guildId: string) {
       // Load members with search
       const membersData = await fetchMembersLegacy(guildId, token);
       
-      console.log('API returned members:', membersData?.length || 0, 'members');
+      // console.log('API returned members:', membersData?.length || 0, 'members');
       
       // Single loop: transform, filter, and count in one pass
       const searchTerm = debouncedSearch.trim().toLowerCase();
@@ -113,9 +113,9 @@ export function useGuildMembers(guildId: string) {
       
       const allFilteredMembers: Member[] = [];
       
-      console.log('Starting to process', membersData?.length || 0, 'members');
-      console.log('Search term:', searchTerm, 'hasSearch:', hasSearch);
-      console.log('Role filter:', roleFilter);
+      // console.log('Starting to process', membersData?.length || 0, 'members');
+      // console.log('Search term:', searchTerm, 'hasSearch:', hasSearch);
+      // console.log('Role filter:', roleFilter);
       
       for (const mem of membersData) {
         // Transform member data (only what's needed)
@@ -144,19 +144,19 @@ export function useGuildMembers(guildId: string) {
         }
       }
       
-      console.log('After filtering,', allFilteredMembers.length, 'members remain');
+      // console.log('After filtering,', allFilteredMembers.length, 'members remain');
       
       // Update total count
       setTotalMembers(allFilteredMembers.length);
       
-      console.log('Filtered members:', allFilteredMembers.length, 'total, showing page with offset:', offset);
+      // console.log('Filtered members:', allFilteredMembers.length, 'total, showing page with offset:', offset);
       
       // Apply pagination
       const startIndex = offset;
       const endIndex = Math.min(startIndex + pageSize, allFilteredMembers.length);
       const pageMembers = allFilteredMembers.slice(startIndex, endIndex);
       
-      console.log('Page members:', pageMembers.length, 'members');
+      // console.log('Page members:', pageMembers.length, 'members');
       
       setMembers(pageMembers);
       setHasMore(endIndex < allFilteredMembers.length);
@@ -175,10 +175,10 @@ export function useGuildMembers(guildId: string) {
 
   // Initial load of members (only once when roles are ready)
   useEffect(() => {
-    console.log('Initial load effect triggered:', { guildId, hasSession: !!session, rolesLength: roles.length, hasLoadedMembers: hasLoadedMembers.current });
+    // console.log('Initial load effect triggered:', { guildId, hasSession: !!session, rolesLength: roles.length, hasLoadedMembers: hasLoadedMembers.current });
     
     if (guildId && session && roles.length > 0 && !hasLoadedMembers.current) {
-      console.log('Triggering initial load of members');
+      // console.log('Triggering initial load of members');
       hasLoadedMembers.current = true;
       loadMembers(true);
     }
@@ -352,7 +352,7 @@ export function useGuildMembersKanban(guildId: string) {
       // Load all members
       const membersData = await fetchMembersLegacy(guildId, token);
       
-      console.log('Kanban API returned members:', membersData?.length || 0, 'members');
+      // console.log('Kanban API returned members:', membersData?.length || 0, 'members');
       
       // Transform member data
       const transformedMembers: Member[] = membersData.map(mem => ({

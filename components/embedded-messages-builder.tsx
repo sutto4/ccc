@@ -269,10 +269,9 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
 
   // Global deduplication function
   const makeGlobalDeduplicatedRequest = async (url: string, options: RequestInit = {}) => {
-    const requestKey = `${url}-${JSON.stringify(options)}`;
+    const requestKey = `${url}-${JSON.stringify({ ...options, headers: { ...options.headers, Authorization: '[REDACTED]' } })}`;
     
     console.log(`🔍 Global deduplication check for: ${url}`);
-    console.log(`🔍 Request key: ${requestKey}`);
     console.log(`🔍 Already in progress globally: ${globalRequestIds.current.has(requestKey)}`);
     console.log(`🔍 Total global requests in progress: ${globalRequestIds.current.size}`);
     
@@ -309,7 +308,7 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
       guildId,
       hasLoadedData: hasLoadedData.current,
       isLoading: isLoadingRef.current,
-      authHeader: typeof authHeader === 'object' && 'Authorization' in authHeader,
+      hasAuthHeader: typeof authHeader === 'object' && 'Authorization' in authHeader,
       requestIdsSize: globalRequestIds.current.size
     });
     

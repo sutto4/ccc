@@ -128,11 +128,11 @@ export default function Sidebar() {
     return true;
   };
   
-  // Debug logging
-  console.log("Session:", session);
-  console.log("User role:", session?.role);
-  console.log("Is admin:", isAdmin);
-  console.log("Features:", features);
+  // Debug logging - REMOVED for security
+  // console.log("Session:", session);
+  // console.log("User role:", session?.role);
+  // console.log("Is admin:", isAdmin);
+  // console.log("Features:", features);
 
   useEffect(() => {
     let alive = true;

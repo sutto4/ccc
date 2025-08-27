@@ -49,11 +49,11 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
   const [dragOverGroup, setDragOverGroup] = useState<number | null>(null);
   const { toast } = useToast();
 
-  console.log('ServerGroupsManager mounted, guildId:', guildId);
-  console.log('Session status:', !!session);
+  // console.log('ServerGroupsManager mounted, guildId:', guildId);
+  // console.log('Session status:', !!session);
 
   useEffect(() => {
-    console.log('useEffect triggered, session:', !!session);
+    // console.log('useEffect triggered, session:', !!session);
     if (session) {
       loadData();
     }
@@ -61,9 +61,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
 
   // Debug effect to log state changes
   useEffect(() => {
-    console.log('Groups state:', groups);
-    console.log('User guilds state:', userGuilds);
-    console.log('Ungrouped guilds count:', userGuilds.filter(g => !g.group).length);
+    // console.log('Groups state:', groups);
+    // console.log('User guilds state:', userGuilds);
+    // console.log('Ungrouped guilds count:', userGuilds.filter(g => !g.group).length);
   }, [groups, userGuilds]);
 
   const loadData = async () => {
