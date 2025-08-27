@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,8 +39,12 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   const { data: session } = useSession();
   const { toast } = useToast();
   
-  // Debug logging for guildId
-  console.log('Current guildId from params:', guildId);
+  // Global request deduplication - persists across component lifecycle changes
+  const globalRequestIds = useRef(new Map<string, Promise<any>>());
+
+  // More robust duplicate prevention
+  const hasLoadedData = useRef(false);
+  const isLoadingRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -98,21 +102,9 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   const usernameMap = useMemo(() => {
     if (!guildMembers.length) return new Map();
     
-    const map = new Map();
-    guildMembers.forEach(member => {
-      // Index by username (case-insensitive)
-      if (member.username) {
-        map.set(member.username.toLowerCase(), member.discordUserId);
-      }
-      // Index by displayName/nickname if available
-      if (member.displayName) {
-        map.set(member.displayName.toLowerCase(), member.discordUserId);
-      }
-      if (member.nickname) {
-        map.set(member.nickname.toLowerCase(), member.discordUserId);
-      }
-    });
-    return map;
+    return new Map(
+      guildMembers.map(m => [m.username.toLowerCase(), m])
+    );
   }, [guildMembers]);
 
   // Optimized mention conversion function
@@ -193,13 +185,6 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
           guild.name.toLowerCase().includes(searchTerm)
         ) || []
       })).filter((guild: any) => {
-        // Debug logging to see what's happening
-        console.log('Filtering guild:', { 
-          guildId: guild.id, 
-          currentGuildId: guildId, 
-          isEqual: guild.id === guildId,
-          guildName: guild.name 
-        });
         return guild.channels.length > 0 && guild.id !== guildId;
       }) || []
     })).filter(group => group.guilds.length > 0);
@@ -262,55 +247,129 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
      });
    }, [configs, searchQuery, channels]);
 
-     useEffect(() => {
-     let alive = true;
-     (async () => {
-       try {
-         setLoading(true);
-         const [chRes, cRes, membersRes, guildsRes, groupsRes] = await Promise.all([
-           fetch(`/api/guilds/${guildId}/channels`, { headers: authHeader }).then(r => r.json()),
-           fetch(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).then(r => r.json()).catch(() => ({ configs: [] })),
-           fetch(`/api/guilds/${guildId}/members`, { headers: authHeader }).then(r => r.json()).catch(() => ({ members: [] })),
-           fetch(`/api/guilds/${guildId}/guilds`, { headers: authHeader }).then(r => r.json()).catch(() => ({ guilds: [] })),
-           fetch(`/api/guilds/${guildId}/groups`, { headers: authHeader }).then(r => r.json()).catch(() => ({ groups: [] })),
-         ]);
-         
-         if (!alive) return;
-         
-         const ch = Array.isArray(chRes?.channels) ? chRes.channels : Array.isArray(chRes) ? chRes : [];
-         setChannels(ch);
-         
-         const guildsData = Array.isArray(guildsRes?.guilds) ? guildsRes.guilds : [];
-         setGuilds(guildsData);
-         
-         const groupsData = Array.isArray(groupsRes?.groups) ? groupsRes.groups : [];
-         setGroups(groupsData);
-         
-         // Debug: Log the groups data to see what we're working with
-         console.log('Loaded groups data:', groupsData);
-         console.log('Current guildId:', guildId);
-         
-         setGuildMembers(Array.isArray(membersRes) ? membersRes : []);
-         setConfigs(Array.isArray(cRes?.configs) ? cRes.configs : []);
-       } finally {
-         setLoading(false);
-       }
-     })();
-     return () => { alive = false; };
-   }, [guildId, authHeader]);
+  // Reset loaded data flag when guildId changes
+  useEffect(() => {
+    hasLoadedData.current = false;
+    isLoadingRef.current = false;
+  }, [guildId]);
 
-   // Debug effect to monitor groups changes
-   useEffect(() => {
-     if (groups.length > 0) {
-       console.log('Groups updated:', groups);
-       groups.forEach(group => {
-         console.log(`Group "${group.name}":`, group);
-         group.guilds?.forEach((guild: any) => {
-           console.log(`  Guild "${guild.name}" (ID: ${guild.id}):`, guild);
-         });
-       });
-     }
-   }, [groups]);
+  // Reset loaded data flag when session changes (new login/logout)
+  useEffect(() => {
+    hasLoadedData.current = false;
+    isLoadingRef.current = false;
+  }, [session?.accessToken]);
+
+  // Cleanup effect to reset flags when component unmounts
+  useEffect(() => {
+    return () => {
+      hasLoadedData.current = false;
+      isLoadingRef.current = false;
+    };
+  }, []);
+
+  // Global deduplication function
+  const makeGlobalDeduplicatedRequest = async (url: string, options: RequestInit = {}) => {
+    const requestKey = `${url}-${JSON.stringify(options)}`;
+    
+    console.log(`🔍 Global deduplication check for: ${url}`);
+    console.log(`🔍 Request key: ${requestKey}`);
+    console.log(`🔍 Already in progress globally: ${globalRequestIds.current.has(requestKey)}`);
+    console.log(`🔍 Total global requests in progress: ${globalRequestIds.current.size}`);
+    
+    // If this exact request is already in progress globally, return the existing promise
+    if (globalRequestIds.current.has(requestKey)) {
+      console.log(`🔍 ⏳ Reusing existing request: ${url}`);
+      return globalRequestIds.current.get(requestKey);
+    }
+    
+    // Create new request promise
+    console.log(`🔍 ➕ Creating new global request: ${url}`);
+    const requestPromise = (async () => {
+      try {
+        const response = await fetch(url, options);
+        const data = await response.json();
+        return data;
+      } finally {
+        // Remove from global in-progress map
+        console.log(`🔍 ➖ Removing request from global in-progress: ${url}`);
+        globalRequestIds.current.delete(requestKey);
+      }
+    })();
+    
+    // Store the promise in the global map
+    globalRequestIds.current.set(requestKey, requestPromise);
+    
+    return requestPromise;
+  };
+
+  useEffect(() => {
+    let alive = true;
+    
+    console.log("🔍 useEffect triggered:", {
+      guildId,
+      hasLoadedData: hasLoadedData.current,
+      isLoading: isLoadingRef.current,
+      authHeader: typeof authHeader === 'object' && 'Authorization' in authHeader,
+      requestIdsSize: globalRequestIds.current.size
+    });
+    
+    // Prevent duplicate API calls if already loaded data for this guild or currently loading
+    if (hasLoadedData.current || isLoadingRef.current) {
+      console.log("🔍 Skipping API calls - already loaded or loading");
+      return;
+    }
+    
+    // Set loading ref to prevent duplicate calls
+    console.log("🔍 Setting isLoadingRef to true");
+    isLoadingRef.current = true;
+    
+    (async () => {
+      try {
+        console.log("🔍 Starting API calls...");
+        setLoading(true);
+        
+        // Use deduplicated requests
+        const [chRes, cRes, membersRes, guildsRes, groupsRes] = await Promise.all([
+          makeGlobalDeduplicatedRequest(`/api/guilds/${guildId}/channels`, { headers: authHeader }),
+          makeGlobalDeduplicatedRequest(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).catch(() => ({ configs: [] })),
+          makeGlobalDeduplicatedRequest(`/api/guilds/${guildId}/members`, { headers: authHeader }).catch(() => ({ members: [] })),
+          makeGlobalDeduplicatedRequest(`/api/proxy/guilds/${guildId}/guilds`, { headers: authHeader }).catch(() => ({ groups: [] })),
+          makeGlobalDeduplicatedRequest(`/api/guilds/${guildId}/groups`, { headers: authHeader }).catch(() => ({ groups: [] })),
+        ]);
+        
+        if (!alive) return;
+        
+        console.log("🔍 API calls completed successfully");
+        
+        const ch = Array.isArray(chRes?.channels) ? chRes.channels : Array.isArray(chRes) ? chRes : [];
+        setChannels(ch);
+        
+        const guildsData = Array.isArray(guildsRes?.guilds) ? guildsRes.guilds : [];
+        setGuilds(guildsData);
+        
+        const groupsData = Array.isArray(groupsRes?.groups) ? groupsRes.groups : [];
+        setGroups(groupsData);
+        
+        setGuildMembers(Array.isArray(membersRes) ? membersRes : []);
+        setConfigs(Array.isArray(cRes?.configs) ? cRes.configs : []);
+        
+        // Mark as loaded to prevent duplicate calls
+        console.log("🔍 Setting hasLoadedData to true");
+        hasLoadedData.current = true;
+      } finally {
+        if (alive) {
+          console.log("🔍 Setting loading to false");
+          setLoading(false);
+          isLoadingRef.current = false;
+        }
+      }
+    })();
+    
+    return () => { 
+      console.log("🔍 useEffect cleanup");
+      alive = false; 
+    };
+  }, [guildId, authHeader]);
 
    // Close channel selector when clicking outside
    useEffect(() => {
@@ -379,12 +438,14 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   };
 
   const refresh = async () => {
-    const cRes = await fetch(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).then(r => r.json()).catch(()=>({ configs: [] }));
-    console.log('🔍 Refresh response:', cRes);
-    const configsArray = Array.isArray(cRes?.configs) ? cRes.configs : [];
-    console.log('🔍 Configs array:', configsArray);
-    console.log('🔍 First config messageId:', configsArray[0]?.messageId);
-    setConfigs(configsArray);
+    // Only refresh embedded messages, not all data
+    try {
+      const cRes = await makeGlobalDeduplicatedRequest(`/api/proxy/guilds/${guildId}/embedded-messages`, { headers: authHeader }).catch(() => ({ configs: [] }));
+      const configsArray = Array.isArray(cRes?.configs) ? cRes.configs : [];
+      setConfigs(configsArray);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    }
   };
 
      const doPublish = async () => {
@@ -398,11 +459,6 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
        const convertedDescription = description ? convertMentions(description) : undefined;
        const convertedAuthorName = authorName ? convertMentions(authorName) : undefined;
        const convertedFooterText = footerText ? convertMentions(footerText) : undefined;
-       
-       console.log('doPublish: Converting mentions', {
-         original: { title, description, authorName, footerText },
-         converted: { convertedTitle, convertedDescription, convertedAuthorName, convertedFooterText }
-       });
        
        const body = {
          title: convertedTitle,
@@ -511,14 +567,12 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
 
   const doDelete = async (c: EmbeddedMessageConfig) => {
     try {
-      console.log('🔍 Deleting config:', { id: c.id, guildId, url: `/api/proxy/guilds/${guildId}/embedded-messages/${c.id}` });
       const res = await fetch(`/api/proxy/guilds/${guildId}/embedded-messages/${c.id}`, { method: 'DELETE', headers: authHeader });
       if (!res.ok) throw new Error((await res.json().catch(()=>({})))?.error || `Failed (${res.status})`);
       toast({ title: "Deleted", description: "Embedded message sent", duration: 3000 });
       await logAction({ guildId, userId: (session?.user as any)?.id || "", actionType: "embedded-message.delete", user: { id: (session?.user as any)?.id || "" }, actionData: { id: c.id } });
       setConfigs(prev => prev.filter(x => x.id !== c.id));
     } catch (e:any) {
-      console.log('❌ Delete failed:', e);
       toast({ title: "Delete failed", description: e?.message || "Unknown error", variant: "destructive" });
     }
   };
@@ -535,6 +589,16 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
               {editing ? `Edit: ${editing.title || 'Untitled'}` : 'Create New Message'}
             </h3>
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={refresh}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                <RefreshCwIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
               {editing && (
                 <Button variant="outline" size="sm" onClick={cancelEdit}>
                   Cancel
