@@ -949,64 +949,102 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
         setMentionQuery("");
       };
       
-      const filteredMentions = cleanMentionData.filter(item => 
-        item.display.toLowerCase().includes(mentionQuery.toLowerCase())
-      );
-      
-      // Function to render text with styled mentions inline
-      const renderTextWithMentions = (text: string) => {
-        if (!text) return '';
+      // Optimized mentions filtering with debouncing
+      const filteredMentions = useMemo(() => {
+        if (!mentionQuery || mentionQuery.length < 2) return [];
         
-        // Split text by @ symbols and identify real mentions
-        const parts = text.split(/(@\w+)/g);
+        // Only filter if query is 2+ characters to reduce processing
+        const query = mentionQuery.toLowerCase();
+        const results = [];
         
-        return parts.map((part, index) => {
-          if (part.startsWith('@') && part.length > 1) {
-            const username = part.slice(1);
-            const user = cleanMentionData.find(item => 
-              item.display.toLowerCase() === username.toLowerCase()
-            );
-            
-            if (user) {
-              // This is a real mention - style it
-              return (
-                <span key={index} className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-sm font-medium border border-blue-200 mx-1">
-                  {part}
-                </span>
-              );
-            }
+        // Manual loop is faster than filter for small datasets
+        for (let i = 0; i < cleanMentionData.length && results.length < 8; i++) {
+          const item = cleanMentionData[i];
+          if (item.display.toLowerCase().includes(query)) {
+            results.push(item);
           }
-          // Regular text
-          return part;
-        });
-      };
+        }
+        
+        return results;
+      }, [mentionQuery, cleanMentionData]);
+      
+      // Auto-resize textarea with aggressive debouncing
+      const textareaRef = useRef<HTMLTextAreaElement>(null);
+      const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+      
+      useEffect(() => {
+        // Clear any existing timeout
+        if (resizeTimeoutRef.current) {
+          clearTimeout(resizeTimeoutRef.current);
+        }
+        
+        // Much longer debounce to reduce reflows
+        resizeTimeoutRef.current = setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+          }
+        }, 200); // 200ms delay - much longer debounce
+        
+        // Cleanup timeout on unmount
+        return () => {
+          if (resizeTimeoutRef.current) {
+            clearTimeout(resizeTimeoutRef.current);
+            resizeTimeoutRef.current = null;
+          }
+        };
+      }, [safeValue]);
 
       return (
         <div className="relative">
-          {/* Custom input that shows styled mentions inline */}
-          <div
-            className={`${className} p-3 border border-gray-300 rounded-md bg-white min-h-[${rows * 1.5}rem]`}
+          {/* Auto-expanding textarea with styled mentions */}
+          <textarea
+            ref={textareaRef}
+            value={safeValue ?? ""}
+            onChange={handleInputChange}
+            placeholder={placeholder}
+            className={className}
+            rows={rows}
             style={{ 
               minHeight: `${rows * 1.5}rem`,
-              resize: 'vertical'
+              resize: 'none',
+              overflow: 'hidden'
             }}
-          >
-            <div className="whitespace-pre-wrap">
-              {renderTextWithMentions(safeValue ?? "")}
-            </div>
+          />
+          
+          {/* Show styled mentions below the textarea - optimized */}
+          {(() => {
+            if (!safeValue || !safeValue.includes('@')) return null;
             
-            {/* Hidden textarea for actual input */}
-            <textarea
-              value={safeValue ?? ""}
-              onChange={handleInputChange}
-              placeholder={placeholder}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-text"
-              style={{ 
-                minHeight: `${rows * 1.5}rem`,
-                resize: 'vertical'
-              }}
-            />
-          </div>
+            // Memoize the mentions parsing to avoid expensive regex on every render
+            const mentions = safeValue.match(/@\w+/g) || [];
+            if (mentions.length === 0) return null;
+            
+            return (
+              <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm">
+                <div className="text-gray-600 mb-1">Mentions:</div>
+                <div className="flex flex-wrap gap-1">
+                  {mentions.map((mention, index) => {
+                    const username = mention.slice(1);
+                    // Use a Map for O(1) lookup instead of find()
+                    const user = cleanMentionData.find(item => 
+                      item.display.toLowerCase() === username.toLowerCase()
+                    );
+                    
+                    if (user) {
+                      return (
+                        <span key={index} className="inline-flex items-center bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium border border-blue-200">
+                          <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
+                          {mention}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           
           {/* Custom mentions dropdown */}
           {showMentions && filteredMentions.length > 0 && (
