@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+
+
 import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +13,8 @@ import { CheckIcon, ImageIcon, RefreshCwIcon, SaveIcon, Trash2Icon, LayoutGridIc
 import { useToast } from "@/components/ui/use-toast";
 import { logAction } from "@/lib/logger";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+
 
 type EmbeddedMessageConfig = {
    id: string;
@@ -102,9 +106,20 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   const usernameMap = useMemo(() => {
     if (!guildMembers.length) return new Map();
     
-    return new Map(
-      guildMembers.map(m => [m.username.toLowerCase(), m])
-    );
+    const map = new Map();
+    guildMembers.forEach(member => {
+      if (member.username && member.discordUserId) {
+        map.set(member.username.toLowerCase(), member.discordUserId);
+      }
+      if (member.displayName && member.discordUserId) {
+        map.set(member.displayName.toLowerCase(), member.discordUserId);
+      }
+      if (member.nickname && member.discordUserId) {
+        map.set(member.nickname.toLowerCase(), member.discordUserId);
+      }
+    });
+    
+    return map;
   }, [guildMembers]);
 
   // Optimized mention conversion function
@@ -112,7 +127,20 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
     if (!text || !usernameMap.size) return text;
     
     return text.replace(/@(\w+)/g, (match, username) => {
-      const userId = usernameMap.get(username.toLowerCase());
+      // Try exact match first
+      let userId = usernameMap.get(username.toLowerCase());
+      
+      // If no exact match, try partial matches
+      if (!userId) {
+        for (const [mapUsername, mapUserId] of usernameMap.entries()) {
+          if (mapUsername.toLowerCase().includes(username.toLowerCase()) || 
+              username.toLowerCase().includes(mapUsername.toLowerCase())) {
+            userId = mapUserId;
+            break;
+          }
+        }
+      }
+      
       return userId ? `<@${userId}>` : match;
     });
   }, [usernameMap]);
@@ -135,22 +163,44 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   const handleInputChange = useCallback((field: string, value: string, setter: (value: string) => void) => {
     setter(value);
     
-    // Check for @ symbol to trigger user search
+    // Check for @ symbol to trigger user search - look for @ anywhere in the text
     const atIndex = value.lastIndexOf('@');
     if (atIndex !== -1) {
+      // Get everything after the @ symbol
       const afterAt = value.slice(atIndex + 1);
-      if (!afterAt.includes(' ') && afterAt.length > 0) {
-        setShowUserSearch(true);
-        setUserSearchQuery(afterAt);
-        setActiveMentionField(field);
-        setMentionPosition({ start: atIndex, end: atIndex + afterAt.length + 1 });
+      
+      // Check if there's a space or end of string after the @
+      const spaceIndex = afterAt.indexOf(' ');
+      const endIndex = spaceIndex !== -1 ? spaceIndex : afterAt.length;
+      const usernamePart = afterAt.slice(0, endIndex);
+      
+      if (usernamePart.length > 0) {
+        // Check if there's an exact match in the usernameMap
+        const exactMatch = usernameMap.get(usernamePart.toLowerCase());
+        
+        if (exactMatch) {
+          // Exact match found - mark as valid mention but keep @username visible
+          console.log("🔍 Exact username match found:", { username: usernamePart, userId: exactMatch });
+          
+          // Don't show dropdown for exact matches - the visual styling will indicate it's valid
+          setShowUserSearch(false);
+          setActiveMentionField(null);
+          setMentionPosition(null);
+          setUserSearchQuery("");
+        } else {
+          // No exact match - show dropdown for search
+          setShowUserSearch(true);
+          setUserSearchQuery(usernamePart);
+          setActiveMentionField(field);
+          setMentionPosition({ start: atIndex, end: atIndex + usernamePart.length + 1 });
+        }
       } else {
         setShowUserSearch(false);
       }
     } else {
       setShowUserSearch(false);
     }
-  }, []);
+  }, [usernameMap]);
 
   // Toggle guild expansion
   const toggleGuildExpansion = useCallback((guildId: string) => {
@@ -173,30 +223,69 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   }, [channels, currentServerSearch]);
 
   const filteredGroupedServersChannels = useMemo(() => {
-    if (!groupedServersSearch.trim()) return groups;
+    console.log("🔍 filteredGroupedServersChannels triggered:", {
+      groupedServersSearch,
+      groupsCount: groups.length,
+      guildId,
+      groupsData: groups
+    });
     
+    if (!groupedServersSearch.trim()) {
+      // No search term - show all channels but filter out current server
+      const result = groups.map(group => ({
+        ...group,
+        guilds: group.guilds?.map((guild: any) => ({
+          ...guild,
+          channels: guild.channels || []
+        })).filter((guild: any) => guild.id !== guildId) || []
+      })).filter(group => group.guilds.length > 0);
+      
+      console.log("🔍 No search term - showing all channels:", result);
+      return result;
+    }
+    
+    // Search term exists - filter channels by search term
     const searchTerm = groupedServersSearch.toLowerCase();
+    console.log("🔍 Searching for:", searchTerm);
+    
     const filteredGroups = groups.map(group => ({
       ...group,
-      guilds: group.guilds?.map((guild: any) => ({
-        ...guild,
-        channels: guild.channels?.filter((channel: any) => 
+      guilds: group.guilds?.map((guild: any) => {
+        const filteredChannels = guild.channels?.filter((channel: any) => 
           channel.name.toLowerCase().includes(searchTerm) ||
           guild.name.toLowerCase().includes(searchTerm)
-        ) || []
-      })).filter((guild: any) => {
-        return guild.channels.length > 0 && guild.id !== guildId;
+        ) || [];
+        
+        console.log(`🔍 Guild ${guild.name} (${guild.id}):`, {
+          totalChannels: guild.channels?.length || 0,
+          filteredChannels: filteredChannels.length,
+          matchingChannels: filteredChannels.map((ch: any) => ch.name)
+        });
+        
+        return {
+          ...guild,
+          channels: filteredChannels
+        };
+      }).filter((guild: any) => {
+        // Only show guilds that have matching channels AND are not the current server
+        const shouldShow = guild.channels.length > 0 && guild.id !== guildId;
+        console.log(`🔍 Guild ${guild.name} should show:`, shouldShow);
+        return shouldShow;
       }) || []
     })).filter(group => group.guilds.length > 0);
     
+    console.log("🔍 Search results:", filteredGroups);
     return filteredGroups;
   }, [groups, groupedServersSearch, guildId]);
 
   // Insert user mention into the active field
   const insertUserMention = useCallback((username: string, userId: string) => {
+    console.log("🔍 insertUserMention called with:", { username, userId, type: typeof userId });
+    
     if (!activeMentionField || !mentionPosition) return;
     
     const mention = `<@${userId}>`;
+    console.log("🔍 Created mention:", mention);
     
     // Update the appropriate field
     if (activeMentionField === 'title') {
@@ -344,6 +433,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
         setChannels(ch);
         
         const guildsData = Array.isArray(guildsRes?.guilds) ? guildsRes.guilds : [];
+        console.log("🔍 Guilds data received:", guildsData);
+        console.log("🔍 Sample guild with channels:", guildsData[0]);
         setGuilds(guildsData);
         
         const groupsData = Array.isArray(groupsRes?.groups) ? groupsRes.groups : [];
@@ -368,6 +459,34 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
       console.log("🔍 useEffect cleanup");
       alive = false; 
     };
+  }, [guildId, authHeader]);
+
+  // Fetch groups data
+  useEffect(() => {
+    if (!guildId || !authHeader) return;
+    
+    const fetchGroups = async () => {
+      try {
+        const response = await makeGlobalDeduplicatedRequest(`/api/guilds/${guildId}/groups`, { headers: authHeader });
+        console.log("🔍 Raw groups API response:", response);
+        
+        if (response && Array.isArray(response)) {
+          console.log("🔍 Setting groups:", response);
+          setGroups(response);
+        } else if (response && response.groups && Array.isArray(response.groups)) {
+          console.log("🔍 Setting groups from response.groups:", response.groups);
+          setGroups(response.groups);
+        } else {
+          console.warn("🔍 Groups response is not an array:", response);
+          setGroups([]);
+        }
+      } catch (error) {
+        console.error("🔍 Error fetching groups:", error);
+        setGroups([]);
+      }
+    };
+
+    fetchGroups();
   }, [guildId, authHeader]);
 
    // Close channel selector when clicking outside
@@ -576,11 +695,384 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
     }
   };
 
+  // Function to render text with styled mentions
+  const renderTextWithMentions = useCallback((text: string) => {
+    if (!text) return text;
+    
+    // Split text by @ mentions and render each part
+    const parts = text.split(/(@\w+)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('@')) {
+        const username = part.slice(1); // Remove @
+        const userId = usernameMap.get(username.toLowerCase());
+        
+        if (userId) {
+          // Valid mention - style it
+          return (
+            <span 
+              key={index} 
+              className="inline-block bg-blue-100 text-blue-800 px-1 rounded text-sm font-medium border border-blue-200"
+              title={`Mention: ${username} (${userId})`}
+            >
+              {part}
+            </span>
+          );
+        } else {
+          // Invalid mention - style as error
+          return (
+            <span 
+              key={index} 
+              className="inline-block bg-red-100 text-red-800 px-1 rounded text-sm font-medium border border-red-200"
+              title="Invalid username"
+            >
+              {part}
+            </span>
+          );
+        }
+      }
+      return part;
+    });
+  }, [usernameMap]);
+
+  // Simple inline styled input that shows mentions with CSS
+  const InlineStyledInput = useCallback(({ 
+    value, 
+    onChange, 
+    placeholder, 
+    className, 
+    field 
+  }: { 
+    value: string; 
+    onChange: (value: string) => void; 
+    placeholder: string; 
+    className: string;
+    field: string;
+  }) => {
+    const [isFocused, setIsFocused] = useState(false);
+    
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      onChange(newValue);
+      
+      // Check for @ mentions and handle them
+      const atIndex = newValue.lastIndexOf('@');
+      if (atIndex !== -1) {
+        const afterAt = newValue.slice(atIndex + 1);
+        const spaceIndex = afterAt.indexOf(' ');
+        const endIndex = spaceIndex !== -1 ? spaceIndex : afterAt.length;
+        const usernamePart = afterAt.slice(0, endIndex);
+        
+        if (usernamePart.length > 0) {
+          const exactMatch = usernameMap.get(usernamePart.toLowerCase());
+          
+          if (exactMatch) {
+            // Don't show dropdown for exact matches
+            setShowUserSearch(false);
+            setActiveMentionField(null);
+            setMentionPosition(null);
+            setUserSearchQuery("");
+          } else {
+            // Show dropdown for search
+            setShowUserSearch(true);
+            setUserSearchQuery(usernamePart);
+            setActiveMentionField(field);
+            setMentionPosition({ start: atIndex, end: atIndex + usernamePart.length + 1 });
+          }
+        } else {
+          setShowUserSearch(false);
+        }
+      } else {
+        setShowUserSearch(false);
+      }
+    };
+    
+    // Create CSS classes for inline mention styling
+    const getInputClassName = () => {
+      let baseClass = className;
+      
+      // Add mention styling if there are @ mentions
+      if (value.includes('@')) {
+        baseClass += ' mention-styled';
+      }
+      
+      return baseClass;
+    };
+    
+    return (
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder={placeholder}
+          className={getInputClassName()}
+        />
+        
+        {/* Inline mention styling overlay */}
+        {isFocused && value.includes('@') && (
+          <div 
+            className="absolute inset-0 pointer-events-none overflow-hidden"
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              padding: 'inherit',
+              border: 'none',
+              background: 'transparent',
+              color: 'transparent'
+            }}
+          >
+            {renderTextWithMentions(value)}
+          </div>
+        )}
+      </div>
+    );
+  }, [usernameMap, setShowUserSearch, setActiveMentionField, setMentionPosition, setUserSearchQuery, renderTextWithMentions]);
+
+  // React Mentions textarea with fallback
+  const MentionsTextarea = useCallback(({ 
+    value, 
+    onChange, 
+    placeholder, 
+    className, 
+    field,
+    rows = 2
+  }: { 
+    value: string; 
+    onChange: (value: string) => void; 
+    placeholder: string; 
+    className: string;
+    field: string;
+    rows?: number;
+  }) => {
+    // Ensure value is always a string
+    const safeValue = value || '';
+    
+    // Convert guild members to the format React Mentions expects
+    const mentionData = useMemo(() => {
+      if (!guildMembers || guildMembers.length === 0) {
+        console.log('🔍 No guild members available for mentions');
+        return [];
+      }
+      
+      const validMembers = guildMembers.filter(member => {
+        const isValid = member && member.discordUserId;
+        if (!isValid) {
+          console.warn('🔍 Invalid member filtered out:', member);
+        }
+        return isValid;
+      });
+      
+      const result = validMembers.map(member => ({
+        id: member.discordUserId,
+        display: member.username || member.displayName || member.nickname || 'Unknown'
+      }));
+      
+
+      
+      return result;
+    }, [guildMembers]);
+
+    // React Mentions with proper data validation
+    const handleMentionsChange = (event: any, newValue: string, newPlainTextValue: string, mentions: any[]) => {
+      onChange(newValue);
+    };
+
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      onChange(e.target.value);
+    };
+
+    // Ensure we have absolutely clean data for React Mentions
+    const cleanMentionData = useMemo(() => {
+      if (!mentionData || mentionData.length === 0) return [];
+      
+      return mentionData
+        .filter(item => {
+          // Strict validation - only allow perfect data
+          return item && 
+                 item.id && 
+                 item.display && 
+                 typeof item.id === 'string' && 
+                 typeof item.display === 'string' &&
+                 item.id.trim() !== '' && 
+                 item.display.trim() !== '' &&
+                 !item.id.includes('undefined') && 
+                 !item.display.includes('undefined') &&
+                 !item.id.includes('null') && 
+                 !item.display.includes('null');
+        })
+        .map(item => ({
+          id: String(item.id).trim(),
+          display: String(item.display).trim()
+        }));
+    }, [mentionData]);
+
+    const canUseReactMentions = cleanMentionData.length > 0;
+
+    
+
+    if (canUseReactMentions) {
+      // Custom mentions implementation since React Mentions keeps crashing
+      const [showMentions, setShowMentions] = useState(false);
+      const [mentionQuery, setMentionQuery] = useState("");
+      const [cursorPosition, setCursorPosition] = useState(0);
+      
+      const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        const cursorPos = e.target.selectionStart || 0;
+        
+        // Check if we should show mentions dropdown
+        const lastAtSymbol = value.lastIndexOf('@', cursorPos - 1);
+        if (lastAtSymbol !== -1 && lastAtSymbol < cursorPos) {
+          const query = value.slice(lastAtSymbol + 1, cursorPos);
+          setMentionQuery(query);
+          setShowMentions(true);
+          setCursorPosition(cursorPos);
+        } else {
+          setShowMentions(false);
+        }
+        
+        onChange(value);
+      };
+      
+      const insertMention = (userId: string, username: string) => {
+        const beforeMention = safeValue.slice(0, cursorPosition - mentionQuery.length - 1);
+        const afterMention = safeValue.slice(cursorPosition);
+        // Insert with a clear, visual format that shows it's a real mention
+        const newValue = beforeMention + `@${username} ` + afterMention;
+        
+        onChange(newValue);
+        setShowMentions(false);
+        setMentionQuery("");
+      };
+      
+      const filteredMentions = cleanMentionData.filter(item => 
+        item.display.toLowerCase().includes(mentionQuery.toLowerCase())
+      );
+      
+      // Function to render text with styled mentions inline
+      const renderTextWithMentions = (text: string) => {
+        if (!text) return '';
+        
+        // Split text by @ symbols and identify real mentions
+        const parts = text.split(/(@\w+)/g);
+        
+        return parts.map((part, index) => {
+          if (part.startsWith('@') && part.length > 1) {
+            const username = part.slice(1);
+            const user = cleanMentionData.find(item => 
+              item.display.toLowerCase() === username.toLowerCase()
+            );
+            
+            if (user) {
+              // This is a real mention - style it
+              return (
+                <span key={index} className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-sm font-medium border border-blue-200 mx-1">
+                  {part}
+                </span>
+              );
+            }
+          }
+          // Regular text
+          return part;
+        });
+      };
+
+      return (
+        <div className="relative">
+          {/* Custom input that shows styled mentions inline */}
+          <div
+            className={`${className} p-3 border border-gray-300 rounded-md bg-white min-h-[${rows * 1.5}rem]`}
+            style={{ 
+              minHeight: `${rows * 1.5}rem`,
+              resize: 'vertical'
+            }}
+          >
+            <div className="whitespace-pre-wrap">
+              {renderTextWithMentions(safeValue ?? "")}
+            </div>
+            
+            {/* Hidden textarea for actual input */}
+            <textarea
+              value={safeValue ?? ""}
+              onChange={handleInputChange}
+              placeholder={placeholder}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-text"
+              style={{ 
+                minHeight: `${rows * 1.5}rem`,
+                resize: 'vertical'
+              }}
+            />
+          </div>
+          
+          {/* Custom mentions dropdown */}
+          {showMentions && filteredMentions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+              {filteredMentions.map((item) => (
+                <div
+                  key={item.id}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  onClick={() => insertMention(item.id, item.display)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium text-sm">
+                      {item.display.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{item.display}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // Fallback to regular textarea
+    return (
+      <div className="relative">
+        <textarea
+          value={safeValue}
+          onChange={handleTextareaChange}
+          placeholder={placeholder}
+          className={className}
+          rows={rows}
+          style={{ 
+            minHeight: `${rows * 1.5}rem`,
+            resize: 'vertical'
+          }}
+        />
+        
+        
+
+      </div>
+    );
+  }, [guildMembers]);
+
+
+
   return (
-    <Section title="Embedded Messages">
-      <p className="text-muted-foreground mb-6">Create rich embed-style messages for your Discord channels.</p>
-                                                                                                               <div className="flex flex-col lg:flex-row gap-6">
-                                                                                                           {/* Left Column: Form */}
+    <>
+      <style jsx>{`
+        .mention-styled {
+          background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.1) 100%);
+        }
+        
+        .mention-styled:focus {
+          background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.15) 100%);
+        }
+
+
+
+        /* React Mentions styling - clean and simple */
+
+      `}</style>
+      
+      <div className="flex gap-6 h-full">
+                                                                                                               {/* Left Column: Form */}
             <div className="space-y-6 h-full flex-1 min-h-[700px] flex flex-col" style={{ minHeight: '700px' }}>
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -898,7 +1390,7 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                       </div>
 
                       {/* Author row */}
-                      <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2 w-[24rem]`}>
+                      <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2 w-full`}>
                                                  <button
                            type="button"
                            onClick={() => {
@@ -915,7 +1407,13 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                           )}
                         </button>
                                                  <div className="relative">
-                           <Input value={authorName} onChange={e => handleInputChange('authorName', e.target.value, setAuthorName)} placeholder="Author name" className="flex-1" />
+                           <InlineStyledInput
+                             value={authorName}
+                             onChange={setAuthorName}
+                             placeholder="Author name"
+                             className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                             field="authorName"
+                           />
                            {showUserSearch && activeMentionField === 'authorName' && (
                              <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
                                   style={{
@@ -930,7 +1428,11 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                                  filteredUsers.map((user) => (
                                    <button
                                      key={user.discordUserId}
-                                     onClick={() => insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId)}
+                                     onClick={() => {
+                                       console.log("🔍 User clicked:", user);
+                                       console.log("🔍 user.discordUserId:", user.discordUserId, "type:", typeof user.discordUserId);
+                                       insertUserMention(user.username || user.displayName || user.nickname, user.discordUserId);
+                                     }}
                                      className="w-full text-left px-2 py-1 hover:bg-muted rounded text-sm flex items-center gap-2"
                                    >
                                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
@@ -964,13 +1466,16 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                       <div className="text-xs text-muted-foreground mb-2">
                         💡 Tip: Type @username to mention users (e.g., @sutto)
                       </div>
-                                             <div className="relative">
-                         <Input 
-                           value={title} 
-                           onChange={e => handleInputChange('title', e.target.value, setTitle)} 
-                           placeholder="Embed title" 
-                           className="font-semibold leading-snug mb-2 w-[24rem]" 
-                         />
+                      
+                      {/* Title Input */}
+                      <div className="relative">
+                        <InlineStyledInput
+                          value={title}
+                          onChange={setTitle}
+                          placeholder="Embed title"
+                          className="font-semibold leading-snug mb-2 w-[24rem] px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          field="title"
+                        />
                          {showUserSearch && activeMentionField === 'title' && (
                            <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
                                 style={{
@@ -1014,13 +1519,14 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                          )}
                        </div>
                                              <div className="relative">
-                         <Textarea 
-                           value={description} 
-                           onChange={e => handleInputChange('description', e.target.value, setDescription)} 
-                           placeholder="Embed description" 
-                           rows={2} 
-                           className="text-sm whitespace-pre-wrap text-muted-foreground" 
-                         />
+                                                   <MentionsTextarea
+                             value={description}
+                             onChange={setDescription}
+                             placeholder="Embed description"
+                             className="text-sm whitespace-pre-wrap text-muted-foreground px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                             field="description"
+                            rows={2}
+                           />
                          {showUserSearch && activeMentionField === 'description' && (
                            <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
                                 style={{
@@ -1116,11 +1622,12 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                           )}
                         </button>
                                                  <div className="relative">
-                           <input 
-                             className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background" 
-                             placeholder="Footer text" 
-                             value={footerText} 
-                             onChange={(e) => handleInputChange('footerText', e.target.value, setFooterText)} 
+                           <InlineStyledInput
+                             value={footerText}
+                             onChange={setFooterText}
+                             placeholder="Footer text"
+                             className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm text-foreground bg-background"
+                             field="footerText"
                            />
                            {showUserSearch && activeMentionField === 'footerText' && (
                              <div className="absolute z-[9999] bg-background border rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto min-w-64" 
@@ -1490,10 +1997,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
            </DialogFooter>
          </DialogContent>
        </Dialog>
-
-
-    </Section>
-  );
-}
+     </>
+   );
+ }
 
 
