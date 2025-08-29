@@ -94,6 +94,16 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
 
+  // User activity state
+  const [userActivityStats, setUserActivityStats] = useState({
+    totalLogins: 0,
+    firstTimeLogins: 0,
+    returningLogins: 0,
+    recentLogins24h: 0,
+    uniqueUsers: 0
+  });
+  const [loginHistory, setLoginHistory] = useState<any[]>([]);
+
   useEffect(() => {
     fetchDashboardData();
     // Remove automatic refresh to prevent connection issues
@@ -166,6 +176,44 @@ export default function AdminDashboard() {
         const errorData = await healthRes.json().catch(() => ({}));
         console.error('Health API error:', errorData);
         setError(`Failed to load health status: ${errorData.error || 'Unknown error'}`);
+      }
+
+      // Fetch user activity data
+      try {
+        const userActivityRes = await fetch('/api/admin/user-logins?limit=50');
+        if (userActivityRes.ok) {
+          const userActivityData = await userActivityRes.json();
+          setUserActivityStats(userActivityData.stats || {
+            totalLogins: 0,
+            firstTimeLogins: 0,
+            returningLogins: 0,
+            recentLogins24h: 0,
+            uniqueUsers: 0
+          });
+          setLoginHistory(userActivityData.loginHistory || []);
+        } else {
+          console.error('User activity API error:', await userActivityRes.text());
+          // Set default values if API fails
+          setUserActivityStats({
+            totalLogins: 0,
+            firstTimeLogins: 0,
+            returningLogins: 0,
+            recentLogins24h: 0,
+            uniqueUsers: 0
+          });
+          setLoginHistory([]);
+        }
+      } catch (userActivityError) {
+        console.error('Failed to fetch user activity:', userActivityError);
+        // Set default values if fetch fails
+        setUserActivityStats({
+          totalLogins: 0,
+          firstTimeLogins: 0,
+          returningLogins: 0,
+          recentLogins24h: 0,
+          uniqueUsers: 0
+        });
+        setLoginHistory([]);
       }
 
       setLoading(false);
@@ -475,6 +523,61 @@ export default function AdminDashboard() {
             <div className="text-center">
               <div className="text-2xl font-bold text-yellow-600">{stats.conversionRate}%</div>
               <div className="text-sm text-gray-600">Premium Conversion</div>
+            </div>
+          </div>
+        </div>
+
+        {/* User Activity */}
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">User Activity</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{userActivityStats?.totalLogins || 0}</div>
+              <div className="text-sm text-gray-600">Total Logins</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{userActivityStats?.firstTimeLogins || 0}</div>
+              <div className="text-sm text-gray-600">New Users</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{userActivityStats?.returningLogins || 0}</div>
+              <div className="text-sm text-gray-600">Returning Users</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">{userActivityStats?.recentLogins24h || 0}</div>
+              <div className="text-sm text-gray-600">Logins (24h)</div>
+            </div>
+          </div>
+
+          {/* Recent Login Activity */}
+          <div className="space-y-2">
+            <h3 className="text-lg font-medium text-gray-900">Recent Login Activity</h3>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {loginHistory?.slice(0, 10).map((login: any, index: number) => (
+                <div key={index} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      login.login_type === 'first_time'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {login.login_type === 'first_time' ? '🎉 New' : '👋 Back'}
+                    </span>
+                    <div>
+                      <div className="font-medium text-sm">{login.username || 'Unknown'}</div>
+                      <div className="text-xs text-gray-500">{login.discord_id}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(login.created_at).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+              {(!loginHistory || loginHistory.length === 0) && (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  No login activity yet
+                </div>
+              )}
             </div>
           </div>
         </div>
