@@ -6,6 +6,7 @@ import { logAction } from "@/lib/logger";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useSharedSession } from "@/components/providers";
 import { useGuildMembersKanban } from "@/hooks/use-guild-members";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function RoleKanban({ guildId, customGroups = [] }: { guildId: string, customGroups?: any[] }) {
 
