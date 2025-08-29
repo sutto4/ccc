@@ -8,7 +8,6 @@ import RoleKanbanWrapper from "@/components/role-kanban-wrapper";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 import MassRoleAssign from "./mass-role-assign";
-import { withPermissions } from "@/hooks/use-permissions";
 
 type Params = { id: string };
 
@@ -61,6 +60,5 @@ async function RolesPage({ params }: { params: Promise<Params> }) {
   );
 }
 
-// Export with permission checking
-export default withPermissions(RolesPage);
+export default RolesPage;
 
