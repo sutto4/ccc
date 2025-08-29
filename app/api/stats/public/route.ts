@@ -1,12 +1,30 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+
+// Database connection helper for Discord bot database
+async function query(sql: string, params?: any[]) {
+  const mysql = require('mysql2/promise');
+  const connection = await mysql.createConnection({
+    host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || process.env.DB_HOST || '127.0.0.1',
+    user: process.env.APP_DB_USER || process.env.BOT_DB_USER || process.env.DB_USER || 'root',
+    password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || process.env.DB_PASS || '',
+    database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
+    port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || process.env.DB_PORT || 3306),
+  });
+
+  try {
+    const [rows] = await connection.execute(sql, params);
+    return rows;
+  } finally {
+    await connection.end();
+  }
+}
 
 export async function GET() {
   try {
     // Get total active servers and member counts from database
     const [totalServersResult, totalMembersResult] = await Promise.all([
-      query("SELECT COUNT(*) as count FROM guilds WHERE status != 'left' OR status IS NULL"),
-      query("SELECT SUM(member_count) as total FROM guilds WHERE (status != 'left' OR status IS NULL) AND member_count IS NOT NULL")
+      query("SELECT COUNT(*) as count FROM guilds WHERE status = 'active' OR status IS NULL"),
+      query("SELECT SUM(member_count) as total FROM guilds WHERE (status = 'active' OR status IS NULL) AND member_count IS NOT NULL")
     ]);
 
     // Extract counts from results

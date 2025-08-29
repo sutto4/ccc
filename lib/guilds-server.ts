@@ -296,14 +296,14 @@ async function intersectAndNormalize(userGuilds: any[], botBase: string): Promis
         // Filter out guilds where bot has left
         const activeResults = results.filter(g => {
           const status = guildStatuses.get(g.id) || 'active';
-          const isActive = status !== 'left';
+          const isActive = status === 'active';
           if (!isActive) {
             // console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
           }
           return isActive;
         });
         
-        // console.log(`Filtered ${results.length - activeResults.length} guilds with 'left' status`);
+        // console.log(`Filtered ${results.length - activeResults.length} guilds with 'inactive' status`);
         return activeResults;
       } finally {
         await connection.end();
@@ -375,14 +375,14 @@ async function normalizeInstalledOnly(botBase: string): Promise<Guild[]> {
             // Filter out guilds where bot has left
             const activeBasic = basic.filter(g => {
               const status = guildStatuses.get(g.id) || 'active';
-              const isActive = status !== 'left';
+              const isActive = status === 'active';
               if (!isActive) {
                 // console.log(`Filtering out guild ${g.id} (${g.name}) - status: ${status}`);
               }
               return isActive;
             });
             
-            // console.log(`Filtered ${basic.length - activeBasic.length} guilds with 'left' status`);
+            // console.log(`Filtered ${basic.length - activeBasic.length} guilds with 'inactive' status`);
             return activeBasic;
           } finally {
             await connection.end();
@@ -503,9 +503,31 @@ async function getDbConnection() {
 // Check if user can use the app based on database role permissions
 async function checkUserCanUseApp(guildId: string, userId: string, userGuild: any): Promise<boolean> {
   try {
-    // Check if user is server owner (simplified check - you might want to enhance this)
+    // FIRST: Check server_access_control table (highest priority)
+    // This covers bot inviters and manually granted access
+    try {
+      const connection = await getDbConnection();
+      try {
+        const [accessRows] = await connection.execute(
+          'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+          [guildId, userId]
+        );
+
+        if ((accessRows as any[]).length > 0) {
+          // console.log(`User ${userId} has direct access to guild ${guildId} via server_access_control`);
+          return true;
+        }
+      } finally {
+        await connection.end();
+      }
+    } catch (accessError) {
+      console.error('Error checking server_access_control:', accessError);
+      // Continue with other checks if this fails
+    }
+
+    // SECOND: Check if user is server owner
     const isOwner = userGuild.owner === true;
-    
+
     if (isOwner) {
       // console.log(`User ${userId} is owner of guild ${guildId} - allowing access`);
       return true;

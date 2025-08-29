@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { guildId, action } = await request.json();
+    const { guildId, action, userId, grantedBy, notes } = await request.json();
 
     if (!guildId || !action) {
       return NextResponse.json({ error: "Missing guildId or action" }, { status: 400 });
@@ -31,15 +31,15 @@ export async function POST(request: NextRequest) {
     let message;
 
     switch (action) {
-      case 'reset-left-status':
-        // Reset guild status from 'left' back to 'active'
+      case 'reset-inactive-status':
+        // Reset guild status from 'inactive' back to 'active'
         result = await query(
-          "UPDATE guilds SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND status = 'left'",
+          "UPDATE guilds SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND status = 'inactive'",
           [guildId]
         );
-        
+
         if (result.affectedRows > 0) {
-          message = `Guild ${guildId} status reset from 'left' to 'active'`;
+          message = `Guild ${guildId} status reset from 'inactive' to 'active'`;
         } else {
           message = `Guild ${guildId} not found or already has active status`;
         }
@@ -59,17 +59,53 @@ export async function POST(request: NextRequest) {
         }
         break;
 
-      case 'set-left':
-        // Force set guild status to 'left'
+      case 'set-inactive':
+        // Force set guild status to 'inactive'
         result = await query(
-          "UPDATE guilds SET status = 'left', updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?",
+          "UPDATE guilds SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?",
           [guildId]
         );
-        
+
         if (result.affectedRows > 0) {
-          message = `Guild ${guildId} status set to 'left'`;
+          message = `Guild ${guildId} status set to 'inactive'`;
         } else {
           message = `Guild ${guildId} not found`;
+        }
+        break;
+
+      case 'grant-access':
+        // Manually grant access to a user for a specific guild
+        if (!guildId || !userId) {
+          return NextResponse.json({ error: "guildId and userId are required" }, { status: 400 });
+        }
+
+        try {
+          // Check if the user exists in the server_access_control table
+          const existingAccess = await query(
+            'SELECT id FROM server_access_control WHERE guild_id = ? AND user_id = ?',
+            [guildId, userId]
+          );
+
+          if ((existingAccess as any[]).length > 0) {
+            message = `User ${userId} already has access to guild ${guildId}`;
+          } else {
+            // Grant access
+            await query(
+              'INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes) VALUES (?, ?, 1, ?, ?)',
+              [guildId, userId, grantedBy || 'SYSTEM', notes || 'Manually granted access']
+            );
+
+            // Also update guild status to active if it's inactive
+            await query(
+              'UPDATE guilds SET status = "active", updated_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND status = "inactive"',
+              [guildId]
+            );
+
+            message = `Granted access to user ${userId} for guild ${guildId}`;
+          }
+        } catch (dbError) {
+          console.error('Error granting access:', dbError);
+          return NextResponse.json({ error: "Database error" }, { status: 500 });
         }
         break;
 

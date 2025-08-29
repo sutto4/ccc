@@ -71,7 +71,7 @@ export async function POST(
       [session.user.id, subscriptionId, serverId]
     );
 
-    // Update the guild status to active if it was 'left'
+    // Update the guild status to active if it was 'inactive'
     await query(
       'UPDATE guilds SET status = "active", updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?',
       [serverId]

@@ -27,7 +27,12 @@ export default async function GuildLayout(
   const { getGuildsForUser } = await import('@/lib/guilds-server');
   const guilds = await getGuildsForUser(session.accessToken as string);
   const guild = guilds.find((g) => g.id === id);
-  if (!guild) return notFound();
+
+  // Log for debugging
+  if (!guild) {
+    console.log(`Guild ${id} not found. Available guilds:`, guilds.map(g => ({ id: g.id, name: g.name })));
+    return notFound();
+  }
 
   return (
     <div className="pl-4 pr-4 md:pr-6 md:pl-4 pt-6">

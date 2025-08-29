@@ -21,7 +21,8 @@ import {
   BarChart3,
   Target,
   AlertCircle,
-  Info
+  Info,
+  UserPlus
 } from "lucide-react";
 import PremiumModal from "@/components/premium-modal";
 
@@ -393,16 +394,16 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Servers</p>
-                <p className="text-3xl font-bold text-gray-900">{formatNumber(stats.totalServers)}</p>
+                <p className="text-sm font-medium text-gray-600">Active Servers</p>
+                <p className="text-3xl font-bold text-gray-900">{formatNumber(stats.activeServers)}</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <Server className="w-6 h-6 text-blue-600" />
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm text-gray-500">
-              <TrendingUp className="w-4 h-4 mr-1" />
-              +{stats.newServers48h} in 48h
+              <Database className="w-4 h-4 mr-1" />
+              All Time: {formatNumber(stats.totalServers)} servers
             </div>
           </div>
 
@@ -460,8 +461,8 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Performance Metrics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.totalCommands}</div>
-              <div className="text-sm text-gray-600">Custom Commands</div>
+              <div className="text-2xl font-bold text-blue-600">{formatNumber(stats.totalServers)}</div>
+              <div className="text-sm text-gray-600">All Time Servers</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{stats.totalEmbeds}</div>
@@ -518,29 +519,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Guild Status Information */}
-          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-1">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="text-sm text-blue-800">
-                <div className="font-medium mb-1">Guild Status System</div>
-                <div className="space-y-1 text-blue-700">
-                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 mr-2">Active</span> Server is connected and accessible</div>
-                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 mr-2">Left</span> Bot was removed from server (hidden from users)</div>
-                  <div><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 mr-2">Null</span> No status set (treated as active)</div>
-                </div>
-                <div className="mt-2 text-blue-600">
-                  <strong>Note:</strong> When a server rejoins the bot, its status is automatically reset to 'active'. 
-                  Use the "Check & Fix All" button below to fix any stuck statuses.
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -589,9 +567,9 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        guild.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : guild.status === 'left'
+                        guild.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : guild.status === 'inactive'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
@@ -671,18 +649,18 @@ export default function AdminDashboard() {
                             <Zap className="w-4 h-4" />
                           </button>
                         )}
-                        {/* Status Fix Button - only show for 'left' status guilds */}
-                        {guild.status === 'left' && (
+                        {/* Status Fix Button - only show for 'inactive' status guilds */}
+                        {guild.status === 'inactive' && (
                           <button
                             onClick={async () => {
-                              if (confirm(`Are you sure you want to reset the status of guild ${guild.id} from 'left' to 'active'? This will make it visible again.`)) {
+                              if (confirm(`Are you sure you want to reset the status of guild ${guild.id} from 'inactive' to 'active'? This will make it visible again.`)) {
                                 try {
                                   const response = await fetch('/api/admin/guilds/fix-status', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ 
-                                      guildId: guild.id, 
-                                      action: 'reset-left-status' 
+                                    body: JSON.stringify({
+                                      guildId: guild.id,
+                                      action: 'reset-inactive-status'
                                     })
                                   });
                                   if (response.ok) {
@@ -700,7 +678,7 @@ export default function AdminDashboard() {
                               }
                             }}
                             className="text-orange-600 hover:text-orange-900 transition-colors"
-                            title="Reset guild status from 'left' to 'active'"
+                            title="Reset guild status from 'inactive' to 'active'"
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
@@ -782,15 +760,15 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={async () => {
-                const guildId = prompt('Enter Guild ID to fix status (reset from "left" to "active"):');
-                if (guildId && confirm(`Are you sure you want to reset the status of guild ${guildId} from 'left' to 'active'? This will make it visible again.`)) {
+                const guildId = prompt('Enter Guild ID to fix status (reset from "inactive" to "active"):');
+                if (guildId && confirm(`Are you sure you want to reset the status of guild ${guildId} from 'inactive' to 'active'? This will make it visible again.`)) {
                   try {
                     const response = await fetch('/api/admin/guilds/fix-status', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        guildId, 
-                        action: 'reset-left-status' 
+                      body: JSON.stringify({
+                        guildId,
+                        action: 'reset-inactive-status'
                       })
                     });
                     if (response.ok) {
@@ -812,7 +790,7 @@ export default function AdminDashboard() {
               <RefreshCw className="w-5 h-5 text-orange-600 mr-3" />
               <div className="text-left">
                 <p className="font-medium text-gray-900">Fix Guild Status</p>
-                <p className="text-sm text-gray-500">Reset 'left' to 'active'</p>
+                <p className="text-sm text-gray-500">Reset 'inactive' to 'active'</p>
               </div>
             </button>
             <button
@@ -825,15 +803,15 @@ export default function AdminDashboard() {
                     const message = `Current Guild Status Summary:\n\n` +
                       `Total Guilds: ${statusData.summary.totalGuilds}\n` +
                       `Active: ${statusData.summary.totalActive}\n` +
-                      `Left: ${statusData.summary.totalLeft}\n\n` +
-                      `Left Guilds:\n${statusData.leftGuilds.map((g: any) => `- ${g.guild_name || g.guild_id} (${g.guild_id})`).join('\n')}\n\n` +
-                      `Would you like to fix all ${statusData.summary.totalLeft} guild(s) with 'left' status?`;
+                      `Inactive: ${statusData.summary.totalInactive}\n\n` +
+                      `Inactive Guilds:\n${statusData.inactiveGuilds.map((g: any) => `- ${g.guild_name || g.guild_id} (${g.guild_id})`).join('\n')}\n\n` +
+                      `Would you like to fix all ${statusData.summary.totalInactive} guild(s) with 'inactive' status?`;
                     
                     if (confirm(message)) {
                       const fixResponse = await fetch('/api/admin/guilds/check-status', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'fix-all-left' })
+                        body: JSON.stringify({ action: 'fix-all-inactive' })
                       });
                       
                       if (fixResponse.ok) {
@@ -862,6 +840,46 @@ export default function AdminDashboard() {
                 <p className="text-sm text-gray-500">Bulk status fix</p>
               </div>
             </button>
+            <button
+              onClick={async () => {
+                const userInput = prompt('Grant bot access to user\n\nEnter: GUILD_ID,USER_ID\n\nExample: 123456789012345678,876543210987654321');
+                if (!userInput) return;
+
+                const [guildId, userId] = userInput.split(',').map(s => s.trim());
+                if (!guildId || !userId) {
+                  alert('Invalid format. Use: GUILD_ID,USER_ID');
+                  return;
+                }
+
+                try {
+                  const response = await fetch('/api/admin/guilds/grant-access', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guildId, userId, notes: 'Manually granted by admin' })
+                  });
+
+                  if (response.ok) {
+                    const result = await response.json();
+                    alert(`Access granted successfully!\n\n${result.message}`);
+                  } else {
+                    const error = await response.json();
+                    alert(`Failed to grant access: ${error.error || 'Unknown error'}`);
+                  }
+                } catch (error) {
+                  console.error('Failed to grant access:', error);
+                  alert('Failed to grant access. Check console for details.');
+                }
+              }}
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <UserPlus className="w-5 h-5 text-green-600 mr-3" />
+              <div className="text-left">
+                <p className="font-medium text-gray-900">Grant Bot Access</p>
+                <p className="text-sm text-gray-500">Manually grant user access to bot management</p>
+              </div>
+            </button>
+
+
             <a
               href="https://discord.gg/nrSjZByddw"
               target="_blank"

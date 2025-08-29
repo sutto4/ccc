@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Get all guilds with 'left' status
-    const leftGuilds = await query(
-      "SELECT guild_id, guild_name, status, updated_at FROM guilds WHERE status = 'left' ORDER BY updated_at DESC"
+    // Get all guilds with 'inactive' status
+    const inactiveGuilds = await query(
+      "SELECT guild_id, guild_name, status, updated_at FROM guilds WHERE status = 'inactive' ORDER BY updated_at DESC"
     );
 
     // Get all guilds with 'active' status for comparison
@@ -32,12 +32,12 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.json({
-      leftGuilds: leftGuilds || [],
+      inactiveGuilds: inactiveGuilds || [],
       activeGuilds: activeGuilds || [],
       summary: {
-        totalLeft: leftGuilds?.length || 0,
+        totalInactive: inactiveGuilds?.length || 0,
         totalActive: activeGuilds?.length || 0,
-        totalGuilds: (leftGuilds?.length || 0) + (activeGuilds?.length || 0)
+        totalGuilds: (inactiveGuilds?.length || 0) + (activeGuilds?.length || 0)
       }
     });
 
@@ -73,15 +73,15 @@ export async function POST(request: NextRequest) {
 
     const { action } = await request.json();
 
-    if (action === 'fix-all-left') {
-      // Reset all guilds with 'left' status to 'active'
+    if (action === 'fix-all-inactive') {
+      // Reset all guilds with 'inactive' status to 'active'
       const result = await query(
-        "UPDATE guilds SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE status = 'left'"
+        "UPDATE guilds SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE status = 'inactive'"
       );
 
       return NextResponse.json({
         success: true,
-        message: `Reset ${result.affectedRows} guild(s) from 'left' to 'active' status`,
+        message: `Reset ${result.affectedRows} guild(s) from 'inactive' to 'active' status`,
         affectedRows: result.affectedRows
       });
     }
