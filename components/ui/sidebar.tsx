@@ -14,7 +14,7 @@ import { usePathname } from "next/navigation";
 import { Shield, Server, Settings, Crown, FileText, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchFeatures, type FeaturesResponse, type Features } from "@/lib/api";
-import { useSession, signOut } from "next-auth/react";
+import { useSharedSession, signIn, signOut } from "@/components/providers";
 
 // CollapsibleSection component
 function CollapsibleSection({ title, defaultOpen = true, children }: { title: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
@@ -40,14 +40,129 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
 
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
+type NavLeafProps = {
+  href: string;
+  label: React.ReactNode;
+  active?: boolean;
+  rightIcon?: React.ReactNode;
+  featureEnabled?: boolean; // true if guild has feature
+  guildSelected?: boolean; // true if a guild is selected
+  onClick?: () => void;
+  premiumRequired?: boolean; // true if premium access is required
+  hasPremium?: boolean; // true if user has premium access
+};
+
 const TOP: Item[] = [
   { href: "/guilds", label: "My Servers", icon: Shield },
   { href: "/admin", label: "Admin", icon: Settings },
 ];
 
-export default function Sidebar() {
+const NavLeaf: React.FC<NavLeafProps> = ({
+  href,
+  label,
+  active,
+  rightIcon,
+  featureEnabled,
+  guildSelected,
+  onClick,
+  premiumRequired,
+  hasPremium,
+}) => {
+  const base =
+    "group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition select-none w-full relative text-left";
+  // Determine the state: no guild selected vs feature not available vs premium required
+  const noGuildSelected = !guildSelected;
+  const featureNotAvailable = guildSelected && !featureEnabled;
+  const needsPremium = premiumRequired && !hasPremium;
+
+  // Free features should never be greyed out due to premium requirements
+  // Only grey out if: no guild selected, feature not available, or premium required but not available
+  const isGreyed = noGuildSelected || featureNotAvailable || (premiumRequired && !hasPremium);
+  // Muted color for greyed out
+  const mutedColor = "#A1A1AA";
+  let icon = rightIcon;
+  if (rightIcon && React.isValidElement(rightIcon)) {
+    const iconEl = rightIcon as React.ReactElement<any>;
+    icon = React.cloneElement(iconEl, {
+      className: iconEl.props.className || "h-3.5 w-3.5",
+      color: isGreyed ? mutedColor : iconEl.props.color,
+    });
+  }
+  const cls = [
+    base,
+    active && guildSelected && featureEnabled && (!premiumRequired || hasPremium)
+      ? "bg-[hsl(var(--sidebar-accent))] text-white"
+      : isGreyed
+        ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
+        : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer",
+  ].join(" ");
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    console.log('NavLeaf click:', {
+      label,
+      featureEnabled,
+      premiumRequired,
+      hasPremium,
+      featureNotAvailable,
+      isGreyed,
+      noGuildSelected,
+      guildSelected,
+      href
+    });
+
+    if (noGuildSelected) {
+      e.preventDefault();
+      setShowNoGuildMessage(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => setShowNoGuildMessage(false), 3000);
+      return;
+    } else if (featureNotAvailable || (premiumRequired && !hasPremium)) {
+      // Show premium modal for any feature that's not available or requires premium
+      console.log('Opening premium modal for:', label);
+      e.preventDefault();
+      e.stopPropagation();
+      setModalOpen(true);
+      return;
+    } else {
+      // Feature is available and accessible - navigate to the href
+      console.log('Navigating to:', href);
+      window.location.href = href;
+    }
+  };
+  const content = (
+    <>
+      <span className="truncate flex-1">{label}</span>
+      {icon && (
+        <span className="ml-auto flex items-center min-w-[1.5em]">{icon}</span>
+      )}
+    </>
+  );
+  return (
+    <>
+      <button className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
+        {content}
+      </button>
+
+      {/* No guild selected message */}
+      {showNoGuildMessage && (
+        <div className="fixed top-20 left-4 z-[100] bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg">
+          Please select a server first
+        </div>
+      )}
+
+      {/* Premium modal only for feature not available */}
+      <PremiumModal open={modalOpen} onOpenChange={setModalOpen} />
+    </>
+  );
+};
+
+NavLeaf.displayName = 'NavLeaf';
+
+const Sidebar = React.memo(function Sidebar() {
   const pathname = usePathname() || "";
-  const { data: session } = useSession();
+  const { data: session, status } = useSharedSession();
   const [features, setFeatures] = useState<Features | null>(null);
 
   // detect if we're inside a guild route
@@ -57,83 +172,8 @@ export default function Sidebar() {
 
   // Check if user is admin
   const isAdmin = session?.role === "admin" || session?.role === "owner";
-  
-  // Helper function to determine if a feature should show crown icon
-  const shouldShowCrown = (featureKey: string) => {
-    if (!features) return false;
-    // Check if the feature's package requirement is "premium"
-    const packageKey = `${featureKey}_package` as keyof Features;
-    const packageType = features[packageKey];
-    console.log(`shouldShowCrown(${featureKey}): packageKey=${packageKey}, packageType=${packageType}, result=${packageType === "premium"}`);
-    return packageType === "premium";
-  };
 
-  // Helper function to check if a feature is accessible (free, premium enabled, or custom enabled)
-  const isFeatureAccessible = (featureKey: string) => {
-    if (!features) return false;
-    
-    // Check if the feature is enabled
-    const isEnabled = features[featureKey as keyof Features] === true;
-    
-    // Check the package requirement
-    const packageKey = `${featureKey}_package` as keyof Features;
-    const packageType = features[packageKey];
-    
-    console.log(`isFeatureAccessible(${featureKey}): isEnabled=${isEnabled}, packageKey=${packageKey}, packageType=${packageType}`);
-    
-    // Free features are always accessible if enabled
-    if (packageType === "free" || packageType === undefined) {
-      console.log(`  -> Feature ${featureKey} is free, returning ${isEnabled}`);
-      return isEnabled;
-    }
-    
-    // Premium features require the feature to be enabled
-    if (packageType === "premium") {
-      console.log(`  -> Feature ${featureKey} is premium, returning ${isEnabled}`);
-      return isEnabled;
-    }
-    
-    // Custom features require the feature to be enabled
-    if (packageType === "custom") {
-      console.log(`  -> Feature ${featureKey} is custom, returning ${isEnabled}`);
-      return isEnabled;
-    }
-    
-    console.log(`  -> Feature ${featureKey} has unknown package type, returning false`);
-    return false;
-  };
-
-  // Helper function to check if a feature should be visible in navigation
-  const isFeatureVisible = (featureKey: string) => {
-    if (!features) return false;
-    
-    const packageKey = `${featureKey}_package` as keyof Features;
-    const packageType = features[packageKey];
-    const isEnabled = features[featureKey as keyof Features] === true;
-    
-    // If no package type is defined, assume it's not configured and hide it
-    if (!packageType) {
-      console.log(`isFeatureVisible(${featureKey}): no package type defined, hiding feature`);
-      return false;
-    }
-    
-    // Custom features only appear if enabled
-    if (packageType === "custom") {
-      console.log(`isFeatureVisible(${featureKey}): custom feature, visible=${isEnabled}`);
-      return isEnabled;
-    }
-    
-    // Free and premium features are always visible (but may be greyed out)
-    console.log(`isFeatureVisible(${featureKey}): ${packageType} feature, always visible`);
-    return true;
-  };
-  
-  // Debug logging - REMOVED for security
-  // console.log("Session:", session);
-  // console.log("User role:", session?.role);
-  // console.log("Is admin:", isAdmin);
-  // console.log("Features:", features);
-
+  // Always call useEffect hook before any conditional returns (Rules of Hooks)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -154,6 +194,114 @@ export default function Sidebar() {
       alive = false;
     };
   }, [guildId]);
+
+  // Show loading state while session is loading
+  if (status === "loading") {
+    return (
+      <div className="flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-full h-full border-r border-[hsl(var(--sidebar-border))]">
+        <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+          </div>
+        </nav>
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if not authenticated
+  if (!session) {
+    return (
+      <div className="flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-full h-full border-r border-[hsl(var(--sidebar-border))]">
+        <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-[80px]">
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+            <p className="text-sm text-muted-foreground mb-4">Please sign in to access your servers</p>
+            <button
+              onClick={() => signIn("discord")}
+              className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-md text-sm font-medium transition-colors"
+            >
+              Sign In with Discord
+            </button>
+          </div>
+        </nav>
+      </div>
+    );
+  }
+  
+  // Helper function to determine if a feature should show crown icon
+  const shouldShowCrown = (featureKey: string) => {
+    if (!features) return false;
+    // Check if the feature's package requirement is "premium"
+    const packageKey = `${featureKey}_package` as keyof Features;
+    const packageType = features[packageKey];
+    console.log(`shouldShowCrown(${featureKey}): packageKey=${packageKey}, packageType=${packageType}, result=${packageType === "premium"}`);
+    return packageType === "premium";
+  };
+
+  // Helper function to check if a feature is accessible (free, premium enabled, or custom enabled)
+  const isFeatureAccessible = (featureKey: string) => {
+    if (!features) return false;
+
+    // Check if the feature is enabled
+    const isEnabled = features[featureKey as keyof Features] === true;
+
+    // Check the package requirement
+    const packageKey = `${featureKey}_package` as keyof Features;
+    const packageType = features[packageKey];
+
+    console.log(`isFeatureAccessible(${featureKey}): isEnabled=${isEnabled}, packageKey=${packageKey}, packageType=${packageType}`);
+
+    // Free features are always accessible if enabled
+    if (packageType === "free" || packageType === undefined) {
+      console.log(`  -> Feature ${featureKey} is free, returning ${isEnabled}`);
+      return isEnabled;
+    }
+
+    // Premium features require the feature to be enabled
+    if (packageType === "premium") {
+      console.log(`  -> Feature ${featureKey} is premium, returning ${isEnabled}`);
+      return isEnabled;
+    }
+
+    // Custom features require the feature to be enabled
+    if (packageType === "custom") {
+      console.log(`  -> Feature ${featureKey} is custom, returning ${isEnabled}`);
+      return isEnabled;
+    }
+
+    console.log(`  -> Feature ${featureKey} has unknown package type, returning false`);
+    return false;
+  };
+
+  // Helper function to check if a feature should be visible in navigation
+  const isFeatureVisible = (featureKey: string) => {
+    if (!features) return false;
+
+    const packageKey = `${featureKey}_package` as keyof Features;
+    const packageType = features[packageKey];
+    const isEnabled = features[featureKey as keyof Features] === true;
+
+    // If no package type is defined, assume it's not configured and hide it
+    if (!packageType) {
+      console.log(`isFeatureVisible(${featureKey}): no package type defined, hiding feature`);
+      return false;
+    }
+
+    // Custom features only appear if enabled
+    if (packageType === "custom") {
+      console.log(`isFeatureVisible(${featureKey}): custom feature, visible=${isEnabled}`);
+      return isEnabled;
+    }
+
+    // Free and premium features are always visible (but may be greyed out)
+    console.log(`isFeatureVisible(${featureKey}): ${packageType} feature, always visible`);
+    return true;
+  };
+
+  // Debug logging - REMOVED for security
+  // console.log("Session:", session);
+  // console.log("User role:", session?.role);
+  // console.log("Is admin:", isAdmin);
+  // console.log("Features:", features);
 
   return (
     <div className="flex flex-col bg-[hsl(var(--sidebar-bg))] text-[hsl(var(--sidebar-foreground))] w-full h-full border-r border-[hsl(var(--sidebar-border))]">
@@ -370,117 +518,7 @@ export default function Sidebar() {
       </div>
     </div>
   );
-}
+});
 
-type NavLeafProps = {
-  href: string;
-  label: React.ReactNode;
-  active?: boolean;
-  rightIcon?: React.ReactNode;
-  featureEnabled?: boolean; // true if guild has feature
-  guildSelected?: boolean; // true if a guild is selected
-  onClick?: () => void;
-  premiumRequired?: boolean; // true if premium access is required
-  hasPremium?: boolean; // true if user has premium access
-};
-
-function NavLeaf({
-  href,
-  label,
-  active,
-  rightIcon,
-  featureEnabled,
-  guildSelected,
-  onClick,
-  premiumRequired,
-  hasPremium,
-}: NavLeafProps) {
-  const base =
-    "group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition select-none w-full relative text-left";
-  // Determine the state: no guild selected vs feature not available vs premium required
-  const noGuildSelected = !guildSelected;
-  const featureNotAvailable = guildSelected && !featureEnabled;
-  const needsPremium = premiumRequired && !hasPremium;
-  
-  // Free features should never be greyed out due to premium requirements
-  // Only grey out if: no guild selected, feature not available, or premium required but not available
-  const isGreyed = noGuildSelected || featureNotAvailable || (premiumRequired && !hasPremium);
-  // Muted color for greyed out
-  const mutedColor = "#A1A1AA";
-  let icon = rightIcon;
-  if (rightIcon && React.isValidElement(rightIcon)) {
-    const iconEl = rightIcon as React.ReactElement<any>;
-    icon = React.cloneElement(iconEl, {
-      className: iconEl.props.className || "h-3.5 w-3.5",
-      color: isGreyed ? mutedColor : iconEl.props.color,
-    });
-  }
-  const cls = [
-    base,
-    active && guildSelected && featureEnabled && (!premiumRequired || hasPremium)
-      ? "bg-[hsl(var(--sidebar-accent))] text-white" 
-      : isGreyed
-        ? "text-[hsl(var(--sidebar-foreground-muted))] opacity-80 cursor-pointer hover:text-[hsl(var(--sidebar-foreground-muted))]"
-        : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-foreground))] cursor-pointer",
-  ].join(" ");
-  const [modalOpen, setModalOpen] = React.useState(false);
-  const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
-  
-  const handleClick = (e: React.MouseEvent) => {
-    console.log('NavLeaf click:', { 
-      label, 
-      featureEnabled, 
-      premiumRequired, 
-      hasPremium, 
-      featureNotAvailable,
-      isGreyed,
-      noGuildSelected,
-      guildSelected,
-      href
-    });
-    
-    if (noGuildSelected) {
-      e.preventDefault();
-      setShowNoGuildMessage(true);
-      // Auto-hide after 3 seconds
-      setTimeout(() => setShowNoGuildMessage(false), 3000);
-      return;
-    } else if (featureNotAvailable || (premiumRequired && !hasPremium)) {
-      // Show premium modal for any feature that's not available or requires premium
-      console.log('Opening premium modal for:', label);
-      e.preventDefault();
-      e.stopPropagation();
-      setModalOpen(true);
-      return;
-    } else {
-      // Feature is available and accessible - navigate to the href
-      console.log('Navigating to:', href);
-      window.location.href = href;
-    }
-  };
-  const content = (
-    <>
-      <span className="truncate flex-1">{label}</span>
-      {icon && (
-        <span className="ml-auto flex items-center min-w-[1.5em]">{icon}</span>
-      )}
-    </>
-  );
-  return (
-    <>
-      <button className={cls} onClick={handleClick} tabIndex={0} title={typeof label === "string" ? label : undefined}>
-        {content}
-      </button>
-      
-      {/* No guild selected message */}
-      {showNoGuildMessage && (
-        <div className="fixed top-20 left-4 z-[100] bg-yellow-500 text-white px-4 py-2 rounded-md shadow-lg">
-          Please select a server first
-        </div>
-      )}
-      
-      {/* Premium modal only for feature not available */}
-      <PremiumModal open={modalOpen} onOpenChange={setModalOpen} />
-    </>
-  );
-}
+Sidebar.displayName = 'Sidebar';
+export default Sidebar;

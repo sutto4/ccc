@@ -66,29 +66,29 @@ export default function RolePermissionSettings({ guildId, roles }: RolePermissio
       
       // Try to load existing permissions from API
       const response = await fetch(`/api/guilds/${guildId}/role-permissions`);
-      
-              if (response.ok) {
-          const data = await response.json();
-                     // Merge with filtered roles only
-           const mergedPermissions = filteredRoles.map(role => {
-             const existing = data.permissions.find((p: any) => p.roleId === role.roleId);
-             return existing || {
-               roleId: role.roleId,
-               roleName: role.name,
-               canUseApp: false
-             };
-           });
-           setPermissions(mergedPermissions);
-           setOriginalPermissions([...mergedPermissions]); // Set original state
-                 } else {
-           // If no permissions exist yet, initialize with filtered roles only
-           const initialPermissions = filteredRoles.map(role => ({
-             roleId: role.roleId,
-             canUseApp: false
-           }));
-           setPermissions(initialPermissions);
-           setOriginalPermissions([...initialPermissions]); // Set original state
-         }
+
+      if (response.ok) {
+        const data = await response.json();
+        // Merge with filtered roles only
+        const mergedPermissions = filteredRoles.map(role => {
+          const existing = data.permissions.find((p: any) => p.roleId === role.roleId);
+          return existing || {
+            roleId: role.roleId,
+            roleName: role.name,
+            canUseApp: false
+          };
+        });
+        setPermissions(mergedPermissions);
+        setOriginalPermissions([...mergedPermissions]); // Set original state
+      } else {
+        // If no permissions exist yet, initialize with filtered roles only
+        const initialPermissions = filteredRoles.map(role => ({
+          roleId: role.roleId,
+          canUseApp: false
+        }));
+        setPermissions(initialPermissions);
+        setOriginalPermissions([...initialPermissions]); // Set original state
+      }
        } catch (error) {
          console.error('Error loading permissions:', error);
          // On error, still initialize with filtered roles (better UX than showing nothing)

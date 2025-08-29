@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSharedSession } from '@/components/providers';
 
 interface PermissionCheck {
   canUseApp: boolean;
@@ -10,7 +10,7 @@ interface PermissionCheck {
 }
 
 export function usePermissions(guildId: string): PermissionCheck {
-  const { data: session } = useSession();
+  const { data: session } = useSharedSession();
   const [permissions, setPermissions] = useState<PermissionCheck>({
     canUseApp: false,
     isOwner: false,
@@ -69,14 +69,14 @@ export function usePermissions(guildId: string): PermissionCheck {
       }
     } catch (error) {
       console.error('Error checking permissions:', error);
-      // Temporary fallback: allow access if permission check fails
-      // This prevents blocking users while we debug the permission system
+      // Strict security: deny access if permission check fails
+      // This prevents unauthorized access when the permission system is not working
       setPermissions({
-        canUseApp: true, // Allow access temporarily
+        canUseApp: false, // Deny access by default
         isOwner: false,
         hasRoleAccess: false,
         loading: false,
-        error: 'Permission check failed, allowing access temporarily'
+        error: 'Permission check failed - access denied for security'
       });
     }
   };

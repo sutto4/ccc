@@ -78,6 +78,8 @@ export default function GuildSettingsPage() {
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
   const [addServerModalOpen, setAddServerModalOpen] = useState(false);
 
+
+
   // State for available servers to add
   const [availableServers, setAvailableServers] = useState<{ id: string; name: string }[]>([]);
   const [loadingAvailableServers, setLoadingAvailableServers] = useState(false);
@@ -237,6 +239,8 @@ export default function GuildSettingsPage() {
       console.error('Failed to load server allocation:', error);
     }
   };
+
+
 
   const loadGuildNames = async (guildIds: string[]) => {
     try {

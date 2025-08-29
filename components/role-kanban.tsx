@@ -4,7 +4,7 @@ import { Dialog } from "@headlessui/react";
 import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { useSession } from "next-auth/react";
+import { useSharedSession } from "@/components/providers";
 import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 
 export default function RoleKanban({ guildId, customGroups = [] }: { guildId: string, customGroups?: any[] }) {
@@ -39,7 +39,8 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { data: session } = useSession();
+  const { data: session } = useSharedSession();
+  const { canUseApp, isOwner, loading: permissionsLoading } = usePermissions(guildId);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -112,16 +113,22 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     if (!result.destination) return;
     const { draggableId, source, destination } = result;
     if (source.droppableId === destination.droppableId) return;
-    
+
+    // Check permissions before allowing role changes
+    if (!canUseApp) {
+      alert('You do not have permission to modify roles in this server.');
+      return;
+    }
+
     // draggableId is now userId:roleId (or userId:null for noRole)
     const [userId, fromRoleIdRaw] = draggableId.split(":");
     const user = members.find((m: any) => m.discordUserId === userId);
     if (!user) return;
-    
+
     const fromRole = fromRoleIdRaw === "null" ? null : fromRoleIdRaw;
     const toRole = destination.droppableId === "noRole" ? null : destination.droppableId;
     const validRoleIds = roles.map(r => r.roleId);
-    
+
     if ((fromRole && !validRoleIds.includes(fromRole)) || (toRole && !validRoleIds.includes(toRole))) {
       alert('Unknown Role: One of the roles involved in this operation does not exist. The list will now refresh.');
       loadMembers();
@@ -190,6 +197,33 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
       });
     }
   }, [guildId, members, roles, session]);
+
+  // Show loading state while checking permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied if user doesn't have permissions
+  if (!canUseApp) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="text-red-600 mb-2">⚠️ Access Denied</div>
+          <p className="text-sm text-muted-foreground">
+            You don't have permission to manage roles in this server.
+            {!isOwner && " Contact a server administrator to grant you access."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -319,7 +353,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                     style={{ maxHeight: 600 }}
                   >
                     {/* Add user button pinned to top (not for 'noRole' column) */}
-                    {col !== "noRole" && (
+                    {col !== "noRole" && canUseApp && (
                       <button
                         className="mt-3 mx-3 rounded bg-primary text-primary-foreground py-1 text-xs font-semibold shadow hover:bg-primary/90 transition"
                         onClick={() => {

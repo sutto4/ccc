@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSharedSession, signIn, signOut } from "@/components/providers";
 
 function initialsFrom(str?: string | null) {
   if (!str) return "U";
@@ -10,8 +10,8 @@ function initialsFrom(str?: string | null) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export default function UserMenu() {
-  const { data: session, status } = useSession();
+const UserMenu = React.memo(function UserMenu() {
+  const { data: session, status } = useSharedSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -77,4 +77,7 @@ export default function UserMenu() {
       )}
     </div>
   );
-}
+});
+
+UserMenu.displayName = 'UserMenu';
+export default UserMenu;
