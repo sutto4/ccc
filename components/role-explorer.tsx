@@ -60,33 +60,33 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
         </div>
       </div>
       {view === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredRoles.map((r) => (
             <div
               key={r.roleId}
-              className={`group rounded-2xl border bg-card shadow-sm transition hover:shadow-lg ${expanded === r.roleId ? 'ring-2 ring-primary/40' : ''}`}
+              className={`group rounded-xl border bg-card shadow-sm transition hover:shadow-md ${expanded === r.roleId ? 'ring-2 ring-primary/40' : ''}`}
             >
               <button
-                className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/60 transition bg-transparent"
+                className="w-full flex items-center justify-between gap-2 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/60 transition bg-transparent"
                 onClick={() => setExpanded(expanded === r.roleId ? null : r.roleId)}
                 aria-expanded={expanded === r.roleId}
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <span
-                    className="inline-block h-5 w-5 rounded-full border-2 border-white shadow"
+                    className="inline-block h-4 w-4 rounded-full border-2 border-white shadow-sm"
                     title={r.color ?? 'no color'}
                     style={{ backgroundColor: r.color || '#e5e7eb', borderColor: r.color || '#e5e7eb' }}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-base truncate">{r.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-sm truncate">{r.name}</span>
                       <span className="text-xs text-muted-foreground font-mono">
                         {userCounts[r.roleId] !== undefined ? `· ${userCounts[r.roleId]} user${userCounts[r.roleId] !== 1 ? 's' : ''}` : ''}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground font-mono truncate text-left pl-0 mt-0.5">{r.roleId}</div>
                   </div>
-                  <span className={`ml-2 text-lg transition-transform ${expanded === r.roleId ? 'rotate-180' : ''}`}>▼</span>
+                  <span className={`ml-1 text-sm transition-transform ${expanded === r.roleId ? 'rotate-180' : ''}`}>▼</span>
                 </div>
               </button>
               {expanded === r.roleId && (

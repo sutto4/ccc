@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Folder, Settings, Trash2, Users, Save, X, GripVertical } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface ServerGroup {
   id: number;
@@ -117,8 +117,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
     } catch (error) {
       console.error("Error loading data:", error);
       toast({
-        title: "Error",
-        description: "Failed to load server groups and guilds",
+        title: "Failed to Load Data",
+        description: "Could not load server groups and guilds. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -142,8 +142,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
         setFormData({ name: "", description: "" });
         setShowCreateForm(false);
         toast({
-          title: "Success",
-          description: "Server group created successfully"
+          title: "Group Created",
+          description: `"${data.group.name}" has been created successfully.`,
+          variant: "success"
         });
       } else {
         throw new Error("Failed to create group");
@@ -151,8 +152,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
     } catch (error) {
       console.error("Error creating group:", error);
       toast({
-        title: "Error",
-        description: "Failed to create server group",
+        title: "Failed to Create Group",
+        description: "Could not create the server group. Please check your input and try again.",
         variant: "destructive"
       });
     }
@@ -174,8 +175,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
         setEditingGroup(null);
         setFormData({ name: "", description: "" });
         toast({
-          title: "Success",
-          description: "Server group updated successfully"
+          title: "Group Updated",
+          description: `"${data.group.name}" has been updated successfully.`,
+          variant: "success"
         });
       } else {
         throw new Error("Failed to update group");
@@ -183,8 +185,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
     } catch (error) {
       console.error("Error updating group:", error);
       toast({
-        title: "Error",
-        description: "Failed to update server group",
+        title: "Failed to Update Group",
+        description: "Could not update the server group. Please try again.",
         variant: "destructive"
       });
     }
@@ -207,8 +209,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
           g.group?.id === groupId ? { ...g, group: null } : g
         ));
         toast({
-          title: "Success",
-          description: "Server group deleted successfully"
+          title: "Group Deleted",
+          description: "The server group has been deleted successfully.",
+          variant: "success"
         });
       } else {
         throw new Error("Failed to delete group");
@@ -216,8 +219,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
     } catch (error) {
       console.error("Error deleting group:", error);
       toast({
-        title: "Error",
-        description: "Failed to delete server group",
+        title: "Failed to Delete Group",
+        description: "Could not delete the server group. Please try again.",
         variant: "destructive"
       });
     }
@@ -274,8 +277,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
           }));
           
           toast({
-            title: "Success",
-            description: "Server added to group successfully"
+            title: "Server Added",
+            description: "Server has been successfully added to the group.",
+            variant: "success"
           });
         }
       } else {
@@ -302,8 +306,9 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
             }));
             
             toast({
-              title: "Success",
-              description: "Server removed from group successfully"
+              title: "Server Removed",
+              description: "Server has been successfully removed from the group.",
+              variant: "success"
             });
           }
         }
@@ -311,8 +316,8 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
     } catch (error) {
       console.error("Error updating group membership:", error);
       toast({
-        title: "Error",
-        description: "Failed to update group membership",
+        title: "Failed to Update Group",
+        description: "Could not update the server group membership. Please try again.",
         variant: "destructive"
       });
     } finally {

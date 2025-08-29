@@ -8,6 +8,7 @@ import Section from "@/components/ui/section";
 import { addRole, removeRole, type Role } from "@/lib/api";
 import { UserRoleModal } from "@/components/ui/user-role-modal";
 import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
+import { useToast } from "@/hooks/use-toast";
 
 export default function MembersPage() {
   const { data: session } = useSession();
@@ -42,6 +43,7 @@ export default function MembersPage() {
   const [view, setView] = useState<'card' | 'table'>('card');
   const [groupSearch, setGroupSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("");
+  const { toast } = useToast();
 
   // Gather all unique custom groups
   const allGroups = useMemo(() => {
@@ -52,53 +54,129 @@ export default function MembersPage() {
 
   // Add role to user
   async function handleAddRole(userId: string, roleId: string) {
-    const actor = (session?.user as any)?.id || "";
-    const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
-    const user = members.find(m => m.discordUserId === userId);
-    const role = roles.find(r => r.roleId === roleId);
-    // Call API to persist
-    await addRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
-    
-    // Reload current page to reflect changes
-    loadMembers(false);
-    // Logging
-    await logAction({
-      guildId,
-      userId: actor,
-      user: { id: actor, username: actorUsername },
-      actionType: "role.add",
-      actionData: {
-        targetUserId: userId,
-        targetUsername: user?.username,
-        roleId,
-        roleName: role?.name,
-      },
-    });
+    try {
+      const actor = (session?.user as any)?.id || "";
+      const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
+      const user = members.find(m => m.discordUserId === userId);
+      const role = roles.find(r => r.roleId === roleId);
+
+      // Call API to persist - this will throw an error for hierarchy violations
+      await addRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
+
+      // Show success toast
+      toast({
+        title: "Role Added Successfully",
+        description: `${user?.username || 'User'} has been assigned the "${role?.name || 'role'}".`,
+        variant: "success",
+      });
+
+      // Reload current page to reflect changes
+      loadMembers(false);
+
+      // Logging
+      await logAction({
+        guildId,
+        userId: actor,
+        user: { id: actor, username: actorUsername },
+        actionType: "role.add",
+        actionData: {
+          targetUserId: userId,
+          targetUsername: user?.username,
+          roleId,
+          roleName: role?.name,
+        },
+      });
+    } catch (error: any) {
+      // Ensure error is properly handled and doesn't bubble up
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      // For expected errors (hierarchy/permission issues), only log minimal info
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+        console.log('[MEMBERS] Role assignment blocked (expected):', errorMessage);
+        toast({
+          title: "Role Assignment Blocked",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      } else {
+        // For unexpected errors, log full details for debugging
+        console.error('[MEMBERS] Unexpected error adding role:', {
+          message: errorMessage,
+          stack: error?.stack,
+          error: error
+        });
+        toast({
+          title: "Failed to Add Role",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      }
+    }
   }
   // Remove role from user
   async function handleRemoveRole(userId: string, roleId: string) {
-    const actor = (session?.user as any)?.id || "";
-    const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
-    const user = members.find(m => m.discordUserId === userId);
-    const role = roles.find(r => r.roleId === roleId);
-    // Call API to persist
-    await removeRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
-    
-    // Reload current page to reflect changes
-    loadMembers(false);
-    // Logging
-    await logAction({
-      guildId,
-      userId: actor,
-      user: { id: actor, username: actorUsername },
-      actionType: "role.remove",
-      actionData: {
-        targetUserId: userId,
-        targetUsername: user?.username,
-        roleId,
-        roleName: role?.name,
-      },
-    });
+    try {
+      const actor = (session?.user as any)?.id || "";
+      const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || actor;
+      const user = members.find(m => m.discordUserId === userId);
+      const role = roles.find(r => r.roleId === roleId);
+
+      // Call API to persist
+      await removeRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
+
+      // Show success toast
+      toast({
+        title: "Role Removed Successfully",
+        description: `${user?.username || 'User'} has been removed from the "${role?.name || 'role'}".`,
+        variant: "success",
+      });
+
+      // Reload current page to reflect changes
+      loadMembers(false);
+
+      // Logging
+      await logAction({
+        guildId,
+        userId: actor,
+        user: { id: actor, username: actorUsername },
+        actionType: "role.remove",
+        actionData: {
+          targetUserId: userId,
+          targetUsername: user?.username,
+          roleId,
+          roleName: role?.name,
+        },
+      });
+    } catch (error: any) {
+      // Ensure error is properly handled and doesn't bubble up
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      // For expected errors (hierarchy/permission issues), only log minimal info
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+        console.log('[MEMBERS] Role removal blocked (expected):', errorMessage);
+        toast({
+          title: "Role Removal Blocked",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      } else {
+        // For unexpected errors, log full details for debugging
+        console.error('[MEMBERS] Unexpected error removing role:', {
+          message: errorMessage,
+          stack: error?.stack,
+          error: error
+        });
+        toast({
+          title: "Failed to Remove Role",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      }
+    }
   }
 
   return (

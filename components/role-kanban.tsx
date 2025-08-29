@@ -7,6 +7,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea
 import { useSharedSession } from "@/components/providers";
 import { useGuildMembersKanban } from "@/hooks/use-guild-members";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useToast } from "@/hooks/use-toast";
 
 export default function RoleKanban({ guildId, customGroups = [] }: { guildId: string, customGroups?: any[] }) {
 
@@ -37,11 +38,16 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [addingUser, setAddingUser] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [userSearchPage, setUserSearchPage] = useState(1);
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [userSearchHasMore, setUserSearchHasMore] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: session } = useSharedSession();
   const { canUseApp, isOwner, loading: permissionsLoading } = usePermissions(guildId);
+  const { toast } = useToast();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -59,6 +65,57 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [dropdownOpen]);
+
+  // Efficient user search with debouncing and pagination
+  const searchUsers = useCallback(async (searchTerm: string, page: number = 1) => {
+    if (!searchTerm.trim()) {
+      setUserSearchResults([]);
+      setUserSearchHasMore(false);
+      return;
+    }
+
+    setUserSearchLoading(true);
+    try {
+      // Search in current members first (fast local search)
+      const localResults = members.filter(u => 
+        !u.roleIds.includes(addUserRoleId || "") &&
+        (u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         u.discordUserId.includes(searchTerm) ||
+         (u.accountid && u.accountid.toLowerCase().includes(searchTerm.toLowerCase())))
+      ).slice(0, 50); // Limit local results
+
+      setUserSearchResults(localResults);
+      setUserSearchHasMore(localResults.length === 50);
+      
+      // If we need more results or local search is insufficient, fetch from API
+      if (localResults.length < 20 && searchTerm.length > 2) {
+        // TODO: Implement API search endpoint for large servers
+        // For now, we'll use local search with pagination
+        setUserSearchHasMore(false);
+      }
+    } catch (error) {
+      console.error('[ROLE-KANBAN] Error searching users:', error);
+      setUserSearchResults([]);
+      setUserSearchHasMore(false);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }, [members, addUserRoleId]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (userSearch.trim()) {
+        setUserSearchPage(1);
+        searchUsers(userSearch, 1);
+      } else {
+        setUserSearchResults([]);
+        setUserSearchHasMore(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [userSearch, searchUsers]);
 
   // Reset pagination when filters change
   const handleRoleSelectionChange = useCallback((newRoleIds: string[]) => {
@@ -117,7 +174,11 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
 
     // Check permissions before allowing role changes
     if (!canUseApp) {
-      alert('You do not have permission to modify roles in this server.');
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to modify roles in this server.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -131,7 +192,11 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     const validRoleIds = roles.map(r => r.roleId);
 
     if ((fromRole && !validRoleIds.includes(fromRole)) || (toRole && !validRoleIds.includes(toRole))) {
-      alert('Unknown Role: One of the roles involved in this operation does not exist. The list will now refresh.');
+      toast({
+        title: "Unknown Role",
+        description: "One of the roles involved in this operation does not exist. The list will now refresh.",
+        variant: "destructive",
+      });
       loadMembers();
       return;
     }
@@ -199,15 +264,47 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
         });
       }
 
+      // Show success toast
+      toast({
+        title: "Roles Updated Successfully",
+        description: "User roles have been updated.",
+        variant: "success",
+      });
+
       // Reload data to ensure UI is in sync with server state
       loadMembers();
     } catch (error) {
-      console.error('Error updating role:', error);
       // Revert optimistic update on error
       if (changed) {
         setMembers(prev => prev.map(m => m.discordUserId === user.discordUserId ? user : m));
       }
-      alert('Failed to update role: ' + (error as any)?.message || 'Unknown error');
+
+      // Ensure error is properly handled and doesn't bubble up
+      const errorMessage = (error as any)?.message || (error as any)?.toString() || 'Unknown error';
+
+      // For expected errors (hierarchy/permission issues), only log minimal info
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+        console.log('[ROLE-KANBAN] Role assignment blocked (expected):', errorMessage);
+        toast({
+          title: "Role Assignment Blocked",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      } else {
+        // For unexpected errors, log full details for debugging
+        console.error('[ROLE-KANBAN] Unexpected error updating role:', {
+          message: errorMessage,
+          stack: (error as any)?.stack,
+          error: error
+        });
+        toast({
+          title: "Failed to Update Role",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      }
     }
   }, [guildId, members, roles, session]);
 
@@ -421,40 +518,100 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
        )}
       
       {/* Modal for adding user to role */}
-      <Dialog open={!!addUserRoleId} onClose={() => setAddUserRoleId(null)} className="fixed z-[200] inset-0 flex items-center justify-center">
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm" aria-hidden="true" onClick={() => setAddUserRoleId(null)} />
+      <Dialog 
+        open={!!addUserRoleId} 
+        onClose={() => {
+          setAddUserRoleId(null);
+          setUserSearch("");
+          setSelectedUserId("");
+          setUserSearchResults([]);
+          setUserSearchPage(1);
+        }} 
+        className="fixed z-[200] inset-0 flex items-center justify-center"
+      >
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" onClick={() => setAddUserRoleId(null)} />
         <div
-          className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 border bg-white/70 text-black backdrop-blur-lg border-white/60"
+          className="relative rounded-xl shadow-xl p-4 w-full max-w-md mx-auto z-10 border border-white/20"
+          style={{
+            background: 'rgba(255, 255, 255, 0.95)',
+            color: '#111827',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)'
+          }}
         >
-          <Dialog.Title className="text-lg font-semibold mb-2">Add user to role</Dialog.Title>
-          <input
-            type="text"
-            className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
-            placeholder="Search users by name or Discord ID..."
-            value={userSearch}
-            onChange={e => setUserSearch(e.target.value)}
-            autoFocus
-          />
-          <div className="max-h-60 overflow-y-auto mb-3">
-            {filteredMembers.filter(u => !u.roleIds.includes(addUserRoleId || "")).map(u => (
-              <div
-                key={u.discordUserId}
-                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selectedUserId === u.discordUserId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                onClick={() => setSelectedUserId(u.discordUserId)}
-              >
-                <img src={u.avatarUrl} alt={u.username} className="w-6 h-6 rounded-full border bg-muted object-cover" />
-                <span className="truncate text-xs font-medium text-black">{u.username}</span>
-                {u.accountid && <span className="ml-auto text-xs text-gray-500">{u.accountid}</span>}
-                <span className="ml-auto text-xs text-gray-500">{u.discordUserId}</span>
+          <Dialog.Title className="text-lg font-bold text-gray-900 mb-3">Add user to role</Dialog.Title>
+          
+          {/* Search Input */}
+          <div className="mb-3">
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white/80 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all duration-200 shadow-sm"
+              placeholder="Search users by name, Discord ID, or account ID..."
+              value={userSearch}
+              onChange={e => setUserSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+          
+          {/* User List */}
+          <div className="max-h-40 overflow-y-auto bg-gray-50/50 rounded-lg border border-gray-100 mb-3">
+            {userSearchLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                <span className="ml-2 text-xs text-gray-500">Searching...</span>
               </div>
-            ))}
-            {filteredMembers.filter(u => !u.roleIds.includes(addUserRoleId || "")).length === 0 && (
-              <div className="text-xs text-gray-400 px-2 py-2">No users found</div>
+            ) : userSearchResults.length > 0 ? (
+              userSearchResults.map(u => (
+                <div
+                  key={u.discordUserId}
+                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-all duration-150 border-b border-gray-100 last:border-b-0 ${
+                    selectedUserId === u.discordUserId
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'hover:bg-white/60'
+                  }`}
+                  onClick={() => setSelectedUserId(u.discordUserId)}
+                >
+                  <img src={u.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"} alt={u.username} className="w-6 h-6 rounded-full border border-white shadow-sm object-cover" />
+                  <div className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-gray-900 truncate" title={u.username}>{u.username}</span>
+                    {u.accountid && <span className="block text-xs text-gray-500 truncate">{u.accountid}</span>}
+                  </div>
+                  <div className="text-xs text-gray-400 font-mono">
+                    {u.discordUserId}
+                  </div>
+                  {selectedUserId === u.discordUserId && (
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-xs text-gray-500 px-3 py-4 text-center">
+                {userSearch ? 'No users found matching your search' : 'Start typing to search users...'}
+              </div>
+            )}
+            
+            {/* Load More Button */}
+            {userSearchHasMore && userSearchResults.length > 0 && (
+              <div className="border-t border-gray-100 p-2">
+                <button
+                  className="w-full text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-1.5 rounded-md transition-colors duration-200"
+                  onClick={() => {
+                    setUserSearchPage(prev => prev + 1);
+                    searchUsers(userSearch, userSearchPage + 1);
+                  }}
+                  disabled={userSearchLoading}
+                >
+                  {userSearchLoading ? 'Loading...' : 'Load More Users'}
+                </button>
+              </div>
             )}
           </div>
+          
+          {/* Action Buttons */}
           <div className="flex gap-2">
             <button
-              className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2 px-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!selectedUserId || addingUser}
               onClick={async () => {
                 if (!addUserRoleId || !selectedUserId) return;
@@ -462,7 +619,9 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                 try {
                   const actor = (session?.user as any)?.id || undefined;
                   const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || undefined;
+                  console.log(`[ROLE-KANBAN] Attempting to add role ${addUserRoleId} to user ${selectedUserId} by actor ${actor}`);
                   await addRole(guildId, selectedUserId, addUserRoleId, actor);
+                  console.log(`[ROLE-KANBAN] Successfully added role ${addUserRoleId} to user ${selectedUserId}`);
                   setMembers(prev => prev.map(m => m.discordUserId === selectedUserId ? { ...m, roleIds: [...m.roleIds, addUserRoleId] } : m));
 
                   // Logging
@@ -482,18 +641,49 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                     }
                   });
 
+                  // Show success toast
+                  toast({
+                    title: "User Added Successfully",
+                    description: `${userObj?.username || 'User'} has been added to ${roleObj?.name || 'the role'}.`,
+                    variant: "success",
+                  });
+
                   // Reload data to ensure UI is in sync
                   loadMembers();
                   setAddUserRoleId(null);
                 } catch (e: any) {
-                  alert('Failed to add user: ' + (e?.message || String(e)));
+                  const errorMessage = e?.message || e?.toString() || 'Unknown error';
+
+                  // For expected errors (hierarchy/permission issues), only log minimal info
+                  if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+                    console.log('[ROLE-KANBAN] Role assignment blocked (expected):', errorMessage);
+                    toast({
+                      title: "Role Assignment Blocked",
+                      description: errorMessage,
+                      variant: "destructive",
+                    });
+                    return; // Prevent any further error propagation
+                  } else {
+                    // For unexpected errors, log full details for debugging
+                    console.error('[ROLE-KANBAN] Unexpected error adding user to role:', {
+                      message: errorMessage,
+                      stack: e?.stack,
+                      error: e
+                    });
+                    toast({
+                      title: "Failed to Add User",
+                      description: errorMessage,
+                      variant: "destructive",
+                    });
+                    return; // Prevent any further error propagation
+                  }
                 } finally {
                   setAddingUser(false);
                 }
               }}
             >Add</button>
             <button
-              className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded-lg transition-all duration-200 border border-gray-200 hover:border-gray-300"
               onClick={() => setAddUserRoleId(null)}
               disabled={addingUser}
             >Cancel</button>

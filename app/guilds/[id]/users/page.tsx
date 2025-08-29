@@ -10,12 +10,14 @@ import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useToast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
   const { canUseApp, loading: permissionsLoading, error: permissionsError } = usePermissions(guildId);
+  const { toast } = useToast();
   
   // Use the shared hook for all member management
   const {
@@ -50,7 +52,11 @@ export default function UsersPage() {
     try {
       // Check permissions first
       if (!canUseApp) {
-        alert('You do not have permission to manage roles in this server.');
+        toast({
+          title: "Permission Denied",
+          description: "You do not have permission to manage roles in this server.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -60,6 +66,13 @@ export default function UsersPage() {
       console.log(`[USERS] Attempting to add role ${roleId} to user ${userId}`);
       await addRole(guildId, userId, roleId, (session as any)?.user?.id || 'unknown', token);
       console.log(`[USERS] Successfully added role ${roleId} to user ${userId}`);
+
+      // Show success toast
+      toast({
+        title: "Role Added Successfully",
+        description: `${members.find(m => m.discordUserId === userId)?.username || 'User'} has been assigned the role.`,
+        variant: "success",
+      });
 
       // Reload current page to reflect changes
       loadMembers(false);
@@ -80,14 +93,32 @@ export default function UsersPage() {
         }
       });
     } catch (error) {
-      console.error('[USERS] Failed to add role:', error);
-      console.error('[USERS] Error details:', {
-        message: (error as any)?.message,
-        status: (error as any)?.status,
-        response: (error as any)?.response,
-        stack: (error as any)?.stack
-      });
-      alert('Failed to add role: ' + ((error as any)?.message || 'Unknown error'));
+      // Ensure error is properly handled and doesn't bubble up
+      const errorMessage = (error as any)?.message || (error as any)?.toString() || 'Unknown error';
+
+      // For expected errors (hierarchy/permission issues), only log minimal info
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+        console.log('[USERS] Role assignment blocked (expected):', errorMessage);
+        toast({
+          title: "Role Assignment Blocked",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      } else {
+        // For unexpected errors, log full details for debugging
+        console.error('[USERS] Unexpected error adding role:', {
+          message: errorMessage,
+          stack: (error as any)?.stack,
+          error: error
+        });
+        toast({
+          title: "Failed to Add Role",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      }
     }
   };
 
@@ -95,7 +126,11 @@ export default function UsersPage() {
     try {
       // Check permissions first
       if (!canUseApp) {
-        alert('You do not have permission to manage roles in this server.');
+        toast({
+          title: "Permission Denied",
+          description: "You do not have permission to manage roles in this server.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -103,7 +138,14 @@ export default function UsersPage() {
       if (!token) return;
       
       await removeRole(guildId, userId, roleId, (session as any)?.user?.id || 'unknown', token);
-      
+
+      // Show success toast
+      toast({
+        title: "Role Removed Successfully",
+        description: `${members.find(m => m.discordUserId === userId)?.username || 'User'} has been removed from the role.`,
+        variant: "success",
+      });
+
       // Reload current page to reflect changes
       loadMembers(false);
       
@@ -123,8 +165,32 @@ export default function UsersPage() {
         }
       });
     } catch (error) {
-      console.error('Failed to remove role:', error);
-      alert('Failed to remove role: ' + (error as any)?.message || 'Unknown error');
+      // Ensure error is properly handled and doesn't bubble up
+      const errorMessage = (error as any)?.message || (error as any)?.toString() || 'Unknown error';
+
+      // For expected errors (hierarchy/permission issues), only log minimal info
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+        console.log('[USERS] Role removal blocked (expected):', errorMessage);
+        toast({
+          title: "Role Removal Blocked",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      } else {
+        // For unexpected errors, log full details for debugging
+        console.error('[USERS] Unexpected error removing role:', {
+          message: errorMessage,
+          stack: (error as any)?.stack,
+          error: error
+        });
+        toast({
+          title: "Failed to Remove Role",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        return; // Prevent any further error propagation
+      }
     }
   };
 
@@ -342,15 +408,27 @@ export default function UsersPage() {
       {/* Role management modal */}
       {selectedUser && (
         <Dialog open={true} onClose={() => { setSelectedUser(null); setModalRole(""); setSearchRole(""); }} className="fixed z-[200] inset-0 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/10 backdrop-blur-sm" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); setSearchRole(""); }} />
-          <div className="relative rounded-xl shadow-xl p-6 w-full max-w-md mx-auto z-10 border bg-white/70 text-black backdrop-blur-lg border-white/60">
-            <Dialog.Title className="text-lg font-semibold mb-2">Manage Roles for {selectedUser.username}</Dialog.Title>
-            <div className="mb-2 text-xs text-muted-foreground">Discord ID: {selectedUser.discordUserId}</div>
-            
-            {/* Current Roles */}
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" onClick={() => { setSelectedUser(null); setModalRole(""); setSearchRole(""); }} />
+          <div 
+            className="relative rounded-xl shadow-xl p-4 w-full max-w-md mx-auto z-10 border border-white/20"
+            style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              color: '#111827',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)'
+            }}
+          >
+            {/* Header */}
             <div className="mb-4">
-              <div className="font-semibold text-sm mb-2">Current Roles</div>
-              <div className="flex flex-wrap gap-1 mb-2">
+              <Dialog.Title className="text-lg font-bold text-gray-900 mb-1">Manage Roles for {selectedUser.username}</Dialog.Title>
+              <p className="text-xs text-gray-600 font-mono">Discord ID: {selectedUser.discordUserId}</p>
+            </div>
+            
+            {/* Current Roles Section */}
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Current Roles</h3>
+              <div className="flex flex-wrap gap-1.5">
                 {selectedUser.roleIds.length > 0 ? selectedUser.roleIds.map((rid) => {
                   const r = roleMap.get(rid);
                   const name = r?.name ?? "unknown";
@@ -358,77 +436,95 @@ export default function UsersPage() {
                   return (
                     <span
                       key={rid}
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-                      style={{ backgroundColor: color ? `${color}20` : undefined, borderColor: color || undefined }}
+                      className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs font-medium text-gray-700 border border-gray-200 transition-all duration-200 group"
+                      style={{
+                        backgroundColor: color ? `${color}20` : undefined,
+                        borderColor: color || undefined,
+                      }}
                       title={rid}
                     >
-                      {name}
+                      <span className="truncate max-w-[100px]" title={name}>{name}</span>
                       <button
                         onClick={async () => {
                           await handleRemoveRole(selectedUser.discordUserId, rid);
                         }}
-                        className="ml-1 rounded-full border px-1 hover:bg-muted"
+                        className="ml-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-0.5 transition-colors duration-200 opacity-0 group-hover:opacity-100"
                         aria-label={`Remove ${name}`}
                         title="Remove role"
                       >
-                        ×
+                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
                       </button>
                     </span>
                   );
-                }) : <span className="text-xs text-muted-foreground">No roles assigned</span>}
+                }) : <span className="text-xs text-gray-500 italic">No roles assigned</span>}
               </div>
             </div>
             
-            {/* Add Role */}
-            <div>
-              <div className="font-semibold text-sm mb-2">Add Role</div>
-              <input
-                type="text"
-                className="w-full px-2 py-1 border rounded text-sm mb-2 bg-white/60 text-black placeholder:text-gray-400"
-                placeholder="Search roles..."
-                value={searchRole}
-                onChange={e => setSearchRole(e.target.value)}
-                autoFocus
-              />
-              <div className="max-h-40 overflow-y-auto mb-3">
+            {/* Add Role Section */}
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Add Role</h3>
+              <div className="mb-3">
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white/80 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all duration-200 shadow-sm"
+                  placeholder="Search roles..."
+                  value={searchRole}
+                  onChange={e => setSearchRole(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-32 overflow-y-auto bg-gray-50/50 rounded-lg border border-gray-100 mb-3">
                 {roles.filter(r =>
                   !selectedUser.roleIds.includes(r.roleId) &&
                   (searchRole === '' || r.name.toLowerCase().includes(searchRole.toLowerCase()) || r.roleId.toLowerCase().includes(searchRole.toLowerCase()))
                 ).map(r => (
                   <div
                     key={r.roleId}
-                    className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${modalRole === r.roleId ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-all duration-150 border-b border-gray-100 last:border-b-0 ${
+                      modalRole === r.roleId ? 'bg-blue-50 border-blue-200' : 'hover:bg-white/60'
+                    }`}
                     onClick={() => setModalRole(r.roleId)}
                   >
-                    <span className="truncate text-xs font-medium text-black">{r.name}</span>
-                    <span className="ml-auto text-xs text-gray-500">{r.roleId}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-gray-900 truncate" title={r.name}>{r.name}</span>
+                      <span className="block text-xs text-gray-500 font-mono">{r.roleId}</span>
+                    </div>
+                    {modalRole === r.roleId && (
+                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                    )}
                   </div>
                 ))}
                 {roles.filter(r =>
                   !selectedUser.roleIds.includes(r.roleId) &&
                   (searchRole === '' || r.name.toLowerCase().includes(searchRole.toLowerCase()) || r.roleId.toLowerCase().includes(searchRole.toLowerCase()))
                 ).length === 0 && (
-                  <div className="text-xs text-gray-400 px-2 py-2">No roles available</div>
+                  <div className="text-xs text-gray-500 px-3 py-4 text-center">
+                    {searchRole ? 'No roles found matching your search' : 'No roles available to add'}
+                  </div>
                 )}
               </div>
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 rounded bg-blue-600 text-white py-1 font-semibold text-xs shadow hover:bg-blue-700 transition disabled:opacity-50"
-                  disabled={!modalRole}
-                  onClick={async () => {
-                    await handleAddRole(selectedUser.discordUserId, modalRole);
-                    setModalRole("");
-                  }}
-                >
-                  Add Role
-                </button>
-                <button
-                  className="flex-1 rounded border py-1 text-xs font-semibold hover:bg-gray-100 text-gray-700 border-gray-300 transition"
-                  onClick={() => { setSelectedUser(null); setModalRole(""); setSearchRole(""); }}
-                >
-                  Cancel
-                </button>
-              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <button
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2 px-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!modalRole}
+                onClick={async () => {
+                  await handleAddRole(selectedUser.discordUserId, modalRole);
+                  setModalRole("");
+                }}
+              >
+                Add Role
+              </button>
+              <button
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded-lg transition-all duration-200 border border-gray-200 hover:border-gray-300"
+                onClick={() => { setSelectedUser(null); setModalRole(""); setSearchRole(""); }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </Dialog>
