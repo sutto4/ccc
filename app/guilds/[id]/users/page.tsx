@@ -9,11 +9,13 @@ import { Select } from "@/components/ui/select";
 import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function UsersPage() {
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
+  const { canUseApp, loading: permissionsLoading, error: permissionsError } = usePermissions(guildId);
   
   // Use the shared hook for all member management
   const {
@@ -46,6 +48,12 @@ export default function UsersPage() {
   // Role management functions
   const handleAddRole = async (userId: string, roleId: string) => {
     try {
+      // Check permissions first
+      if (!canUseApp) {
+        alert('You do not have permission to manage roles in this server.');
+        return;
+      }
+
       const token = (session as any)?.accessToken as string;
       if (!token) return;
       
@@ -77,6 +85,12 @@ export default function UsersPage() {
 
   const handleRemoveRole = async (userId: string, roleId: string) => {
     try {
+      // Check permissions first
+      if (!canUseApp) {
+        alert('You do not have permission to manage roles in this server.');
+        return;
+      }
+
       const token = (session as any)?.accessToken as string;
       if (!token) return;
       
@@ -105,6 +119,46 @@ export default function UsersPage() {
       alert('Failed to remove role: ' + (error as any)?.message || 'Unknown error');
     }
   };
+
+  // Check permissions loading state
+  if (permissionsLoading) {
+    return (
+      <Section title="Users">
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Checking permissions...</p>
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  // Check permissions error
+  if (permissionsError) {
+    return (
+      <Section title="Users">
+        <div className="p-8 text-center">
+          <div className="text-red-600 mb-2">Permission Check Failed</div>
+          <p className="text-sm text-muted-foreground">{permissionsError}</p>
+        </div>
+      </Section>
+    );
+  }
+
+  // Check if user has access
+  if (!canUseApp) {
+    return (
+      <Section title="Users">
+        <div className="p-8 text-center">
+          <div className="text-red-600 mb-2">⚠️ Access Denied</div>
+          <p className="text-sm text-muted-foreground">
+            You don't have permission to manage users in this server. Contact a server administrator.
+          </p>
+        </div>
+      </Section>
+    );
+  }
 
   return (
     <Section

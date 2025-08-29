@@ -163,39 +163,51 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
     }
     
     // Now perform API calls and logging in background
-    if (fromRole && actor && user.roleIds.includes(fromRole)) {
-      removeRole(guildId, user.discordUserId, fromRole, actor);
-      const roleObj = roles.find(r => r.roleId === fromRole);
-      logAction({
-        guildId,
-        userId: actor,
-        actionType: "role.remove",
-        user: { id: actor, username: actorUsername },
-        actionData: {
-          targetUser: user.discordUserId,
-          targetUsername: user.username,
-          role: fromRole,
-          roleName: roleObj?.name || fromRole,
-          source: "kanban-dnd"
-        }
-      });
-    }
-    if (toRole && actor && !user.roleIds.includes(toRole)) {
-      addRole(guildId, user.discordUserId, toRole, actor);
-      const roleObj = roles.find(r => r.roleId === toRole);
-      logAction({
-        guildId,
-        userId: actor,
-        actionType: "role.add",
-        user: { id: actor, username: actorUsername },
-        actionData: {
-          targetUser: user.discordUserId,
-          targetUsername: user.username,
-          role: toRole,
-          roleName: roleObj?.name || toRole,
-          source: "kanban-dnd"
-        }
-      });
+    try {
+      if (fromRole && actor && user.roleIds.includes(fromRole)) {
+        await removeRole(guildId, user.discordUserId, fromRole, actor);
+        const roleObj = roles.find(r => r.roleId === fromRole);
+        logAction({
+          guildId,
+          userId: actor,
+          actionType: "role.remove",
+          user: { id: actor, username: actorUsername },
+          actionData: {
+            targetUser: user.discordUserId,
+            targetUsername: user.username,
+            role: fromRole,
+            roleName: roleObj?.name || fromRole,
+            source: "kanban-dnd"
+          }
+        });
+      }
+      if (toRole && actor && !user.roleIds.includes(toRole)) {
+        await addRole(guildId, user.discordUserId, toRole, actor);
+        const roleObj = roles.find(r => r.roleId === toRole);
+        logAction({
+          guildId,
+          userId: actor,
+          actionType: "role.add",
+          user: { id: actor, username: actorUsername },
+          actionData: {
+            targetUser: user.discordUserId,
+            targetUsername: user.username,
+            role: toRole,
+            roleName: roleObj?.name || toRole,
+            source: "kanban-dnd"
+          }
+        });
+      }
+
+      // Reload data to ensure UI is in sync with server state
+      loadMembers();
+    } catch (error) {
+      console.error('Error updating role:', error);
+      // Revert optimistic update on error
+      if (changed) {
+        setMembers(prev => prev.map(m => m.discordUserId === user.discordUserId ? user : m));
+      }
+      alert('Failed to update role: ' + (error as any)?.message || 'Unknown error');
     }
   }, [guildId, members, roles, session]);
 
@@ -452,6 +464,7 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                   const actorUsername = (session?.user as any)?.name || (session?.user as any)?.username || undefined;
                   await addRole(guildId, selectedUserId, addUserRoleId, actor);
                   setMembers(prev => prev.map(m => m.discordUserId === selectedUserId ? { ...m, roleIds: [...m.roleIds, addUserRoleId] } : m));
+
                   // Logging
                   const userObj = members.find(m => m.discordUserId === selectedUserId);
                   const roleObj = roles.find(r => r.roleId === addUserRoleId);
@@ -468,6 +481,9 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
                       source: "kanban-modal"
                     }
                   });
+
+                  // Reload data to ensure UI is in sync
+                  loadMembers();
                   setAddUserRoleId(null);
                 } catch (e: any) {
                   alert('Failed to add user: ' + (e?.message || String(e)));
