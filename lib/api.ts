@@ -261,6 +261,9 @@ export async function addRole(
   const qs = new URLSearchParams({ actor: actorId })
   const headers: Record<string, string> = {}
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
+
+  console.log(`[API] Adding role ${roleId} to user ${userId} by actor ${actorId}`);
+
   return j<{ ok: true }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}?${qs}`, {
     method: 'POST',
     headers,

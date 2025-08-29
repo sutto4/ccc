@@ -57,8 +57,10 @@ export default function UsersPage() {
       const token = (session as any)?.accessToken as string;
       if (!token) return;
       
+      console.log(`[USERS] Attempting to add role ${roleId} to user ${userId}`);
       await addRole(guildId, userId, roleId, (session as any)?.user?.id || 'unknown', token);
-      
+      console.log(`[USERS] Successfully added role ${roleId} to user ${userId}`);
+
       // Reload current page to reflect changes
       loadMembers(false);
       
@@ -78,8 +80,14 @@ export default function UsersPage() {
         }
       });
     } catch (error) {
-      console.error('Failed to add role:', error);
-      alert('Failed to add role: ' + (error as any)?.message || 'Unknown error');
+      console.error('[USERS] Failed to add role:', error);
+      console.error('[USERS] Error details:', {
+        message: (error as any)?.message,
+        status: (error as any)?.status,
+        response: (error as any)?.response,
+        stack: (error as any)?.stack
+      });
+      alert('Failed to add role: ' + ((error as any)?.message || 'Unknown error'));
     }
   };
 
