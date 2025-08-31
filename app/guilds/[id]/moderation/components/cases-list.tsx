@@ -25,6 +25,7 @@ interface ModerationCase {
   created_at: string;
   updated_at: string;
   evidence_count: number;
+  origin_server_name?: string;
 }
 
 interface CasesListProps {
@@ -111,7 +112,14 @@ export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesL
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Moderation Cases ({cases.length})</span>
+            <div className="flex items-center space-x-2">
+              <span>Moderation Cases ({cases.length})</span>
+              {isPartOfGroup && (
+                <Badge variant="outline" className="text-xs">
+                  Group View
+                </Badge>
+              )}
+            </div>
             <Button size="sm" variant="primary">
               <Plus className="h-4 w-4 mr-2" />
               New Case
@@ -233,6 +241,12 @@ export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesL
                       </span>
                       {caseItem.duration_label && (
                         <span>Duration: {caseItem.duration_label}</span>
+                      )}
+                      {caseItem.origin_server_name && (
+                        <span className="flex items-center space-x-1 text-blue-600">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                          <span>{caseItem.origin_server_name}</span>
+                        </span>
                       )}
                     </div>
                   </div>

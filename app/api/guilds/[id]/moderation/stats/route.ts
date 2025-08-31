@@ -41,6 +41,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id: guildId } = await params;
 
+    // Check if this guild is part of a server group
+    let groupGuildIds: string[] = [guildId];
+    try {
+      const [groupResult] = await query(`
+        SELECT g.group_id, sgm.guild_id as member_guild_id
+        FROM guilds g
+        LEFT JOIN server_group_members sgm ON g.group_id = sgm.group_id
+        WHERE g.guild_id = ? AND g.group_id IS NOT NULL
+      `, [guildId]);
+      
+      if (groupResult && groupResult.length > 0 && groupResult[0].group_id) {
+        // This guild is in a group, get all guilds in the same group
+        const [groupMembers] = await query(`
+          SELECT guild_id FROM server_group_members 
+          WHERE group_id = ?
+        `, [groupResult[0].group_id]);
+        
+        if (groupMembers && groupMembers.length > 0) {
+          groupGuildIds = groupMembers.map((member: any) => member.guild_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking server group:', error);
+      // Continue with single guild if group check fails
+    }
+
     // Get various stats in parallel
     const [
       totalCasesResult,
@@ -51,51 +77,51 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       actionBreakdownResult
     ] = await Promise.all([
       // Total cases
-      query('SELECT COUNT(*) as count FROM moderation_cases WHERE guild_id = ?', [guildId]),
+      query(`SELECT COUNT(*) as count FROM moderation_cases WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')})`, groupGuildIds),
 
       // Active bans (ban actions that are still active and haven't expired)
       query(`
         SELECT COUNT(*) as count
         FROM moderation_cases
-        WHERE guild_id = ? AND action_type = 'ban' AND active = 1
+        WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')}) AND action_type = 'ban' AND active = 1
         AND (expires_at IS NULL OR expires_at > NOW())
-      `, [guildId]),
+      `, groupGuildIds),
 
       // Active mutes (mute actions that are still active and haven't expired)
       query(`
         SELECT COUNT(*) as count
         FROM moderation_cases
-        WHERE guild_id = ? AND action_type = 'mute' AND active = 1
+        WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')}) AND action_type = 'mute' AND active = 1
         AND (expires_at IS NULL OR expires_at > NOW())
-      `, [guildId]),
+      `, groupGuildIds),
 
       // Pending reviews (BANS without evidence that need attention)
       query(`
         SELECT COUNT(*) as count
         FROM moderation_cases mc
         LEFT JOIN moderation_evidence me ON mc.id = me.case_id AND mc.guild_id = me.guild_id
-        WHERE mc.guild_id = ? 
+        WHERE mc.guild_id IN (${groupGuildIds.map(() => '?').join(',')}) 
           AND mc.action_type = 'ban' 
           AND mc.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         GROUP BY mc.id
         HAVING COUNT(me.id) = 0
-      `, [guildId]),
+      `, groupGuildIds),
 
       // Recent cases (last 24 hours)
       query(`
         SELECT COUNT(*) as count
         FROM moderation_cases
-        WHERE guild_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-      `, [guildId]),
+        WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')}) AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      `, groupGuildIds),
 
       // Action breakdown
       query(`
         SELECT action_type, COUNT(*) as count
         FROM moderation_cases
-        WHERE guild_id = ?
+        WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')})
         GROUP BY action_type
         ORDER BY count DESC
-      `, [guildId])
+      `, groupGuildIds)
     ]);
 
     const stats = {
@@ -104,7 +130,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       activeMutes: (activeMutesResult as any)[0]?.count || 0,
       pendingReviews: (pendingReviewsResult as any).length || 0,
       recentCases24h: (recentCasesResult as any)[0]?.count || 0,
-      actionBreakdown: actionBreakdownResult as any[]
+      actionBreakdown: actionBreakdownResult as any[],
+      isGroupView: groupGuildIds.length > 1,
+      groupGuildCount: groupGuildIds.length,
+      groupGuildIds: groupGuildIds
     };
 
     return NextResponse.json(stats);

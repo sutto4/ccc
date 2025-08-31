@@ -21,17 +21,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Fetch all features from the features table
+    // First, let's see what columns actually exist in the features table
+    const tableInfo = await query(`DESCRIBE features`);
+    console.log('Features table structure:', tableInfo);
+
+    // Let's also see a sample of the actual data
+    const sampleData = await query(`SELECT * FROM features LIMIT 3`);
+    console.log('Sample features data:', sampleData);
+
+    // Fetch all features from the features table with guild enablement statistics
     const features = await query(`
       SELECT 
-        id,
-        feature_name as feature_key,
-        feature_name,
-        description,
-        minimum_package,
-        is_active
-      FROM features 
-      ORDER BY feature_name
+        f.feature_name as feature_key,
+        f.feature_name as feature_name,
+        f.description,
+        f.minimum_package,
+        f.is_active,
+        COUNT(gf.guild_id) as total_guilds,
+        SUM(CASE WHEN gf.enabled = 1 THEN 1 ELSE 0 END) as enabled_guilds,
+        SUM(CASE WHEN gf.enabled = 0 THEN 1 ELSE 0 END) as disabled_guilds
+      FROM features f
+      LEFT JOIN guild_features gf ON f.feature_name = gf.feature_name
+      GROUP BY f.feature_name, f.description, f.minimum_package, f.is_active
+      ORDER BY f.feature_name
     `);
 
     console.log('Admin features query result:', features);

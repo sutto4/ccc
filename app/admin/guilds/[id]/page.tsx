@@ -8,16 +8,19 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crown, Shield, Settings } from "lucide-react";
 
 interface Feature {
-  id: number;
   feature_key: string;
   feature_name: string;
   description: string;
   minimum_package: 'free' | 'premium';
   is_active: boolean;
+  total_guilds: number;
+  enabled_guilds: number;
+  disabled_guilds: number;
 }
 
 interface GuildFeature {
   feature_name: string;
+  feature_key: string;
   enabled: boolean;
   package_override?: 'free' | 'premium';
 }
@@ -71,10 +74,31 @@ export default function AdminGuildSettingsPage() {
       const guildFeaturesData = await guildFeaturesResponse.json();
       
       // Transform guild features data
+      
+      // Create a mapping from display names to feature keys for API calls
+      const displayNameToFeatureKeyMap: Record<string, string> = {
+        'Ban Syncing': 'ban_sync',
+        'Bot Customisation': 'bot_customisation',
+        'Creator Alerts': 'creator_alerts',
+        'Custom Commands': 'custom_commands',
+        'Custom Dot Command Prefix': 'custom_prefix',
+        'Custom Groups': 'custom_groups',
+        'Embedded Messages': 'embedded_messages',
+        'FDG Donator Sync': 'fdg_donator_sync',
+        'Feedback Collection': 'feedback_system',
+        'FiveM ESX Integration': 'fivem_esx',
+        'FiveM QBcore Integration': 'fivem_qbcore',
+        'Moderation Tools': 'moderation',
+        'Reaction Roles': 'reaction_roles',
+        'User Verification System': 'verification_system'
+      };
+      
       const transformedFeatures = featuresData.features.map((feature: Feature) => {
-        const guildFeature = guildFeaturesData.features[feature.feature_key];
+        // The guild features API now returns display names as keys, so we need to use feature_name
+        const guildFeature = guildFeaturesData.features[feature.feature_name];
         return {
-          feature_name: feature.feature_key,
+          feature_name: feature.feature_name,
+          feature_key: displayNameToFeatureKeyMap[feature.feature_name], // Store the actual feature key for API calls
           enabled: guildFeature === true,
           package_override: undefined // We'll add this functionality later
         };
@@ -89,15 +113,21 @@ export default function AdminGuildSettingsPage() {
     }
   };
 
-  const toggleFeature = async (featureKey: string, enabled: boolean) => {
+  const toggleFeature = async (displayName: string, enabled: boolean) => {
     try {
       setSaving(true);
+      
+      // Find the guild feature to get the actual feature key for the API call
+      const guildFeature = guildFeatures.find(f => f.feature_name === displayName);
+      if (!guildFeature) {
+        throw new Error(`Feature not found: ${displayName}`);
+      }
       
       const response = await fetch(`/api/guilds/${guildId}/features`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          feature_name: featureKey,
+          feature_name: guildFeature.feature_key, // Use the actual feature key, not display name
           enabled: enabled
         })
       });
@@ -107,7 +137,7 @@ export default function AdminGuildSettingsPage() {
       // Update local state
       setGuildFeatures(prev => 
         prev.map(f => 
-          f.feature_name === featureKey 
+          f.feature_name === displayName 
             ? { ...f, enabled } 
             : f
         )
@@ -203,6 +233,8 @@ export default function AdminGuildSettingsPage() {
           </CardContent>
         </Card>
 
+
+
         {/* Feature Management */}
         <Card>
           <CardHeader>
@@ -229,11 +261,12 @@ export default function AdminGuildSettingsPage() {
           <CardContent>
             <div className="space-y-4">
               {features.map((feature) => {
-                const guildFeature = guildFeatures.find(f => f.feature_name === feature.feature_key);
+                // Since both admin features and guild features use display names, we can match directly
+                const guildFeature = guildFeatures.find(f => f.feature_name === feature.feature_name);
                 const isEnabled = guildFeature?.enabled || false;
                 
                 return (
-                  <div key={feature.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={feature.feature_name} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-medium">{feature.feature_name}</h4>
@@ -255,13 +288,13 @@ export default function AdminGuildSettingsPage() {
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
-                          id={`feature-${feature.id}`}
+                          id={`feature-${feature.feature_name}`}
                           checked={isEnabled}
-                          onChange={(e) => toggleFeature(feature.feature_key, e.target.checked)}
+                          onChange={(e) => toggleFeature(feature.feature_name, e.target.checked)}
                           disabled={saving}
                           className="w-4 h-4"
                         />
-                        <label htmlFor={`feature-${feature.id}`} className="text-sm">
+                        <label htmlFor={`feature-${feature.feature_name}`} className="text-sm">
                           {isEnabled ? 'Enabled' : 'Disabled'}
                         </label>
                       </div>

@@ -16,6 +16,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 
 
+type ButtonConfig = {
+  id: string;
+  label: string;
+  url: string;
+  style?: 'primary' | 'secondary' | 'danger' | 'link';
+};
+
 type EmbeddedMessageConfig = {
    id: string;
    channelId: string;
@@ -35,6 +42,9 @@ type EmbeddedMessageConfig = {
    multiChannel?: boolean;
    // Multi-channel support
    channels?: Array<{guildId: string, channelId: string, guildName: string, channelName: string}>;
+   // Button support
+   buttons?: ButtonConfig[];
+   enableButtons?: boolean;
  };
 
 export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean }) {
@@ -90,6 +100,10 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
    const [footerText, setFooterText] = useState("");
    const [footerIconUrl, setFooterIconUrl] = useState("");
    const [showTimestamp, setShowTimestamp] = useState(true);
+   
+   // Button state
+   const [enableButtons, setEnableButtons] = useState(false);
+   const [buttons, setButtons] = useState<ButtonConfig[]>([]);
   
   // User mention state
   const [guildMembers, setGuildMembers] = useState<any[]>([]);
@@ -158,6 +172,27 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
       )
       .slice(0, 8); // Limit to 8 results for performance
   }, [userSearchQuery, guildMembers]);
+
+  // Button management functions
+  const addButton = () => {
+    const newButton: ButtonConfig = {
+      id: `btn_${Date.now()}`,
+      label: 'New Button',
+      url: 'https://example.com',
+      style: 'primary'
+    };
+    setButtons(prev => [...prev, newButton]);
+  };
+
+  const removeButton = (buttonId: string) => {
+    setButtons(prev => prev.filter(btn => btn.id !== buttonId));
+  };
+
+  const updateButton = (buttonId: string, field: keyof ButtonConfig, value: string) => {
+    setButtons(prev => prev.map(btn => 
+      btn.id === buttonId ? { ...btn, [field]: value } : btn
+    ));
+  };
 
   // Handle @ key press to show user search
   const handleInputChange = useCallback((field: string, value: string, setter: (value: string) => void) => {
@@ -520,6 +555,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
      setFooterText("");
      setFooterIconUrl("");
      setShowTimestamp(true);
+     setEnableButtons(false);
+     setButtons([]);
    };
 
      const startEdit = (config: EmbeddedMessageConfig) => {
@@ -548,6 +585,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
      setFooterText(config.footer?.text || "");
      setFooterIconUrl(config.footer?.iconUrl || "");
      setShowTimestamp(config.timestamp !== null);
+     setEnableButtons(config.enableButtons || false);
+     setButtons(config.buttons || []);
    };
 
   const cancelEdit = () => {
@@ -595,6 +634,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
          timestamp: showTimestamp ? Date.now() : undefined,
          enabled: true,
          createdBy: (session?.user as any)?.name || (session?.user as any)?.username || 'ServerMate Bot',
+         enableButtons: enableButtons,
+         buttons: enableButtons ? buttons : undefined,
        };
 
        if (editing && editing.id) {
@@ -1711,6 +1752,28 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                          </div>
                                                  {showTimestamp && <span className="ml-auto">Just now</span>}
                       </div>
+                      
+                      {/* Buttons preview */}
+                      {enableButtons && buttons.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex flex-wrap gap-2">
+                            {buttons.map((button, index) => (
+                              <button
+                                key={button.id}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                  button.style === 'primary' ? 'bg-blue-500 text-white hover:bg-blue-600' :
+                                  button.style === 'secondary' ? 'bg-gray-200 text-gray-800 hover:bg-gray-300' :
+                                  button.style === 'danger' ? 'bg-red-500 text-white hover:bg-red-600' :
+                                  'bg-transparent text-blue-500 hover:bg-blue-50 underline'
+                                }`}
+                                title={`${button.label} - ${button.url}`}
+                              >
+                                {button.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1724,6 +1787,96 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                 <span className="text-sm font-medium">Show timestamp</span>
               </label>
             </div>
+
+            {/* Button toggle */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={enableButtons} 
+                  onChange={e => setEnableButtons(e.target.checked)} 
+                />
+                <span className="text-sm font-medium">Enable buttons</span>
+              </label>
+            </div>
+
+            {/* Button management */}
+            {enableButtons && (
+              <div className="space-y-3 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-700">Message Buttons</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addButton}
+                    className="text-xs"
+                  >
+                    + Add Button
+                  </Button>
+                </div>
+                
+                {buttons.length === 0 ? (
+                  <div className="text-sm text-gray-500 text-center py-4">
+                    No buttons added yet. Click "Add Button" to get started.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {buttons.map((button, index) => (
+                      <div key={button.id} className="p-3 border border-gray-200 rounded bg-white space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-600">Button {index + 1}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeButton(button.id)}
+                            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Label</label>
+                            <Input
+                              value={button.label}
+                              onChange={(e) => updateButton(button.id, 'label', e.target.value)}
+                              placeholder="Button text"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Style</label>
+                            <select
+                              value={button.style}
+                              onChange={(e) => updateButton(button.id, 'style', e.target.value)}
+                              className="w-full text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="primary">Primary</option>
+                              <option value="secondary">Secondary</option>
+                              <option value="danger">Danger</option>
+                              <option value="link">Link</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">URL</label>
+                          <Input
+                            value={button.url}
+                            onChange={(e) => updateButton(button.id, 'url', e.target.value)}
+                            placeholder="https://example.com"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
                          {/* Publish button */}
              <Button
@@ -1801,6 +1954,29 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
                                                <div className="text-sm text-muted-foreground mt-1 overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                           {c.description || 'No description'} 
                         </div>
+                        
+                        {/* Show buttons if enabled */}
+                        {c.enableButtons && c.buttons && c.buttons.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs text-muted-foreground mb-1">Buttons:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {c.buttons.map((button, index) => (
+                                <span
+                                  key={button.id}
+                                  className={`px-2 py-1 text-xs rounded border ${
+                                    button.style === 'primary' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                    button.style === 'secondary' ? 'bg-gray-100 text-gray-800 border-gray-200' :
+                                    button.style === 'danger' ? 'bg-red-100 text-red-800 border-red-200' :
+                                    'bg-transparent text-blue-600 border-blue-200'
+                                  }`}
+                                  title={`${button.label} - ${button.url}`}
+                                >
+                                  {button.label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                                                  <div className="text-xs text-muted-foreground mt-1">
                            {/* Show channels information */}
                            {c.channels && c.channels.length > 0 ? (

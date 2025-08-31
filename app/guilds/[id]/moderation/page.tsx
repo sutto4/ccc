@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Shield, 
@@ -67,7 +68,10 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
     activeBans: 0,
     activeMutes: 0,
     pendingReviews: 0,
-    recentCases24h: 0
+    recentCases24h: 0,
+    isGroupView: false,
+    groupGuildCount: 1,
+    groupGuildIds: []
   });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -177,6 +181,28 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {/* Group Information Banner */}
+      {stats.isGroupView && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <div className="flex-1">
+                <h3 className="font-medium text-blue-900">
+                  Server Group View: {finalGroupName || 'Unknown Group'}
+                </h3>
+                <p className="text-sm text-blue-700">
+                  Showing moderation data from {stats.groupGuildCount} server{stats.groupGuildCount !== 1 ? 's' : ''} in this group
+                </p>
+              </div>
+              <Badge variant="outline" className="border-blue-300 text-blue-700">
+                Group View
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -189,7 +215,9 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
               {statsLoading ? "..." : stats.totalCases.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.totalCases === 0 ? "No cases yet" : "Total moderation cases"}
+              {stats.totalCases === 0 ? "No cases yet" : 
+               stats.isGroupView ? `Across ${stats.groupGuildCount} server${stats.groupGuildCount !== 1 ? 's' : ''}` : 
+               "Total moderation cases"}
             </p>
           </CardContent>
         </Card>

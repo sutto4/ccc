@@ -52,30 +52,68 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Invalid guild ID" }, { status: 400 });
     }
 
+    // Check if this guild is part of a server group
+    let groupGuildIds: string[] = [guildId];
+    let groupInfo: any = null;
+    try {
+      const [groupResult] = await query(`
+        SELECT g.group_id, sg.name as group_name, sg.description as group_description
+        FROM guilds g
+        LEFT JOIN server_groups sg ON g.group_id = sg.id
+        WHERE g.guild_id = ? AND g.group_id IS NOT NULL
+      `, [guildId]);
+      
+      if (groupResult && groupResult.length > 0 && groupResult[0].group_id) {
+        // This guild is in a group, get all guilds in the same group
+        const [groupMembers] = await query(`
+          SELECT sgm.guild_id, g.guild_name
+          FROM server_group_members sgm
+          JOIN guilds g ON sgm.guild_id = g.guild_id
+          WHERE sgm.group_id = ?
+        `, [groupResult[0].group_id]);
+        
+        if (groupMembers && groupMembers.length > 0) {
+          groupGuildIds = groupMembers.map((member: any) => member.guild_id);
+          groupInfo = {
+            id: groupResult[0].group_id,
+            name: groupResult[0].group_name,
+            description: groupResult[0].group_description,
+            servers: groupMembers
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error checking server group:', error);
+      // Continue with single guild if group check fails
+    }
 
 
 
-    // Get cases with proper evidence count
+
+    // Get cases with proper evidence count and server origin info
     const casesQuery = `
       SELECT
         mc.*,
-        COALESCE(COUNT(me.id), 0) as evidence_count
+        COALESCE(COUNT(me.id), 0) as evidence_count,
+        g.guild_name as origin_server_name
       FROM moderation_cases mc
       LEFT JOIN moderation_evidence me ON mc.id = me.case_id AND mc.guild_id = me.guild_id
-      WHERE mc.guild_id = ?
+      JOIN guilds g ON mc.guild_id = g.guild_id
+      WHERE mc.guild_id IN (${groupGuildIds.map(() => '?').join(',')})
       GROUP BY mc.id, mc.case_id, mc.action_type, mc.target_user_id, mc.target_username, 
                mc.moderator_user_id, mc.moderator_username, mc.reason, mc.duration_ms, 
-               mc.duration_label, mc.active, mc.expires_at, mc.created_at, mc.updated_at
+               mc.duration_label, mc.active, mc.expires_at, mc.created_at, mc.updated_at,
+               g.guild_name
       ORDER BY mc.created_at DESC
       LIMIT ? OFFSET ?
     `;
 
-    const queryParams = [guildId, limit, offset];
+    const queryParams = [...groupGuildIds, limit, offset];
     const cases = await query(casesQuery, queryParams);
 
     // Get total count for pagination
-    const countQuery = `SELECT COUNT(*) as total FROM moderation_cases WHERE guild_id = ?`;
-    const countResult = await query(countQuery, [guildId]);
+    const countQuery = `SELECT COUNT(*) as total FROM moderation_cases WHERE guild_id IN (${groupGuildIds.map(() => '?').join(',')})`;
+    const countResult = await query(countQuery, groupGuildIds);
     const totalCount = (countResult as any)[0]?.total || 0;
 
     return NextResponse.json({
@@ -85,7 +123,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         limit,
         offset,
         hasMore: offset + limit < totalCount
-      }
+      },
+      groupInfo,
+      isGroupView: groupGuildIds.length > 1
     });
 
   } catch (error) {

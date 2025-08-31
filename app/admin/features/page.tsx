@@ -9,14 +9,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crown, Plus, Edit, Trash2 } from "lucide-react";
 
 interface Feature {
-  id: number;
   feature_key: string;
   feature_name: string;
   description: string;
   minimum_package: 'free' | 'premium';
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  total_guilds: number;
+  enabled_guilds: number;
+  disabled_guilds: number;
 }
 
 export default function AdminFeaturesPage() {
@@ -54,7 +54,7 @@ export default function AdminFeaturesPage() {
     e.preventDefault();
     try {
       const url = editingFeature 
-        ? `/api/admin/features/${editingFeature.id}`
+        ? `/api/admin/features/${editingFeature.feature_key}`
         : '/api/admin/features';
       
       const method = editingFeature ? 'PUT' : 'POST';
@@ -74,11 +74,11 @@ export default function AdminFeaturesPage() {
     }
   };
 
-  const handleDelete = async (featureId: number) => {
+  const handleDelete = async (featureKey: string) => {
     if (!confirm('Are you sure you want to delete this feature?')) return;
     
     try {
-      const response = await fetch(`/api/admin/features/${featureId}`, {
+      const response = await fetch(`/api/admin/features/${featureKey}`, {
         method: 'DELETE'
       });
 
@@ -209,6 +209,36 @@ export default function AdminFeaturesPage() {
           </Card>
         )}
 
+        {/* Features Summary */}
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{features.length}</div>
+                <div className="text-sm text-blue-700">Total Features</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">
+                  {features.filter(f => f.minimum_package === 'free').length}
+                </div>
+                <div className="text-sm text-green-700">Free Features</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {features.filter(f => f.minimum_package === 'premium').length}
+                </div>
+                <div className="text-sm text-yellow-700">Premium Features</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {features.reduce((sum, f) => sum + f.total_guilds, 0)}
+                </div>
+                <div className="text-sm text-purple-700">Total Guilds</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Features List */}
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold">Global Features</h2>
@@ -258,6 +288,24 @@ export default function AdminFeaturesPage() {
                     <p className="text-xs text-muted-foreground font-mono">
                       Key: {feature.feature_key}
                     </p>
+                    
+                    {/* Guild Statistics */}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="grid grid-cols-3 gap-4 text-xs">
+                        <div className="text-center">
+                          <div className="font-semibold text-blue-600">{feature.total_guilds}</div>
+                          <div className="text-muted-foreground">Total Guilds</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-green-600">{feature.enabled_guilds}</div>
+                          <div className="text-muted-foreground">Enabled</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-red-600">{feature.disabled_guilds}</div>
+                          <div className="text-muted-foreground">Disabled</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="flex gap-2">
@@ -271,7 +319,7 @@ export default function AdminFeaturesPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(feature.id)}
+                      onClick={() => handleDelete(feature.feature_key)}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="w-4 h-4" />

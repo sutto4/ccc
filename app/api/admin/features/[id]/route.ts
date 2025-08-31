@@ -10,7 +10,7 @@ export const PUT = withAuth(async (req, { params }, auth) => {
   }
 
   try {
-    const { id } = await params;
+    const { id: featureKey } = await params;
     const body = await req.json();
     const { feature_name, description, minimum_package, is_active } = body;
 
@@ -28,8 +28,8 @@ export const PUT = withAuth(async (req, { params }, auth) => {
     await query(
       `UPDATE features 
        SET feature_name = ?, description = ?, minimum_package = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [feature_name, description, minimum_package, is_active ? 1 : 0, id]
+       WHERE feature_name = ?`,
+      [feature_name, description, minimum_package, is_active ? 1 : 0, featureKey]
     );
 
     return NextResponse.json({ 
@@ -54,12 +54,12 @@ export const DELETE = withAuth(async (_req, { params }, auth) => {
   }
 
   try {
-    const { id } = await params;
+    const { id: featureKey } = await params;
 
     // Check if feature is being used by any guilds
     const usageResult = await query(
-      `SELECT COUNT(*) as count FROM guild_features WHERE feature_name = (SELECT feature_key FROM features WHERE id = ?)`,
-      [id]
+      `SELECT COUNT(*) as count FROM guild_features WHERE feature_name = ?`,
+      [featureKey]
     );
 
     let usage = usageResult;
@@ -74,7 +74,7 @@ export const DELETE = withAuth(async (_req, { params }, auth) => {
     }
 
     // Delete feature
-    await query(`DELETE FROM features WHERE id = ?`, [id]);
+    await query(`DELETE FROM features WHERE feature_name = ?`, [featureKey]);
 
     return NextResponse.json({ 
       success: true, 
