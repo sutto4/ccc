@@ -55,7 +55,7 @@ export default function LogsPage() {
     
     const loadLogs = async () => {
       try {
-        setLoading(true);
+    setLoading(true);
         setError(null);
         
         // TODO: Replace with actual API call when endpoint is created
@@ -269,12 +269,12 @@ export default function LogsPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
+    <div>
             <h2 className="text-xl font-semibold">Server Logs</h2>
             <p className="text-muted-foreground">
               View server activity and bot logs
             </p>
-          </div>
+        </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -284,7 +284,7 @@ export default function LogsPage() {
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
-          </div>
+        </div>
         </div>
 
         {/* Error Message */}
@@ -292,7 +292,7 @@ export default function LogsPage() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700">
             <XCircle className="h-5 w-5" />
             {error}
-          </div>
+        </div>
         )}
 
         {/* Filters */}
@@ -309,7 +309,7 @@ export default function LogsPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="search">Search</Label>
+          <Label htmlFor="search">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -370,7 +370,7 @@ export default function LogsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+        </div>
           </CardContent>
         </Card>
 
@@ -389,7 +389,7 @@ export default function LogsPage() {
             {filteredLogs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No logs found matching the current filters.
-              </div>
+      </div>
             ) : (
               <div className="space-y-3">
                 {filteredLogs.map((log) => (
@@ -409,8 +409,8 @@ export default function LogsPage() {
                         {log.username && (
                           <span className="text-sm text-muted-foreground">
                             by {log.username}
-                          </span>
-                        )}
+                      </span>
+                    )}
                       </div>
                       
                       <p className="text-sm font-medium mb-1">{log.message}</p>
@@ -466,8 +466,8 @@ export default function LogsPage() {
                   {logs.filter(l => l.level === 'error').length}
                 </div>
                 <div className="text-sm text-red-700">Errors</div>
-              </div>
-            </div>
+      </div>
+    </div>
           </CardContent>
         </Card>
       </div>

@@ -83,19 +83,47 @@ export default function ActionModal({ isOpen, onClose, action, targetUserId, tar
     if (!userId.trim()) return;
 
     setIsSubmitting(true);
-    
+
     try {
-      // TODO: Implement API call
-      console.log(`Performing ${action} on user ${userId}`, { reason, duration });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // TODO: Show success toast
+      // Get guild ID from the current URL
+      const guildId = window.location.pathname.split('/')[2];
+
+      // Prepare the API request
+      const requestBody = {
+        action,
+        target_user_id: userId.trim(),
+        target_username: targetUsername || userId.trim(),
+        reason: reason.trim() || undefined,
+        duration_ms: (action === "timeout" || action === "mute") && duration ? parseInt(duration) * 1000 : undefined
+      };
+
+      const response = await fetch(`/api/guilds/${guildId}/moderation/actions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to perform moderation action');
+      }
+
+      // Show success message (you can implement a toast system here)
+      console.log('✅ Action successful:', data.message);
+
+      // Close the modal
       onClose();
+
+      // Optionally refresh the page or trigger a data refresh
+      // For now, we'll just close the modal
+
     } catch (error) {
       console.error(`Failed to ${action} user:`, error);
-      // TODO: Show error toast
+      // You can implement error toast here
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
     } finally {
       setIsSubmitting(false);
     }

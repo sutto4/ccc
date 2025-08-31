@@ -18,7 +18,7 @@ import {
 import ActionModal, { ModAction } from "./components/action-modal";
 import CasesList from "./components/cases-list";
 import ModerationSettings from "./components/moderation-settings";
-import CaseDetailDemo from "./components/case-detail-demo";
+import CaseDetail from "./components/case-detail";
 import { useBanSyncMock } from "./hooks/use-ban-sync-mock";
 
 // Mock function to get guild info - replace with real API call
@@ -38,6 +38,7 @@ const getGuildInfo = async (guildId: string) => {
 
 export default function ModerationPage({ params }: { params: Promise<{ id: string }> }) {
   const [activeTab, setActiveTab] = useState("cases");
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     action: ModAction;
@@ -60,11 +61,44 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
     } | null;
   } | null>(null);
 
+  // Stats state
+  const [stats, setStats] = useState({
+    totalCases: 0,
+    activeBans: 0,
+    activeMutes: 0,
+    pendingReviews: 0,
+    recentCases24h: 0
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // Fetch moderation stats
+  const fetchStats = async (id: string) => {
+    // Don't fetch if id is empty
+    if (!id || id.trim() === '') {
+      setStatsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/guilds/${id}/moderation/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        console.error('Failed to fetch stats:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error fetching moderation stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const getGuildId = async () => {
       const { id } = await params;
       setGuildId(id);
-      
+
       // Fetch guild info to check group membership
       try {
         const info = await getGuildInfo(id);
@@ -73,6 +107,9 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
         console.error("Failed to fetch guild info:", error);
         setGuildInfo({ id, name: "Unknown Server", group: null });
       }
+
+      // Fetch moderation stats
+      await fetchStats(id);
     };
     getGuildId();
   }, [params]);
@@ -99,6 +136,11 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
       isOpen: false,
       action: "ban",
     });
+  };
+
+  const viewCaseDetails = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    setActiveTab("case-detail");
   };
 
   return (
@@ -143,8 +185,12 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
             <List className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No cases yet</p>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : stats.totalCases.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats.totalCases === 0 ? "No cases yet" : "Total moderation cases"}
+            </p>
           </CardContent>
         </Card>
 
@@ -154,8 +200,12 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
             <Ban className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No active bans</p>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : stats.activeBans.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats.activeBans === 0 ? "No active bans" : "Currently banned"}
+            </p>
           </CardContent>
         </Card>
 
@@ -165,8 +215,12 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
             <VolumeX className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No muted users</p>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : stats.activeMutes.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats.activeMutes === 0 ? "No muted users" : "Currently muted"}
+            </p>
           </CardContent>
         </Card>
 
@@ -176,8 +230,12 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No pending cases</p>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : stats.pendingReviews.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats.pendingReviews === 0 ? "No pending cases" : "Need attention"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -204,11 +262,55 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
         </TabsList>
 
         <TabsContent value="cases" className="space-y-4">
-          <CasesList guildId={guildId} isPartOfGroup={finalIsPartOfGroup} />
+          {guildId ? (
+            <CasesList
+              guildId={guildId}
+              isPartOfGroup={finalIsPartOfGroup}
+              onViewCase={viewCaseDetails}
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading moderation cases...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="case-detail" className="space-y-4">
-          <CaseDetailDemo guildId={guildId} isPartOfGroup={finalIsPartOfGroup} />
+          {guildId && selectedCaseId ? (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab("cases")}
+                  className="flex items-center space-x-2"
+                >
+                  ← Back to Cases
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  Viewing Case #{selectedCaseId}
+                </div>
+              </div>
+              <CaseDetail
+                guildId={guildId}
+                caseId={selectedCaseId}
+                isPartOfGroup={finalIsPartOfGroup}
+              />
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading case details...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="actions" className="space-y-4">
@@ -280,7 +382,18 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
-          <ModerationSettings guildId={guildId} isPartOfGroup={finalIsPartOfGroup} groupName={finalGroupName} />
+          {guildId ? (
+            <ModerationSettings guildId={guildId} isPartOfGroup={finalIsPartOfGroup} groupName={finalGroupName} />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading moderation settings...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

@@ -413,11 +413,11 @@ export default function AdminDashboard() {
             >
               🧪 Test Modal
             </button>
-          </div>
         </div>
+      </div>
 
         {/* Error Display */}
-        {error && (
+          {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center">
               <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
@@ -619,8 +619,8 @@ export default function AdminDashboard() {
                   Existing ({existingCount})
                 </button>
               </div>
-            </div>
-          </div>
+              </div>
+        </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -632,8 +632,8 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Features</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
+              </tr>
+            </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {getFilteredGuilds().map((guild) => (
                   <tr key={guild.id} className="hover:bg-gray-50">
@@ -788,11 +788,11 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         </div>
 
         {/* Quick Actions */}
