@@ -260,7 +260,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       // Update Discord commands for this guild via bot command server
       try {
-        const botResponse = await fetch('http://localhost:3001/commands', {
+        console.log('[FEATURES-PUT] Making HTTP call to bot server...');
+        console.log('[FEATURES-PUT] Target URL: http://127.0.0.1:3001/api/commands');
+        console.log('[FEATURES-PUT] Request payload:', {
+          guildId,
+          action: enabled ? 'enabled' : 'disabled',
+          features: currentFeatures
+        });
+        
+        const botResponse = await fetch('http://127.0.0.1:3001/api/commands', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -280,6 +288,41 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         }
       } catch (commandError) {
         console.error('[FEATURES-PUT] Error updating bot commands:', commandError);
+        
+        // Fallback: Write to file for bot to read
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const commandFile = path.join(process.cwd(), 'command-updates.json');
+          
+          const commandUpdate = {
+            timestamp: new Date().toISOString(),
+            guildId,
+            action: enabled ? 'enabled' : 'disabled',
+            features: currentFeatures
+          };
+          
+          // Read existing updates or create new array
+          let updates = [];
+          if (fs.existsSync(commandFile)) {
+            updates = JSON.parse(fs.readFileSync(commandFile, 'utf8'));
+          }
+          
+          // Add new update
+          updates.push(commandUpdate);
+          
+          // Keep only last 10 updates
+          if (updates.length > 10) {
+            updates = updates.slice(-10);
+          }
+          
+          // Write back to file
+          fs.writeFileSync(commandFile, JSON.stringify(updates, null, 2));
+          console.log('[FEATURES-PUT] Command update written to file as fallback');
+        } catch (fileError) {
+          console.error('[FEATURES-PUT] Failed to write command update to file:', fileError);
+        }
+        
         // Don't fail the feature update if command update fails
       }
       

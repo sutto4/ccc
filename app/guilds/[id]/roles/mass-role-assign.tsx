@@ -5,9 +5,11 @@ import RoleMultiPicker from "@/components/ui/role-multi-picker";
 import { addRole, removeRole, type Member, type Role } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSharedSession } from "@/components/providers";
 
 export default function MassRoleAssign({ guildId, roles }: { guildId: string; roles: Role[] }) {
   const { canUseApp, loading: permissionsLoading, error: permissionsError } = usePermissions(guildId);
+  const { data: session } = useSharedSession();
   const [selectedUsers, setSelectedUsers] = useState<Member[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [saving, startSaving] = useTransition();
@@ -18,18 +20,23 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     setError(null);
     setSuccess(false);
     if (!selectedUsers.length || !selectedRoles.length) return;
+    if (!session?.user?.id) {
+      setError("Session expired. Please log in again.");
+      return;
+    }
+
     startSaving(async () => {
       try {
         // For each user, assign all selected roles and log each action
         await Promise.all(
           selectedUsers.flatMap((user) =>
             selectedRoles.map(async (role) => {
-              await addRole(guildId, user.discordUserId, role.roleId, user.discordUserId);
+              await addRole(guildId, user.discordUserId, role.roleId, session.user.id);
               await logAction({
                 guildId,
-                userId: user.discordUserId,
+                userId: session.user.id,
                 actionType: "role.add",
-                user: { id: user.discordUserId, username: user.username },
+                user: { id: session.user.id, username: session.user.name || 'Unknown' },
                 actionData: {
                   targetUser: user.discordUserId,
                   targetUsername: user.username,
@@ -54,18 +61,23 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     setError(null);
     setSuccess(false);
     if (!selectedUsers.length || !selectedRoles.length) return;
+    if (!session?.user?.id) {
+      setError("Session expired. Please log in again.");
+      return;
+    }
+
     startSaving(async () => {
       try {
         // For each user, remove all selected roles and log each action
         await Promise.all(
           selectedUsers.flatMap((user) =>
             selectedRoles.map(async (role) => {
-              await removeRole(guildId, user.discordUserId, role.roleId, user.discordUserId);
+              await removeRole(guildId, user.discordUserId, role.roleId, session.user.id);
               await logAction({
                 guildId,
-                userId: user.discordUserId,
+                userId: session.user.id,
                 actionType: "role.remove",
-                user: { id: user.discordUserId, username: user.username },
+                user: { id: session.user.id, username: session.user.name || 'Unknown' },
                 actionData: {
                   targetUser: user.discordUserId,
                   targetUsername: user.username,
