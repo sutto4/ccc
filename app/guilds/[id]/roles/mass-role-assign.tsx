@@ -26,11 +26,17 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     }
 
     startSaving(async () => {
+      const results = {
+        successful: [] as string[],
+        failed: [] as { user: string; error: string }[],
+        total: selectedUsers.length * selectedRoles.length
+      };
+
       try {
-        // For each user, assign all selected roles and log each action
-        await Promise.all(
-          selectedUsers.flatMap((user) =>
-            selectedRoles.map(async (role) => {
+        // Process each user-role combination individually to handle errors gracefully
+        for (const user of selectedUsers) {
+          for (const role of selectedRoles) {
+            try {
               await addRole(guildId, user.discordUserId, role.roleId, session.user.id);
               await logAction({
                 guildId,
@@ -45,12 +51,50 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
                   source: "mass-role-assign"
                 }
               });
-            })
-          )
-        );
-        setSuccess("Roles assigned successfully!");
-        setSelectedUsers([]);
-        setSelectedRoles([]);
+              results.successful.push(`${user.username} (${role.name})`);
+            } catch (roleError: any) {
+              let errorMessage = "Unknown error";
+
+              if (roleError?.error === "user_not_found") {
+                errorMessage = "User is no longer a member of the server";
+              } else if (roleError?.message) {
+                errorMessage = roleError.message;
+              } else if (typeof roleError === 'string') {
+                errorMessage = roleError;
+              }
+
+              results.failed.push({
+                user: `${user.username} (${role.name})`,
+                error: errorMessage
+              });
+
+              console.warn(`Failed to assign role ${role.name} to ${user.username}:`, roleError);
+            }
+          }
+        }
+
+        // Prepare success message with summary
+        let successMessage = `Processed ${results.successful.length + results.failed.length} role assignments.`;
+        if (results.successful.length > 0) {
+          successMessage += ` ${results.successful.length} successful.`;
+        }
+        if (results.failed.length > 0) {
+          successMessage += ` ${results.failed.length} failed.`;
+        }
+
+        setSuccess(successMessage);
+
+        // Show detailed error information if there were failures
+        if (results.failed.length > 0) {
+          const failedDetails = results.failed.map(f => `${f.user}: ${f.error}`).join('\n');
+          setError(`Some role assignments failed:\n${failedDetails}`);
+        }
+
+        // Clear selections only if everything was successful
+        if (results.failed.length === 0) {
+          setSelectedUsers([]);
+          setSelectedRoles([]);
+        }
       } catch (e: any) {
         setError(e.message || "Failed to assign roles");
       }
@@ -67,11 +111,17 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     }
 
     startSaving(async () => {
+      const results = {
+        successful: [] as string[],
+        failed: [] as { user: string; error: string }[],
+        total: selectedUsers.length * selectedRoles.length
+      };
+
       try {
-        // For each user, remove all selected roles and log each action
-        await Promise.all(
-          selectedUsers.flatMap((user) =>
-            selectedRoles.map(async (role) => {
+        // Process each user-role combination individually to handle errors gracefully
+        for (const user of selectedUsers) {
+          for (const role of selectedRoles) {
+            try {
               await removeRole(guildId, user.discordUserId, role.roleId, session.user.id);
               await logAction({
                 guildId,
@@ -86,12 +136,50 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
                   source: "mass-role-assign"
                 }
               });
-            })
-          )
-        );
-        setSuccess("Roles removed successfully!");
-        setSelectedUsers([]);
-        setSelectedRoles([]);
+              results.successful.push(`${user.username} (${role.name})`);
+            } catch (roleError: any) {
+              let errorMessage = "Unknown error";
+
+              if (roleError?.error === "user_not_found") {
+                errorMessage = "User is no longer a member of the server";
+              } else if (roleError?.message) {
+                errorMessage = roleError.message;
+              } else if (typeof roleError === 'string') {
+                errorMessage = roleError;
+              }
+
+              results.failed.push({
+                user: `${user.username} (${role.name})`,
+                error: errorMessage
+              });
+
+              console.warn(`Failed to remove role ${role.name} from ${user.username}:`, roleError);
+            }
+          }
+        }
+
+        // Prepare success message with summary
+        let successMessage = `Processed ${results.successful.length + results.failed.length} role removals.`;
+        if (results.successful.length > 0) {
+          successMessage += ` ${results.successful.length} successful.`;
+        }
+        if (results.failed.length > 0) {
+          successMessage += ` ${results.failed.length} failed.`;
+        }
+
+        setSuccess(successMessage);
+
+        // Show detailed error information if there were failures
+        if (results.failed.length > 0) {
+          const failedDetails = results.failed.map(f => `${f.user}: ${f.error}`).join('\n');
+          setError(`Some role removals failed:\n${failedDetails}`);
+        }
+
+        // Clear selections only if everything was successful
+        if (results.failed.length === 0) {
+          setSelectedUsers([]);
+          setSelectedRoles([]);
+        }
       } catch (e: any) {
         setError(e.message || "Failed to remove roles");
       }
