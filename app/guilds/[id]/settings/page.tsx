@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { fetchRoles } from "@/lib/api";
+import { fetchRoles, fetchGuildCommandPermissions, fetchWebAppFeatures, updateWebAppFeatures } from "@/lib/api";
 import type { Role } from "@/lib/api";
 import PremiumModal from "@/components/premium-modal";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
@@ -34,6 +34,20 @@ export default function GuildSettingsPage() {
   const [originalPermissions, setOriginalPermissions] = useState<RolePermission[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [commandPermissions, setCommandPermissions] = useState<any>(null);
+  const [commandSettings, setCommandSettings] = useState<any>({});
+  const [webAppFeatures, setWebAppFeatures] = useState<{
+    features: Array<{
+      key: string;
+      name: string;
+      description: string;
+      minimumPackage: string;
+      enabled: boolean;
+      canEnable: boolean;
+    }>;
+    states: Record<string, boolean>;
+    isPremium: boolean;
+  }>({ features: [], states: {}, isPremium: false });
   const { toast } = useToast();
 
   // General settings state
@@ -302,7 +316,46 @@ export default function GuildSettingsPage() {
       console.log('Filtered relevant roles:', relevantRoles);
       
       setRoles(relevantRoles);
-      
+
+      // Load command permissions
+      try {
+        console.log('🚨🚨🚨 LOADING COMMAND PERMISSIONS! 🚨🚨🚨');
+        console.log('Loading command permissions for guild:', guildId);
+        const commandPerms = await fetchGuildCommandPermissions(guildId);
+        console.log('🚨🚨🚨 COMMAND PERMISSIONS LOADED! 🚨🚨🚨');
+        console.log('Command permissions loaded:', commandPerms);
+        setCommandPermissions(commandPerms);
+
+        // Initialize command settings based on permissions
+        const initialSettings: any = {};
+        Object.keys(commandPerms.commands).forEach(cmd => {
+          initialSettings[cmd] = commandPerms.commands[cmd].guildEnabled;
+        });
+        console.log('🚨🚨🚨 INITIAL COMMAND SETTINGS! 🚨🚨🚨');
+        console.log('Initial command settings:', initialSettings);
+        setCommandSettings(initialSettings);
+      } catch (error) {
+        console.error('🚨🚨🚨 ERROR LOADING COMMAND PERMISSIONS! 🚨🚨🚨');
+        console.error('Error loading command permissions:', error);
+        // Don't show error toast for command permissions as it's not critical
+      }
+
+      // Load web app features
+      try {
+        console.log('🚨🚨🚨 LOADING WEB APP FEATURES! 🚨🚨🚨');
+        const features = await fetchWebAppFeatures(guildId);
+        console.log('🚨🚨🚨 WEB APP FEATURES LOADED! 🚨🚨🚨');
+        console.log('Web app features loaded:', features);
+        console.log('Features type:', typeof features);
+        console.log('Features keys:', Object.keys(features));
+        setWebAppFeatures(features);
+      } catch (error) {
+        console.error('🚨🚨🚨 ERROR LOADING WEB APP FEATURES! 🚨🚨🚨');
+        console.error('Error loading web app features:', error);
+        // Set default empty state
+        setWebAppFeatures({});
+      }
+
     } catch (error) {
       console.error('Error loading roles:', error);
       toast({
@@ -567,7 +620,7 @@ export default function GuildSettingsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             General
@@ -575,6 +628,10 @@ export default function GuildSettingsPage() {
           <TabsTrigger value="role-permissions" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Role Permissions
+          </TabsTrigger>
+          <TabsTrigger value="commands-features" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Features
           </TabsTrigger>
           <TabsTrigger value="subscription" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
@@ -1085,6 +1142,344 @@ export default function GuildSettingsPage() {
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Logs and activity tracking will be implemented here.</p>
                 <p className="text-sm mt-2">This will show bot commands, role changes, and server activity.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Features Tab */}
+        <TabsContent value="commands-features" className="space-y-4">
+          <Card>
+            <CardHeader title="Features" subtitle="Configure which commands and features are available in your server." />
+
+            <CardContent className="space-y-6">
+              {/* Command Management */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Slash Commands</h3>
+                <p className="text-sm text-muted-foreground">
+                  Enable or disable individual slash commands for this server. Disabled commands won't appear in Discord.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Moderation Commands */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Moderation</h4>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'warn', description: 'Warn a user for breaking rules', feature: 'moderation' },
+                        { name: 'kick', description: 'Kick a user from the server', feature: 'moderation' },
+                        { name: 'ban', description: 'Ban a user from the server', feature: 'moderation' },
+                        { name: 'mute', description: 'Mute a user in the server', feature: 'moderation' },
+                        { name: 'role', description: 'Manage user roles', feature: 'moderation' },
+                        { name: 'setmodlog', description: 'Set moderation log channel', feature: 'moderation' }
+                      ].map((cmd) => {
+                        const perm = commandPermissions?.commands[cmd.name];
+                        const canModify = perm?.canModify ?? true;
+                        const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
+                        
+                        // Debug logging
+                        if (cmd.name === 'setverifylog' || cmd.name === 'setmodlog') {
+                          console.log(`🚨🚨🚨 ${cmd.name} DEBUG:`, {
+                            commandSettings: commandSettings[cmd.name],
+                            permGuildEnabled: perm?.guildEnabled,
+                            permAdminEnabled: perm?.adminEnabled,
+                            canModify: canModify,
+                            finalIsEnabled: isEnabled,
+                            commandSettingsObject: commandSettings
+                          });
+                        }
+
+                        return (
+                          <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">/{cmd.name}</p>
+                              <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                              {!perm?.adminEnabled && (
+                                <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
+                              )}
+                            </div>
+                            <input
+                              type="checkbox"
+                              id={`cmd-${cmd.name}`}
+                              checked={isEnabled}
+                              disabled={!canModify}
+                              onChange={canModify ? (e) => {
+                                setCommandSettings(prev => ({
+                                  ...prev,
+                                  [cmd.name]: e.target.checked
+                                }));
+                              } : () => {
+                                toast({
+                                  title: "Access Denied",
+                                  description: "This command is disabled by admin and cannot be modified.",
+                                  variant: "destructive"
+                                });
+                              }}
+                              className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Utility Commands */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Utilities</h4>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'custom', description: 'Execute custom commands', feature: 'utilities' },
+                        { name: 'sendverify', description: 'Send verification message', feature: 'utilities' },
+                        { name: 'setverifylog', description: 'Set verification log channel', feature: 'utilities' },
+                        { name: 'feedback', description: 'Submit feedback', feature: 'utilities' },
+                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' }
+                      ].map((cmd) => {
+                        const perm = commandPermissions?.commands[cmd.name];
+                        const canModify = perm?.canModify ?? true;
+                        const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
+                        
+                        // Debug logging
+                        if (cmd.name === 'setverifylog' || cmd.name === 'setmodlog') {
+                          console.log(`🚨🚨🚨 ${cmd.name} DEBUG:`, {
+                            commandSettings: commandSettings[cmd.name],
+                            permGuildEnabled: perm?.guildEnabled,
+                            permAdminEnabled: perm?.adminEnabled,
+                            canModify: canModify,
+                            finalIsEnabled: isEnabled,
+                            commandSettingsObject: commandSettings
+                          });
+                        }
+
+                        return (
+                          <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">/{cmd.name}</p>
+                              <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                              {!perm?.adminEnabled && (
+                                <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
+                              )}
+                            </div>
+                            <input
+                              type="checkbox"
+                              id={`cmd-${cmd.name}`}
+                              checked={isEnabled}
+                              disabled={!canModify}
+                              onChange={canModify ? (e) => {
+                                setCommandSettings(prev => ({
+                                  ...prev,
+                                  [cmd.name]: e.target.checked
+                                }));
+                              } : () => {
+                                toast({
+                                  title: "Access Denied",
+                                  description: "This command is disabled by admin and cannot be modified.",
+                                  variant: "destructive"
+                                });
+                              }}
+                              className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature Management */}
+              <div className="space-y-4 pt-6 border-t">
+                <h3 className="text-lg font-semibold">Web App Features</h3>
+                <p className="text-sm text-muted-foreground">
+                  Control which features are available in the web interface for your server.
+                </p>
+
+                <div className="space-y-3">
+                  {webAppFeatures?.features?.length > 0 ? (
+                    webAppFeatures.features.map((feature) => {
+                      const isEnabled = feature.enabled;
+                      const canEnable = feature.canEnable;
+                      const isPremiumFeature = feature.minimumPackage === 'premium';
+                      const isServerPremium = webAppFeatures.isPremium;
+                      
+                      console.log(`🚨🚨🚨 WEB APP FEATURE ${feature.key}:`, {
+                        isEnabled,
+                        canEnable,
+                        isPremiumFeature,
+                        isServerPremium,
+                        feature,
+                        webAppFeatures
+                      });
+                      
+                      return (
+                        <div key={feature.key} className={`flex items-center justify-between p-3 border rounded-lg ${!canEnable ? 'opacity-60' : ''}`}>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{feature.name}</p>
+                              {isPremiumFeature && (
+                                <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                                  Premium
+                                </span>
+                              )}
+                              {!canEnable && isPremiumFeature && (
+                                <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                                  Requires Premium
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{feature.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {isEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <input
+                              type="checkbox"
+                              id={`feature-${feature.key}`}
+                              checked={isEnabled}
+                              disabled={!canEnable}
+                              onChange={(e) => {
+                                if (!canEnable) {
+                                  toast({
+                                    title: "Premium Required",
+                                    description: "This feature requires a premium subscription.",
+                                    variant: "destructive"
+                                  });
+                                  return;
+                                }
+                                
+                                setWebAppFeatures(prev => ({
+                                  ...prev,
+                                  states: {
+                                    ...prev.states,
+                                    [feature.key]: e.target.checked
+                                  },
+                                  features: prev.features.map(f => 
+                                    f.key === feature.key 
+                                      ? { ...f, enabled: e.target.checked }
+                                      : f
+                                  )
+                                }));
+                              }}
+                              className={`w-4 h-4 ${!canEnable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground">
+                      <p>Loading web app features...</p>
+                      {webAppFeatures && (
+                        <p className="text-xs mt-2">
+                          Debug: webAppFeatures = {JSON.stringify(webAppFeatures, null, 2)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    console.log('Test button clicked!');
+                    alert('Test button works!');
+                  }}
+                >
+                  Test Button
+                </Button>
+                <Button
+                  onClick={async () => {
+                    console.log('=== SAVE BUTTON CLICKED ===');
+                    try {
+                      setSaving(true);
+                      console.log('commandSettings:', commandSettings);
+                      console.log('commandPermissions:', commandPermissions);
+
+                      // Convert command settings to the format expected by the API
+                      const allCommands = [
+                        { name: 'warn', feature: 'moderation' },
+                        { name: 'kick', feature: 'moderation' },
+                        { name: 'ban', feature: 'moderation' },
+                        { name: 'mute', feature: 'moderation' },
+                        { name: 'role', feature: 'moderation' },
+                        { name: 'setmodlog', feature: 'moderation' },
+                        { name: 'custom', feature: 'utilities' },
+                        { name: 'sendverify', feature: 'utilities' },
+                        { name: 'setverifylog', feature: 'utilities' },
+                        { name: 'feedback', feature: 'utilities' },
+                        { name: 'embed', feature: 'utilities' }
+                      ];
+                      
+                      const commandsToUpdate = Object.entries(commandSettings).map(([name, enabled]) => {
+                        const cmd = allCommands.find(c => c.name === name);
+                        return {
+                          command_name: name,
+                          feature_name: cmd?.feature || 'unknown',
+                          enabled
+                        };
+                      });
+                      
+                      console.log('commandsToUpdate:', commandsToUpdate);
+
+                      // Update commands
+                      if (commandsToUpdate.length > 0) {
+                        console.log('Making API call to save commands...');
+                        console.log('API URL:', `/api/guilds/${guildId}/commands`);
+                        console.log('Request body:', { commands: commandsToUpdate });
+                        
+                        const response = await fetch(`/api/guilds/${guildId}/commands`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ commands: commandsToUpdate })
+                        });
+                        
+                        console.log('API response status:', response.status);
+                        console.log('API response ok:', response.ok);
+                        
+                        if (!response.ok) {
+                          const errorText = await response.text();
+                          console.error('API error response:', errorText);
+                          throw new Error(`API error: ${errorText}`);
+                        }
+                        
+                        const responseData = await response.json();
+                        console.log('API response data:', responseData);
+                      } else {
+                        console.log('No commands to update - commandSettings is empty');
+                      }
+
+                      // Update web app features
+                      if (webAppFeatures?.states) {
+                        console.log('Saving web app features:', webAppFeatures.states);
+                        await updateWebAppFeatures(guildId, webAppFeatures.states);
+                      } else {
+                        console.log('No web app features to save');
+                      }
+
+                      toast({
+                        title: "Settings Updated",
+                        description: "Command settings and web app features have been saved successfully.",
+                      });
+                    } catch (error) {
+                      console.error('Error saving settings:', error);
+                      toast({
+                        title: "Error",
+                        description: "Failed to save settings.",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Settings
+                </Button>
               </div>
             </CardContent>
           </Card>

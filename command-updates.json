@@ -1,0 +1,131 @@
+[
+  {
+    "timestamp": "2025-09-02T00:53:57.440Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:53:58.567Z",
+    "guildId": "1320881785852395540",
+    "action": "disabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:53:59.767Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:54:00.991Z",
+    "guildId": "1320881785852395540",
+    "action": "disabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:54:02.356Z",
+    "guildId": "1320881785852395540",
+    "action": "disabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:54:03.607Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:54:04.716Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T00:54:05.850Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T22:40:47.507Z",
+    "guildId": "1320881785852395540",
+    "action": "disabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "reaction_roles",
+      "verification_system"
+    ]
+  },
+  {
+    "timestamp": "2025-09-02T22:41:58.570Z",
+    "guildId": "1320881785852395540",
+    "action": "enabled",
+    "features": [
+      "ban_sync",
+      "embedded_messages",
+      "feedback_system",
+      "moderation",
+      "reaction_roles",
+      "verification_system"
+    ]
+  }
+]

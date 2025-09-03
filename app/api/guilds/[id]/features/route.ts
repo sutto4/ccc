@@ -173,6 +173,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  console.log('🚨🚨🚨 FEATURES PUT FUNCTION IS RUNNING! 🚨🚨🚨');
   console.log('[FEATURES-PUT] PUT request received');
   const { id: guildId } = await params;
   console.log('[FEATURES-PUT] Guild ID:', guildId);
@@ -196,12 +197,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       password: env.DB_PASS,
       database: env.DB_NAME,
     });
+    
+    // Check which database we're actually connected to
+    const [dbResult] = await connection.execute(`SELECT DATABASE() as current_db`);
+    console.log('[FEATURES-PUT] Connected to database:', dbResult);
 
     try {
       // Parse request body
       const body = await req.json();
       const { feature_name, enabled } = body;
       
+      console.log('🚨🚨🚨 REQUEST BODY PARSED! 🚨🚨🚨');
       console.log('[FEATURES-PUT] Request body:', { feature_name, enabled, guildId });
       
       if (!feature_name || typeof enabled !== 'boolean') {
@@ -240,13 +246,19 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
 
             // Insert or update the feature setting
-      await connection.execute(
+      console.log('[FEATURES-PUT] About to execute database query:', {
+        query: `INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
+        params: [guildId, feature_name, enabled ? 1 : 0]
+      });
+      
+      const result = await connection.execute(
         `INSERT INTO guild_features (guild_id, feature_name, enabled) 
          VALUES (?, ?, ?) 
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
         [guildId, feature_name, enabled ? 1 : 0]
       );
-
+      
+      console.log('[FEATURES-PUT] Database query result:', result);
       console.log('[FEATURES-PUT] Feature updated successfully');
 
       // Get all current features for this guild to update commands

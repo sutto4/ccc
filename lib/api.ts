@@ -80,6 +80,24 @@ export type Features = {
   embedded_messages_package?: string
 }
 
+export type GuildCommand = {
+  name: string
+  description: string
+  category: string
+  enabled: boolean
+}
+
+export type GuildCommandUpdate = {
+  name: string
+  enabled: boolean
+}
+
+export type GuildCommandsResponse = {
+  success: boolean
+  guildId: string
+  commands: GuildCommand[]
+}
+
 export type FeaturesResponse = {
   guildId: string
   features: Features
@@ -312,9 +330,9 @@ export async function updateRolePermissions(
 }
 
 export async function checkUserPermissions(
-  guildId: string, 
-  userId: string, 
-  userRoles: string[], 
+  guildId: string,
+  userId: string,
+  userRoles: string[],
   accessToken?: string
 ): Promise<PermissionCheck> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -323,5 +341,73 @@ export async function checkUserPermissions(
     method: 'POST',
     headers,
     body: JSON.stringify({ userId, userRoles })
+  })
+}
+
+// Guild command management functions
+export async function fetchGuildCommands(guildId: string): Promise<GuildCommandsResponse> {
+  return j<GuildCommandsResponse>(`/guilds/${guildId}/commands`)
+}
+
+export async function updateGuildCommands(
+  guildId: string,
+  commands: GuildCommandUpdate[]
+): Promise<{ success: boolean; message: string }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  return j<{ success: boolean; message: string }>(`/guilds/${guildId}/commands`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ commands })
+  })
+}
+
+export type GuildCommandPermissions = {
+  commands: {
+    [commandName: string]: {
+      adminEnabled: boolean
+      guildEnabled: boolean
+      canModify: boolean
+    }
+  }
+  features: {
+    [featureName: string]: {
+      adminEnabled: boolean
+      guildEnabled: boolean
+      canModify: boolean
+    }
+  }
+}
+
+export async function fetchGuildCommandPermissions(guildId: string): Promise<GuildCommandPermissions> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  return j<GuildCommandPermissions>(`/guilds/${guildId}/command-permissions`, {
+    headers
+  })
+}
+
+export async function fetchWebAppFeatures(guildId: string): Promise<{
+  features: Array<{
+    key: string;
+    name: string;
+    description: string;
+    minimumPackage: string;
+    enabled: boolean;
+    canEnable: boolean;
+  }>;
+  states: Record<string, boolean>;
+  isPremium: boolean;
+}> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  return j(`/guilds/${guildId}/web-app-features`, {
+    headers
+  })
+}
+
+export async function updateWebAppFeatures(guildId: string, features: Record<string, boolean>): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  await j(`/guilds/${guildId}/web-app-features`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ features })
   })
 }

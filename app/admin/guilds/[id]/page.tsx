@@ -41,12 +41,14 @@ export default function AdminGuildSettingsPage() {
   const [guild, setGuild] = useState<Guild | null>(null);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [guildFeatures, setGuildFeatures] = useState<GuildFeature[]>([]);
+  const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('Admin page loaded, guildId:', guildId);
     if (guildId) {
       fetchGuildData();
     }
@@ -54,6 +56,7 @@ export default function AdminGuildSettingsPage() {
 
   const fetchGuildData = async () => {
     try {
+      console.log('Fetching guild data for guildId:', guildId);
       setLoading(true);
       
       // Fetch guild info
@@ -106,6 +109,22 @@ export default function AdminGuildSettingsPage() {
       
       setGuildFeatures(transformedFeatures);
       
+      // Fetch current command states
+      try {
+        const commandsResponse = await fetch(`/api/guilds/${guildId}/commands`);
+        if (commandsResponse.ok) {
+          const commandsData = await commandsResponse.json();
+          const commandStatesMap: Record<string, boolean> = {};
+          commandsData.commands.forEach((cmd: any) => {
+            commandStatesMap[cmd.name] = cmd.enabled;
+          });
+          setCommandStates(commandStatesMap);
+          console.log('🚨🚨🚨 COMMAND STATES LOADED! 🚨🚨🚨', commandStatesMap);
+        }
+      } catch (err) {
+        console.error('Error fetching command states:', err);
+      }
+      
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -115,24 +134,44 @@ export default function AdminGuildSettingsPage() {
 
   const toggleFeature = async (displayName: string, enabled: boolean) => {
     try {
+      console.log('=== TOGGLE FEATURE CLICKED ===');
+      console.log('displayName:', displayName);
+      console.log('enabled:', enabled);
+      console.log('guildId:', guildId);
+      console.log('guildFeatures:', guildFeatures);
+      
       setSaving(true);
       
       // Find the guild feature to get the actual feature key for the API call
       const guildFeature = guildFeatures.find(f => f.feature_name === displayName);
+      console.log('guildFeature found:', guildFeature);
+      
       if (!guildFeature) {
+        console.error(`Feature not found: ${displayName}`);
         throw new Error(`Feature not found: ${displayName}`);
       }
+      
+      const requestBody = {
+        feature_name: guildFeature.feature_key, // Use the actual feature key, not display name
+        enabled: enabled
+      };
+      
+      console.log('Making API call with body:', requestBody);
       
       const response = await fetch(`/api/guilds/${guildId}/features`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feature_name: guildFeature.feature_key, // Use the actual feature key, not display name
-          enabled: enabled
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) throw new Error('Failed to update feature');
+      console.log('API response status:', response.status);
+      console.log('API response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Failed to update feature: ${errorText}`);
+      }
       
       // Update local state
       setGuildFeatures(prev => 
@@ -143,7 +182,64 @@ export default function AdminGuildSettingsPage() {
         )
       );
       
-      setSuccess(`Feature ${enabled ? 'enabled' : 'disabled'} successfully`);
+      // Automatically enable/disable associated commands
+      const commandsToUpdate = [];
+      
+      // Define command-to-feature mapping
+      const commandFeatureMap: Record<string, string> = {
+        'warn': 'moderation',
+        'kick': 'moderation', 
+        'ban': 'moderation',
+        'mute': 'moderation',
+        'role': 'moderation',
+        'setmodlog': 'moderation',
+        'custom': 'utilities',
+        'sendverify': 'utilities',
+        'setverifylog': 'utilities',
+        'feedback': 'utilities',
+        'embed': 'utilities'
+      };
+      
+      // Find commands that belong to this feature
+      Object.entries(commandFeatureMap).forEach(([commandName, featureName]) => {
+        if (featureName === guildFeature.feature_key) {
+          commandsToUpdate.push({
+            command_name: commandName,
+            feature_name: featureName,
+            enabled: enabled
+          });
+        }
+      });
+      
+      // Update commands if any were found
+      if (commandsToUpdate.length > 0) {
+        console.log(`🚨🚨🚨 AUTO-UPDATING ${commandsToUpdate.length} COMMANDS FOR FEATURE ${displayName}! 🚨🚨🚨`);
+        
+        const commandsResponse = await fetch(`/api/guilds/${guildId}/commands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commands: commandsToUpdate })
+        });
+        
+        if (!commandsResponse.ok) {
+          const errorText = await commandsResponse.text();
+          console.error('Failed to update commands:', errorText);
+          throw new Error(`Failed to update associated commands: ${errorText}`);
+        }
+        
+        // Update local command states
+        setCommandStates(prev => {
+          const updated = { ...prev };
+          commandsToUpdate.forEach(cmd => {
+            updated[cmd.command_name] = cmd.enabled;
+          });
+          return updated;
+        });
+        
+        console.log(`🚨🚨🚨 SUCCESSFULLY UPDATED ${commandsToUpdate.length} COMMANDS! 🚨🚨🚨`);
+      }
+      
+      setSuccess(`Feature ${displayName} ${enabled ? 'enabled' : 'disabled'} successfully! ${commandsToUpdate.length > 0 ? `(${commandsToUpdate.length} commands updated)` : ''}`);
       setTimeout(() => setSuccess(null), 3000);
       
     } catch (err: any) {
@@ -290,8 +386,8 @@ export default function AdminGuildSettingsPage() {
                           type="checkbox"
                           id={`feature-${feature.feature_name}`}
                           checked={isEnabled}
-                          onChange={(e) => toggleFeature(feature.feature_name, e.target.checked)}
                           disabled={saving}
+                          onChange={(e) => toggleFeature(feature.feature_name, e.target.checked)}
                           className="w-4 h-4"
                         />
                         <label htmlFor={`feature-${feature.feature_name}`} className="text-sm">
@@ -302,6 +398,178 @@ export default function AdminGuildSettingsPage() {
                   </div>
                 );
               })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Command Management */}
+        <Card>
+          <CardHeader>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Command Management
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Enable/disable individual slash commands for this guild. These settings override global feature toggles.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Moderation Commands */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Moderation</h4>
+                  {[
+                    { name: 'warn', description: 'Warn a user for breaking rules' },
+                    { name: 'kick', description: 'Kick a user from the server' },
+                    { name: 'ban', description: 'Ban a user from the server' },
+                    { name: 'mute', description: 'Mute a user in the server' },
+                    { name: 'role', description: 'Manage user roles' },
+                    { name: 'setmodlog', description: 'Set moderation log channel' }
+                  ].map((cmd) => (
+                    <div key={cmd.name} className="flex items-center justify-between p-2 border rounded">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">/{cmd.name}</p>
+                        <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`cmd-${cmd.name}`}
+                          checked={commandStates[cmd.name] || false}
+                          onChange={(e) => {
+                            setCommandStates(prev => ({
+                              ...prev,
+                              [cmd.name]: e.target.checked
+                            }));
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <label htmlFor={`cmd-${cmd.name}`} className="text-xs">
+                          {commandStates[cmd.name] ? 'Enabled' : 'Disabled'}
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Utility Commands */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Utilities</h4>
+                  {[
+                    { name: 'custom', description: 'Execute custom commands' },
+                    { name: 'sendverify', description: 'Send verification message' },
+                    { name: 'setverifylog', description: 'Set verification log channel' },
+                    { name: 'feedback', description: 'Submit feedback' },
+                    { name: 'embed', description: 'Send embedded messages' }
+                  ].map((cmd) => (
+                    <div key={cmd.name} className="flex items-center justify-between p-2 border rounded">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">/{cmd.name}</p>
+                        <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`cmd-${cmd.name}`}
+                          checked={commandStates[cmd.name] || false}
+                          onChange={(e) => {
+                            setCommandStates(prev => ({
+                              ...prev,
+                              [cmd.name]: e.target.checked
+                            }));
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <label htmlFor={`cmd-${cmd.name}`} className="text-xs">
+                          {commandStates[cmd.name] ? 'Enabled' : 'Disabled'}
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  onClick={async () => {
+                    try {
+                      console.log('🚨🚨🚨 ADMIN SAVE COMMAND SETTINGS CLICKED! 🚨🚨🚨');
+                      console.log('=== SAVE COMMAND SETTINGS CLICKED ===');
+                      setSaving(true);
+                      
+                      // Get all command checkboxes and their current state
+                      const commandUpdates = [];
+                      
+                      // Process command checkboxes
+                      const allCommands = [
+                        { name: 'warn', description: 'Warn a user for breaking rules', feature: 'moderation' },
+                        { name: 'kick', description: 'Kick a user from the server', feature: 'moderation' },
+                        { name: 'ban', description: 'Ban a user from the server', feature: 'moderation' },
+                        { name: 'mute', description: 'Mute a user in the server', feature: 'moderation' },
+                        { name: 'role', description: 'Manage user roles', feature: 'moderation' },
+                        { name: 'setmodlog', description: 'Set moderation log channel', feature: 'moderation' },
+                        { name: 'custom', description: 'Execute custom commands', feature: 'utilities' },
+                        { name: 'sendverify', description: 'Send verification message', feature: 'utilities' },
+                        { name: 'setverifylog', description: 'Set verification log channel', feature: 'utilities' },
+                        { name: 'feedback', description: 'Submit feedback', feature: 'utilities' },
+                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' }
+                      ];
+                      
+                      for (const cmd of allCommands) {
+                        const checkbox = document.getElementById(`cmd-${cmd.name}`) as HTMLInputElement;
+                        if (checkbox) {
+                          const isChecked = checkbox.checked;
+                          commandUpdates.push({
+                            command_name: cmd.name,
+                            feature_name: cmd.feature,
+                            enabled: isChecked
+                          });
+                        }
+                      }
+                      
+                      console.log('🚨🚨🚨 COMMAND UPDATES TO PROCESS! 🚨🚨🚨');
+                      console.log('Command updates to process:', commandUpdates);
+                      
+                      // Process each command update
+                      if (commandUpdates.length > 0) {
+                        console.log('🚨🚨🚨 PROCESSING COMMAND UPDATES! 🚨🚨🚨');
+                        
+                        const response = await fetch(`/api/guilds/${guildId}/commands`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ commands: commandUpdates })
+                        });
+                        
+                        if (!response.ok) {
+                          const errorText = await response.text();
+                          console.error('Failed to update commands:', errorText);
+                          throw new Error(`Failed to update commands: ${errorText}`);
+                        }
+                        
+                        console.log('🚨🚨🚨 COMMAND UPDATES SUCCESS! 🚨🚨🚨');
+                        console.log(`Successfully updated ${commandUpdates.length} commands`);
+                      }
+                      
+                      console.log('🚨🚨🚨 SHOWING SUCCESS MESSAGE! 🚨🚨🚨');
+                      setSuccess(`Successfully updated ${commandUpdates.length} commands!`);
+                      setTimeout(() => setSuccess(null), 3000);
+                      
+                    } catch (error) {
+                      console.error('Error saving command settings:', error);
+                      setError(`Failed to save settings: ${error.message}`);
+                      setTimeout(() => setError(null), 5000);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  variant="outline"
+                  size="sm"
+                >
+                  {saving ? 'Saving...' : 'Save Command Settings'}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
