@@ -93,6 +93,7 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
   const [error, setError] = useState<string | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
+  const [notificationTested, setNotificationTested] = useState(false);
 
   // User activity state
   const [userActivityStats, setUserActivityStats] = useState({
@@ -110,6 +111,39 @@ export default function AdminDashboard() {
     // const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
     // return () => clearInterval(interval);
   }, []);
+
+  const testNotification = async () => {
+    try {
+      setNotificationTested(false);
+
+      // Create a test notification in the database
+      const response = await fetch('/api/admin/test-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: 'Test notification: ServerMate added to Test Server!',
+          type: 'new_server',
+          data: {
+            guildId: 'test-guild-123',
+            guildName: 'Test Server',
+            timestamp: new Date().toISOString()
+          }
+        }),
+      });
+
+      if (response.ok) {
+        setNotificationTested(true);
+        // The sound notification component should pick this up automatically
+        setTimeout(() => {
+          setNotificationTested(false);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Error testing notification:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -192,7 +226,8 @@ export default function AdminDashboard() {
           });
           setLoginHistory(userActivityData.loginHistory || []);
         } else {
-          console.error('User activity API error:', await userActivityRes.text());
+          const errorText = await userActivityRes.text().catch(() => 'Unknown error');
+          console.error('User activity API error:', errorText);
           // Set default values if API fails
           setUserActivityStats({
             totalLogins: 0,
@@ -412,6 +447,57 @@ export default function AdminDashboard() {
               title="Test the premium modal functionality"
             >
               🧪 Test Modal
+            </button>
+            <button
+              onClick={testNotification}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
+                notificationTested
+                  ? 'bg-green-500 text-white hover:bg-green-600 animate-pulse'
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+              }`}
+              title="Test the sound notification system - click anywhere on page first to enable audio"
+            >
+              {notificationTested ? '🎵 Sound Played!' : '🔊 Test Sound'}
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  // Use same logic as health check
+                  const botUrl = process.env.SERVER_API_BASE_URL || process.env.BOT_API_URL || 'http://127.0.0.1:3001';
+                  console.log('🔄 Triggering manual sync with bot at:', botUrl);
+
+                  // First test basic connectivity
+                  console.log('🔍 Testing basic health endpoint...');
+                  const healthResponse = await fetch(`${botUrl}/api/health`);
+                  console.log('🏥 Health check response:', healthResponse.status);
+
+                  if (!healthResponse.ok) {
+                    throw new Error(`Health check failed: ${healthResponse.status}`);
+                  }
+
+                  // Now try the sync endpoint
+                  console.log('🔄 Calling sync endpoint...');
+                  const response = await fetch(`${botUrl}/api/sync-member-counts`, {
+                    method: 'POST',
+                  });
+
+                  if (response.ok) {
+                    console.log('✅ Manual sync completed');
+                    alert('✅ Guild status sync completed! Check the guild status now.');
+                  } else {
+                    console.error('❌ Manual sync failed:', response.status);
+                    alert(`❌ Manual sync failed: ${response.status}`);
+                  }
+                } catch (error) {
+                  console.error('❌ Manual sync error:', error);
+                  alert(`❌ Manual sync error: ${error.message}`);
+                }
+              }}
+              className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors font-semibold"
+              title="Manually trigger guild status sync to update kicked servers"
+            >
+              🔄 Sync Status
             </button>
         </div>
       </div>

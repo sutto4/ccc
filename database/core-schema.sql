@@ -78,8 +78,42 @@ INSERT IGNORE INTO features (feature_name, display_name, description, minimum_pa
 INSERT IGNORE INTO guilds (guild_id, name, owner_id, premium) VALUES
 ('1403257704222429224', 'Sample Server', 'sample-owner-id', FALSE);
 
+-- Table for user login history (for admin analytics)
+CREATE TABLE IF NOT EXISTS user_logins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    discord_id VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
+    username VARCHAR(255),
+    login_type ENUM('first_time', 'returning') NOT NULL DEFAULT 'returning',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Indexes for performance
+    INDEX idx_discord_id (discord_id),
+    INDEX idx_email (email),
+    INDEX idx_login_type (login_type),
+    INDEX idx_created_at (created_at)
+);
+
+-- Table for user notifications (sounds, alerts, etc.)
+CREATE TABLE IF NOT EXISTS user_notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(20) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    message TEXT,
+    data JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+
+    -- Indexes for performance
+    INDEX idx_user_type (user_id, type),
+    INDEX idx_created_at (created_at),
+    INDEX idx_user_created (user_id, created_at),
+    INDEX idx_type_created (type, created_at),
+    INDEX idx_read_status (user_id, read_at)
+);
+
 -- Enable all free features for the sample guild
 INSERT IGNORE INTO guild_features (guild_id, feature_name, enabled)
 SELECT '1403257704222429224', feature_name, TRUE
-FROM features 
+FROM features
 WHERE minimum_package = 'free';

@@ -272,15 +272,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       // Update Discord commands for this guild via bot command server
       try {
+        const botUrl = process.env.BOT_API_URL || 'http://127.0.0.1:3001';
         console.log('[FEATURES-PUT] Making HTTP call to bot server...');
-        console.log('[FEATURES-PUT] Target URL: http://127.0.0.1:3001/api/commands');
+        console.log('[FEATURES-PUT] Target URL:', `${botUrl}/api/commands`);
         console.log('[FEATURES-PUT] Request payload:', {
           guildId,
           action: enabled ? 'enabled' : 'disabled',
           features: currentFeatures
         });
-        
-        const botResponse = await fetch('http://127.0.0.1:3001/api/commands', {
+
+        const botResponse = await fetch(`${botUrl}/api/commands`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

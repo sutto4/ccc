@@ -40,22 +40,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // First, let's test basic guilds table access with minimal columns
-    try {
-      const testGuilds = await query("SELECT guild_id, guild_name FROM guilds LIMIT 5");
-      console.log('Basic guilds test result:', testGuilds);
-      
-      // Test if we can get more columns
-      const testExtended = await query("SELECT guild_id, guild_name, premium FROM guilds LIMIT 1");
-      console.log('Extended guilds test result:', testExtended);
-      
-    } catch (testError) {
-      console.error('Table structure test failed:', testError);
-      return NextResponse.json({
-        error: "Database structure test failed",
-        details: testError instanceof Error ? testError.message : 'Unknown error'
-      }, { status: 500 });
-    }
+
 
     // Fetch guilds with only the columns we know exist - no ORDER BY for now
     const guilds = await query(`

@@ -5,15 +5,12 @@ export async function GET() {
   try {
     // Test basic database connection
     const result = await query("SELECT 1 as test");
-    console.log('Database test result:', result);
-    
+
     // Test guilds table access
     const guildsCount = await query("SELECT COUNT(*) as count FROM guilds");
-    console.log('Guilds count result:', guildsCount);
-    
+
     // Test users table access
     const usersCount = await query("SELECT COUNT(*) as count FROM users");
-    console.log('Users count result:', usersCount);
     
     // Get pool status
     const poolStatus = getPoolStatus();

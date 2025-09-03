@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    console.log('[TEST] Testing connection to bot server...');
-    
+    const botUrl = process.env.BOT_API_URL || 'http://127.0.0.1:3001';
+    console.log('[TEST] Testing connection to bot server at:', botUrl);
+
     // Test health endpoint
-    const healthResponse = await fetch('http://127.0.0.1:3001/api/commands/health');
+    const healthResponse = await fetch(`${botUrl}/api/commands/health`);
     const healthData = await healthResponse.json();
     
     console.log('[TEST] Health check response:', healthData);

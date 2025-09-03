@@ -43,32 +43,51 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
+    // Sanitize inputs to prevent SQL injection
+    const safeLimit = Math.max(1, Math.min(200, limit));
+    const safeOffset = Math.max(0, offset);
+
+    console.log(`[USER-LOGINS] Fetching with limit=${safeLimit}, offset=${safeOffset}`);
+
     // Get recent login history
-    const loginHistory = await query(`
-      SELECT
-        discord_id,
-        email,
-        username,
-        login_type,
-        created_at,
-        DATE(created_at) as login_date
-      FROM user_logins
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    let loginHistory;
+    try {
+      loginHistory = await query(`
+        SELECT
+          discord_id,
+          email,
+          username,
+          login_type,
+          created_at,
+          DATE(created_at) as login_date
+        FROM user_logins
+        ORDER BY created_at DESC
+        LIMIT ${safeLimit} OFFSET ${safeOffset}
+      `);
+      console.log(`[USER-LOGINS] Found ${Array.isArray(loginHistory) ? loginHistory.length : 0} login records`);
+    } catch (historyError) {
+      console.warn('[USER-LOGINS] Error fetching login history:', historyError);
+      loginHistory = []; // Set empty array if query fails
+    }
 
     // Get summary stats
-    const [
-      totalLoginsResult,
-      firstTimeLoginsResult,
-      returningLoginsResult,
-      recentLoginsResult
-    ] = await Promise.all([
-      query('SELECT COUNT(*) as count FROM user_logins'),
-      query('SELECT COUNT(*) as count FROM user_logins WHERE login_type = "first_time"'),
-      query('SELECT COUNT(*) as count FROM user_logins WHERE login_type = "returning"'),
-      query('SELECT COUNT(*) as count FROM user_logins WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')
-    ]);
+    let totalLoginsResult, firstTimeLoginsResult, returningLoginsResult, recentLoginsResult;
+
+    try {
+      [totalLoginsResult, firstTimeLoginsResult, returningLoginsResult, recentLoginsResult] = await Promise.all([
+        query('SELECT COUNT(*) as count FROM user_logins'),
+        query('SELECT COUNT(*) as count FROM user_logins WHERE login_type = "first_time"'),
+        query('SELECT COUNT(*) as count FROM user_logins WHERE login_type = "returning"'),
+        query('SELECT COUNT(*) as count FROM user_logins WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')
+      ]);
+    } catch (statsError) {
+      console.warn('[USER-LOGINS] Error fetching stats:', statsError);
+      // Set default values if stats queries fail
+      totalLoginsResult = [{ count: 0 }];
+      firstTimeLoginsResult = [{ count: 0 }];
+      returningLoginsResult = [{ count: 0 }];
+      recentLoginsResult = [{ count: 0 }];
+    }
 
     const stats = {
       totalLogins: (totalLoginsResult as any)[0]?.count || 0,

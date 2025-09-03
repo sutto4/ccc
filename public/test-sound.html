@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServerMate Sound Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: background 0.2s;
+        }
+        .button:hover {
+            background: #2563eb;
+        }
+        .button.success {
+            background: #10b981;
+        }
+        .logs {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 0;
+        }
+        .log-error { color: #dc2626; }
+        .log-success { color: #059669; }
+        .log-info { color: #2563eb; }
+        .log-warn { color: #d97706; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔊 ServerMate Sound Test</h1>
+        <p>Test the notification sound system that's used when new servers are added.</p>
+
+        <div>
+            <button class="button" onclick="testWebAudio()">🎵 Test Web Audio API</button>
+            <button class="button" onclick="testFallbackBeep()">🔊 Test Fallback Beep</button>
+            <button class="button" onclick="testAlertFallback()">🔔 Test Alert Fallback</button>
+            <button class="button" onclick="clearLogs()">🧹 Clear Logs</button>
+        </div>
+
+        <div class="logs" id="logs">
+            <div class="log-entry log-info">Ready to test sound notifications...</div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function testWebAudio() {
+            log('🔊 Testing Web Audio API...', 'info');
+
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) {
+                    log('❌ Web Audio API not supported', 'error');
+                    return;
+                }
+
+                const audioContext = new AudioContext();
+                log('✅ AudioContext created', 'success');
+
+                if (audioContext.state === 'suspended') {
+                    log('🔄 Audio context suspended, attempting to resume...', 'warn');
+                    audioContext.resume().then(() => {
+                        log('✅ Audio context resumed', 'success');
+                        playTestSound(audioContext);
+                    }).catch(err => {
+                        log('❌ Could not resume audio context: ' + err.message, 'error');
+                    });
+                } else {
+                    playTestSound(audioContext);
+                }
+
+            } catch (error) {
+                log('❌ Web Audio API test failed: ' + error.message, 'error');
+            }
+        }
+
+        function playTestSound(audioContext) {
+            try {
+                log('🎵 Creating oscillator sound...', 'info');
+
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                // Pleasant ascending tone
+                oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+                oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+                oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+
+                log('✅ Sound scheduled to play', 'success');
+
+                // Clean up
+                setTimeout(() => {
+                    try {
+                        oscillator.disconnect();
+                        gainNode.disconnect();
+                        log('🧹 Sound cleanup completed', 'success');
+                    } catch (e) {
+                        log('⚠️ Cleanup warning: ' + e.message, 'warn');
+                    }
+                }, 600);
+
+            } catch (error) {
+                log('❌ Error creating sound: ' + error.message, 'error');
+            }
+        }
+
+        function testFallbackBeep() {
+            log('🔊 Testing fallback beep...', 'info');
+
+            try {
+                const audio = new Audio();
+                audio.volume = 0.3;
+
+                // Create a simple beep sound
+                const sampleRate = 44100;
+                const duration = 0.5;
+                const numSamples = sampleRate * duration;
+                const buffer = new ArrayBuffer(44 + numSamples * 2);
+                const view = new DataView(buffer);
+
+                // WAV header
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + numSamples * 2, true);
+                writeString(8, 'WAVE');
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, sampleRate * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                writeString(36, 'data');
+                view.setUint32(40, numSamples * 2, true);
+
+                // Generate ascending tone
+                for (let i = 0; i < numSamples; i++) {
+                    const t = i / sampleRate;
+                    const frequency = 523.25 + (783.99 - 523.25) * (t / duration);
+                    const sample = Math.sin(2 * Math.PI * frequency * t) * 32767 * Math.exp(-t * 2);
+                    view.setInt16(44 + i * 2, sample, true);
+                }
+
+                audio.src = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+
+                audio.play().then(() => {
+                    log('✅ Fallback beep played successfully', 'success');
+                }).catch(err => {
+                    log('❌ Fallback beep failed: ' + err.message, 'error');
+                });
+
+            } catch (error) {
+                log('❌ Fallback beep creation failed: ' + error.message, 'error');
+            }
+        }
+
+        function testAlertFallback() {
+            log('🔔 Testing alert fallback...', 'info');
+            alert('🔔 New server notification! (Sound not available)');
+            log('✅ Alert fallback shown', 'success');
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div class="log-entry log-info">Logs cleared...</div>';
+        }
+
+        // Auto-detect audio capabilities on load
+        window.addEventListener('load', () => {
+            log('🔍 Checking audio capabilities...', 'info');
+
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                log('✅ Web Audio API supported', 'success');
+            } else {
+                log('❌ Web Audio API not supported', 'error');
+            }
+
+            // Check if we're in a secure context
+            if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+                log('✅ Secure context (HTTPS or localhost)', 'success');
+            } else {
+                log('⚠️ Not in secure context - audio may not work', 'warn');
+            }
+        });
+    </script>
+</body>
+</html>

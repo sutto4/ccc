@@ -4,6 +4,7 @@ import { PropsWithChildren, useState, useEffect } from "react";
 import Sidebar from "@/components/ui/sidebar";
 import Topbar from "@/components/ui/topbar";
 import { WelcomeModal } from "@/components/welcome-modal";
+import { SoundNotification } from "@/components/sound-notification";
 import { useSession } from "next-auth/react";
 
 export default function ConsoleShell({ children }: PropsWithChildren) {
@@ -92,6 +93,9 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
         userGuilds={userGuilds}
         isPremium={isPremium}
       />
+
+      {/* Sound Notifications */}
+      <SoundNotification />
     </div>
   );
 }

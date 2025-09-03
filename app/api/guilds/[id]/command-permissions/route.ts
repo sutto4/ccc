@@ -92,20 +92,7 @@ export async function GET(
       // Guild enabled = command is enabled in guild_commands (if admin has made it available)
       const isGuildEnabled = guildCommandMap.get(cmd.name) || false;
       
-      // Debug specific command
-      if (cmd.name === 'setmodlog') {
-        console.log('🚨🚨🚨 SETMODLOG DEBUG:', {
-          commandName: cmd.name,
-          category: cmd.category,
-          commandFeature,
-          existsInGuildCommands,
-          isFeatureEnabled,
-          isCommandEnabledByAdmin,
-          isAdminEnabled,
-          isGuildEnabled,
-          guildCommandValue: guildCommandMap.get(cmd.name)
-        });
-      }
+
       
       commands[cmd.name] = {
         adminEnabled: isAdminEnabled,

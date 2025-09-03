@@ -10,6 +10,7 @@ const EnvSchema = z.object({
   NEXT_PUBLIC_API_BASE_URL: z.string().optional(),
   NEXT_PUBLIC_DISCORD_CLIENT_ID: z.string().optional(),
   SERVER_API_BASE_URL: z.string().optional(),
+  BOT_API_URL: z.string().optional(),
   DB_HOST: z.string().optional(),
   DB_USER: z.string().optional(),
   DB_PASS: z.string().optional(),

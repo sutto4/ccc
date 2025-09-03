@@ -31,20 +31,24 @@ export async function GET() {
 	let botError: string | undefined;
 	if (base) {
 		const url = `${base.replace(/\/$/, "")}/api/guilds`;
+		console.log('[HEALTH] Testing bot API connection to:', url);
 		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 3000);
+		const timeout = setTimeout(() => controller.abort(), 5000); // Increased timeout
 		try {
 			const res = await fetch(url, { signal: controller.signal });
 			botStatus = res.status;
 			botOk = res.ok;
+			console.log('[HEALTH] Bot API response:', { status: botStatus, ok: botOk });
 		} catch (e: any) {
 			botOk = false;
 			botError = e?.message || String(e);
+			console.log('[HEALTH] Bot API error:', botError);
 		} finally {
 			clearTimeout(timeout);
 		}
 	} else {
 		botError = "SERVER_API_BASE_URL not configured";
+		console.log('[HEALTH] SERVER_API_BASE_URL not configured');
 	}
 
 	const ok = dbOk && botOk;

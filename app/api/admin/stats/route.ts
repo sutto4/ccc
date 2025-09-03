@@ -39,31 +39,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // First, let's check what tables and columns actually exist
-    try {
-      // Test basic guilds table access
-      const testGuilds = await query("SELECT COUNT(*) as count FROM guilds");
-      console.log('Guilds table test result:', testGuilds);
-      
-      // Test if status column exists
-      const testStatus = await query("SELECT guild_id, status FROM guilds LIMIT 1");
-      console.log('Status column test result:', testStatus);
-      
-      // Test if custom_commands table exists
-      const testCommands = await query("SELECT COUNT(*) as count FROM custom_commands");
-      console.log('Custom commands table test result:', testCommands);
-      
-      // Test if embedded_messages table exists
-      const testEmbeds = await query("SELECT COUNT(*) as count FROM embedded_messages");
-      console.log('Embedded messages table test result:', testEmbeds);
-      
-    } catch (testError) {
-      console.error('Table structure test failed:', testError);
-      return NextResponse.json({
-        error: "Database structure test failed",
-        details: testError instanceof Error ? testError.message : 'Unknown error'
-      }, { status: 500 });
-    }
+
 
     // Get comprehensive stats using raw SQL queries
     const [

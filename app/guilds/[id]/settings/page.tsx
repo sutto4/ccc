@@ -1177,17 +1177,7 @@ export default function GuildSettingsPage() {
                         const canModify = perm?.canModify ?? true;
                         const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
                         
-                        // Debug logging
-                        if (cmd.name === 'setverifylog' || cmd.name === 'setmodlog') {
-                          console.log(`🚨🚨🚨 ${cmd.name} DEBUG:`, {
-                            commandSettings: commandSettings[cmd.name],
-                            permGuildEnabled: perm?.guildEnabled,
-                            permAdminEnabled: perm?.adminEnabled,
-                            canModify: canModify,
-                            finalIsEnabled: isEnabled,
-                            commandSettingsObject: commandSettings
-                          });
-                        }
+
 
                         return (
                           <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
@@ -1238,17 +1228,7 @@ export default function GuildSettingsPage() {
                         const canModify = perm?.canModify ?? true;
                         const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
                         
-                        // Debug logging
-                        if (cmd.name === 'setverifylog' || cmd.name === 'setmodlog') {
-                          console.log(`🚨🚨🚨 ${cmd.name} DEBUG:`, {
-                            commandSettings: commandSettings[cmd.name],
-                            permGuildEnabled: perm?.guildEnabled,
-                            permAdminEnabled: perm?.adminEnabled,
-                            canModify: canModify,
-                            finalIsEnabled: isEnabled,
-                            commandSettingsObject: commandSettings
-                          });
-                        }
+
 
                         return (
                           <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
