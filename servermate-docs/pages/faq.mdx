@@ -1,0 +1,315 @@
+# Frequently Asked Questions
+
+Find answers to common questions about ServerMate. If you can't find what you're looking for, join our [Support Discord](https://discord.gg/servermate) for help.
+
+## 🚀 Getting Started
+
+### How do I add ServerMate to my server?
+1. Visit the [ServerMate Invite Link](https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID)
+2. Select your server from the dropdown
+3. Click "Authorize" and complete the verification
+4. ServerMate will join and send you a welcome DM
+
+### How do I access the web dashboard?
+1. Go to [app.servermate.gg](https://app.servermate.gg)
+2. Sign in with your Discord account
+3. Select your server from the list
+4. Start configuring your settings
+
+### What permissions does ServerMate need?
+ServerMate requires these Discord permissions:
+- **Read Messages** - To see commands
+- **Send Messages** - To respond to commands
+- **Manage Messages** - For moderation
+- **Kick Members** - For kick command
+- **Ban Members** - For ban command
+- **Manage Roles** - For role management
+- **Moderate Members** - For mute/unmute
+- **Embed Links** - For rich formatting
+
+---
+
+## ⚔️ Commands & Features
+
+### Why isn't a command working?
+**Check these common issues:**
+
+1. **Command not enabled:**
+   - Go to Settings → Commands & Features
+   - Make sure the feature is enabled
+
+2. **Missing permissions:**
+   - Verify bot has required Discord permissions
+   - Check your role permissions in the dashboard
+
+3. **Wrong syntax:**
+   - Use `/command` format (not `!command`)
+   - Check parameter requirements
+
+4. **Rate limiting:**
+   - Wait a few seconds between commands
+   - Some commands have cooldowns
+
+### How do I enable/disable commands?
+1. Go to [app.servermate.gg](https://app.servermate.gg)
+2. Select your server
+3. Navigate to **Settings** → **Commands & Features**
+4. Toggle commands on/off as needed
+
+### What's the difference between features and commands?
+- **Features** are major functionality groups (Moderation, Verification, etc.)
+- **Commands** are individual slash commands within those features
+- You must enable the parent feature to use its commands
+
+---
+
+## 👥 Permissions & Roles
+
+### How do I set up permissions?
+1. Go to **Settings** → **Permissions**
+2. Select a role or user
+3. Enable/disable specific permissions
+4. Save your changes
+
+### Why can't I use a command?
+**Possible reasons:**
+- Your role doesn't have permission
+- The command requires a higher role
+- The feature isn't enabled for your server
+- You need server administrator permissions
+
+### How do I give someone access to the web dashboard?
+1. Go to **Settings** → **User Access**
+2. Add their Discord ID or mention
+3. Set their access level (Admin/Moderator/User)
+4. They can now access the dashboard
+
+---
+
+## 🔐 Verification System
+
+### How do I set up user verification?
+1. Enable **Verification System** in the dashboard
+2. Use `/setverifylog` to set the log channel
+3. Configure the verification message
+4. Set up auto-role assignment
+
+### What happens during verification?
+1. User runs `/sendverify` or clicks verification button
+2. Bot sends them a verification message
+3. User completes verification process
+4. Bot assigns verified role automatically
+5. Verification is logged in your log channel
+
+### Can I customize the verification message?
+Yes! Go to **Settings** → **Verification** to customize:
+- Welcome message
+- Verification instructions
+- Success/failure messages
+- Auto-assigned roles
+
+---
+
+## 🎯 Custom Commands
+
+### How do I create a custom command?
+**Premium Feature**
+
+1. Go to **Custom Commands** in the dashboard
+2. Click **Create New Command**
+3. Set the command trigger (e.g., `!rules`)
+4. Write the response message
+5. Configure permissions and variables
+6. Save and test
+
+### What variables can I use?
+- `{user}` - Mention the user
+- `{username}` - User's display name
+- `{server}` - Server name
+- `{channel}` - Current channel
+- `{random}` - Random responses
+- `{time}` - Current time/date
+
+### Can anyone create custom commands?
+Only users with **Manage Server** permissions or those granted access in the dashboard can create custom commands.
+
+---
+
+## 📊 Premium Features
+
+### What features require premium?
+**Premium Features:**
+- Custom Commands
+- Advanced Analytics
+- Custom Bot Prefixes
+- Bot Customization (name/avatar)
+- FiveM Integration
+- Creator Alerts
+- Ban Syncing
+- Custom Groups
+
+### How do I upgrade to premium?
+1. Go to [app.servermate.gg/premium](https://app.servermate.gg/premium)
+2. Choose your subscription plan
+3. Complete payment via Stripe
+4. Premium features unlock immediately
+
+### Can I try premium features?
+We offer a limited free trial for some premium features. Contact our support team to learn more.
+
+---
+
+## 🔗 Integrations
+
+### How do I set up FiveM integration?
+**Premium Feature**
+
+1. Go to **Settings** → **FiveM Integration**
+2. Choose your framework (ESX/QBcore)
+3. Enter database connection details
+4. Configure role synchronization
+5. Test the connection
+
+### What FiveM frameworks are supported?
+- **ESX Framework** - Most popular framework
+- **QBcore Framework** - Alternative framework
+- Both support role sync and player data
+
+### Can I integrate with other platforms?
+Currently, we support:
+- FiveM (ESX/QBcore)
+- External group management systems
+- Webhook integrations for notifications
+
+---
+
+## 🐛 Troubleshooting
+
+### Bot not responding?
+**Check these:**
+1. Bot is online (check Discord member list)
+2. Bot has required permissions
+3. You're using correct command syntax
+4. Try `/help` command
+
+### Web dashboard not loading?
+**Try these solutions:**
+1. Clear browser cache
+2. Try a different browser
+3. Disable browser extensions
+4. Check internet connection
+
+### Commands showing as "Unknown"?
+**Common causes:**
+1. Command not enabled in dashboard
+2. Discord hasn't synced commands yet (wait 1 hour)
+3. Bot permissions issue
+4. Server-specific command restrictions
+
+### Permission errors?
+**Verify:**
+1. Bot's role is high enough in hierarchy
+2. Bot has required Discord permissions
+3. Your role has dashboard permissions
+4. Command isn't restricted to admins only
+
+---
+
+## 🔧 Advanced Configuration
+
+### How do I set up logging?
+1. Create dedicated log channels
+2. Use these commands:
+   ```
+   /setmodlog channel:#mod-logs
+   /setverifylog channel:#verification-logs
+   ```
+3. Configure log retention in dashboard
+
+### Can I customize bot responses?
+Yes! Go to **Settings** → **Messages** to customize:
+- Welcome messages
+- Moderation responses
+- Error messages
+- Success notifications
+
+### How do I backup my configuration?
+1. Go to **Settings** → **Backup**
+2. Click **Export Configuration**
+3. Save the JSON file securely
+4. Use **Import** to restore settings
+
+---
+
+## 💰 Billing & Support
+
+### How do I cancel my subscription?
+1. Go to **Settings** → **Billing**
+2. Click **Manage Subscription**
+3. Follow Stripe's cancellation process
+4. Features remain active until period ends
+
+### What's your refund policy?
+- 30-day money-back guarantee
+- Contact support within 30 days of purchase
+- Refunds processed via original payment method
+
+### How do I get premium support?
+**Premium subscribers get:**
+- Priority support responses
+- Direct Discord support channel
+- Phone/video call support
+- Custom integration assistance
+
+---
+
+## 🚧 Beta & Updates
+
+### Is ServerMate in beta?
+Yes! ServerMate is currently in beta. This means:
+- Features may change or be refined
+- New features added regularly
+- Your feedback helps us improve
+- Occasional service updates
+
+### How do I report bugs or suggest features?
+1. Use `/feedback` command in Discord
+2. Join our [Support Discord](https://discord.gg/servermate)
+3. Use the feedback form in the web dashboard
+4. Email us at support@servermate.gg
+
+### When do you release updates?
+- Major updates: Monthly
+- Bug fixes: As needed
+- Feature releases: Based on user feedback
+- Beta features: Continuous deployment
+
+---
+
+## 📞 Contact & Support
+
+### How do I get help?
+**Multiple ways to reach us:**
+1. **Discord Support:** [Join our server](https://discord.gg/servermate)
+2. **Documentation:** [docs.servermate.gg](https://docs.servermate.gg)
+3. **Email:** support@servermate.gg
+4. **Feedback Command:** `/feedback` in your server
+
+### What's the best way to report issues?
+**For bug reports, include:**
+- Steps to reproduce the issue
+- Expected vs actual behavior
+- Screenshots if applicable
+- Your server ID and bot version
+
+### Response times?
+- **Premium Support:** < 2 hours
+- **Standard Support:** < 24 hours
+- **Feature Requests:** < 1 week
+- **Bug Fixes:** < 48 hours (critical)
+
+---
+
+Still have questions? Join our [Support Discord](https://discord.gg/servermate) - our community is always ready to help!
+
+**Remember:** ServerMate is constantly evolving. Check back regularly for new features and improvements!

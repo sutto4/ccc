@@ -1,0 +1,260 @@
+# Commands Reference
+
+This page contains all available ServerMate commands, their usage, and examples. Commands are organized by category for easy reference.
+
+## 🎯 Command Usage
+
+- All commands start with `/`
+- Replace `<user>` with a user mention or user ID
+- Replace `<reason>` with your reason for the action
+- Some commands require specific permissions
+
+## ⚔️ Moderation Commands
+
+### `/warn`
+Warn a user for breaking server rules.
+
+**Usage:** `/warn user:<user> reason:<reason>`
+
+**Examples:**
+```
+/warn user:@BadUser reason:Spamming in general chat
+/warn user:123456789012345678 reason:Inappropriate language
+```
+
+**Required Permissions:** Manage Messages
+
+---
+
+### `/kick`
+Remove a user from the server.
+
+**Usage:** `/kick user:<user> reason:<reason>`
+
+**Examples:**
+```
+/kick user:@TrollUser reason:Breaking server rules
+/kick user:123456789012345678 reason:Spamming
+```
+
+**Required Permissions:** Kick Members
+
+---
+
+### `/ban`
+Permanently ban a user from the server.
+
+**Usage:** `/ban user:<user> reason:<reason> delete_messages:<days>`
+
+**Parameters:**
+- `user`: The user to ban
+- `reason`: Reason for the ban
+- `delete_messages`: Number of days of messages to delete (0-7)
+
+**Examples:**
+```
+/ban user:@BadUser reason:Harassment delete_messages:7
+/ban user:123456789012345678 reason:Spam delete_messages:1
+```
+
+**Required Permissions:** Ban Members
+
+---
+
+### `/mute`
+Temporarily mute a user in the server.
+
+**Usage:** `/mute user:<user> duration:<time> reason:<reason>`
+
+**Parameters:**
+- `user`: The user to mute
+- `duration`: Time to mute (e.g., 10m, 1h, 1d)
+- `reason`: Reason for the mute
+
+**Examples:**
+```
+/mute user:@Spammer duration:30m reason:Excessive messaging
+/mute user:123456789012345678 duration:1h reason:Trolling
+```
+
+**Required Permissions:** Moderate Members
+
+---
+
+### `/unmute`
+Remove a timeout/mute from a user.
+
+**Usage:** `/unmute user:<user> reason:<reason>`
+
+**Examples:**
+```
+/unmute user:@MutedUser reason:Mute period expired
+/unmute user:123456789012345678 reason:Good behavior
+```
+
+**Required Permissions:** Moderate Members
+
+---
+
+### `/role`
+Manage user roles (add or remove).
+
+**Usage:** `/role action:<add/remove> user:<user> role:<role> reason:<reason>`
+
+**Parameters:**
+- `action`: Either "add" or "remove"
+- `user`: The user to modify
+- `role`: The role to add/remove
+- `reason`: Reason for the change
+
+**Examples:**
+```
+/role action:add user:@NewMember role:@Member reason:Welcome to the server
+/role action:remove user:@User role:@Moderator reason:Demotion
+```
+
+**Required Permissions:** Manage Roles
+
+---
+
+## 🔧 Utility Commands
+
+### `/custom`
+Execute custom server commands.
+
+**Usage:** `/custom command:<command_name>`
+
+**Note:** Custom commands must be created in the web dashboard first.
+
+**Examples:**
+```
+/custom command:rules
+/custom command:info
+```
+
+---
+
+### `/sendverify`
+Send a verification message to a user.
+
+**Usage:** `/sendverify user:<user>`
+
+**Examples:**
+```
+/sendverify user:@NewMember
+```
+
+**Required Setup:** Verification system must be configured in web dashboard
+
+---
+
+### `/setverifylog`
+Set the channel for verification logs.
+
+**Usage:** `/setverifylog channel:<channel>`
+
+**Examples:**
+```
+/setverifylog channel:#verification-logs
+```
+
+**Required Permissions:** Manage Server
+
+---
+
+### `/setmodlog`
+Set the channel for moderation logs.
+
+**Usage:** `/setmodlog channel:<channel>`
+
+**Examples:**
+```
+/setmodlog channel:#mod-logs
+```
+
+**Required Permissions:** Manage Server
+
+---
+
+### `/feedback`
+Submit feedback about the server or bot.
+
+**Usage:** `/feedback type:<type> message:<message>`
+
+**Parameters:**
+- `type`: "bug", "feature", "general", or "server"
+- `message`: Your feedback message
+
+**Examples:**
+```
+/feedback type:feature message:Add more moderation commands
+/feedback type:bug message:Kick command not working properly
+```
+
+---
+
+### `/embed`
+Send embedded messages with rich formatting.
+
+**Usage:** `/embed title:<title> description:<description> color:<color>`
+
+**Parameters:**
+- `title`: Embed title (optional)
+- `description`: Embed description
+- `color`: Hex color code (optional)
+
+**Examples:**
+```
+/embed title:Welcome! description:Welcome to our server! color:#00ff00
+/embed description:Server rules: 1. Be respectful 2. No spam
+```
+
+## 📋 Command Management
+
+### Enabling/Disabling Commands
+
+Commands can be enabled or disabled for your server through the web dashboard:
+
+1. Go to [app.servermate.gg](https://app.servermate.gg)
+2. Select your server
+3. Navigate to **Settings** → **Commands & Features**
+4. Toggle commands on/off as needed
+
+### Permission Requirements
+
+Most commands require specific Discord permissions:
+- **Manage Messages**: For warning users
+- **Kick Members**: For kicking users
+- **Ban Members**: For banning users
+- **Moderate Members**: For muting/unmuting users
+- **Manage Roles**: For role management
+- **Manage Server**: For server configuration
+
+### Custom Permissions
+
+You can set custom permission requirements for each command in the web dashboard under **Permissions** settings.
+
+## 🚧 Beta Commands
+
+Some commands may be in development or testing:
+- Features marked as "beta" may change
+- Command behavior may be refined over time
+- Report issues through `/feedback` or our support Discord
+
+## 🆘 Command Troubleshooting
+
+### Command Not Working?
+1. Check if the command is enabled in your server settings
+2. Verify you have the required permissions
+3. Make sure ServerMate has the necessary bot permissions
+4. Try again or contact support
+
+### Permission Errors?
+- Ensure the bot has the required permissions in your server
+- Check your personal role permissions
+- Contact server administrators if needed
+
+### Need Help?
+- Use `/feedback` to report issues
+- Join our [Support Discord](https://discord.gg/servermate)
+- Check the [FAQ](/faq) for common solutions
