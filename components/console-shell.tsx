@@ -1,10 +1,50 @@
 "use client";
 
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useState, useEffect } from "react";
 import Sidebar from "@/components/ui/sidebar";
 import Topbar from "@/components/ui/topbar";
+import { WelcomeModal } from "@/components/welcome-modal";
+import { useSession } from "next-auth/react";
 
 export default function ConsoleShell({ children }: PropsWithChildren) {
+  const { data: session } = useSession();
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [userGuilds, setUserGuilds] = useState<any[]>([]);
+  const [isPremium, setIsPremium] = useState(false);
+
+  useEffect(() => {
+    if (session?.user) {
+      // Check if this is the user's first visit
+      const hasVisited = localStorage.getItem('servermate-first-visit');
+      
+      // For testing: uncomment the next line to always show the modal
+      // localStorage.removeItem('servermate-first-visit');
+      
+      if (!hasVisited) {
+        setShowWelcomeModal(true);
+        localStorage.setItem('servermate-first-visit', 'true');
+      }
+
+      // Fetch user's guilds for the welcome modal
+      fetch('/api/guilds')
+        .then(res => res.json())
+        .then(data => {
+          if (data.guilds) {
+            setUserGuilds(data.guilds);
+          }
+        })
+        .catch(err => console.error('Error fetching guilds:', err));
+
+      // Check premium status
+      fetch('/api/user/premium-status')
+        .then(res => res.json())
+        .then(data => {
+          setIsPremium(data.isPremium || false);
+        })
+        .catch(err => console.error('Error fetching premium status:', err));
+    }
+  }, [session]);
+
   return (
     <div className="min-h-screen">
       {/* Sidebar - full height, behind everything */}
@@ -44,6 +84,14 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
           </div>
         </div>
       </footer>
+
+      {/* Welcome Modal */}
+      <WelcomeModal
+        isOpen={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+        userGuilds={userGuilds}
+        isPremium={isPremium}
+      />
     </div>
   );
 }
