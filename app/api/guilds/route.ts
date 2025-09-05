@@ -8,15 +8,14 @@ const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
+let requestCounter = 0;
 export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken }) => {
-  console.log('=== GUILDS API CALLED ===');
+  requestCounter++;
+  const requestId = `${requestCounter}-${Date.now()}`;
+
+  console.log(`=== GUILDS API CALLED #${requestCounter} [${requestId}] ===`);
   console.log('Access token available:', !!accessToken);
   console.log('Environment:', process.env.NODE_ENV);
-  console.log('All SERVER_* env vars:', {
-    SERVER_API_BASE_URL: process.env.SERVER_API_BASE_URL,
-    SERVER_API_URL: process.env.SERVER_API_URL,
-    BOT_API_URL: process.env.BOT_API_URL
-  });
   console.log('Timestamp:', new Date().toISOString());
   console.log('Process PID:', process.pid);
 
@@ -44,6 +43,11 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
+
+  console.log('🔍 Guilds API Debug:');
+  console.log('- Cache key:', ugCacheKey);
+  console.log('- Cached guilds count:', userGuilds.length);
+  console.log('- Cache hit:', userGuilds.length > 0);
 
   if (userGuilds.length === 0) {
     // In-flight de-duplication to avoid concurrent double fetches
@@ -117,7 +121,12 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
   }
 
   const results = await intersectAndNormalize(userGuilds, botBase);
-  console.log('Final results:', { guildCount: results.length, guilds: results.map(g => ({ id: g.id, name: g.name })) });
+  console.log('Final results:', {
+    guildCount: results.length,
+    guilds: results.map(g => ({ id: g.id, name: g.name })),
+    timestamp: new Date().toISOString(),
+    requestId: Math.random().toString(36).substr(2, 9)
+  });
 
   // If no guilds found and botBase is configured, also return user guilds for debugging
   if (results.length === 0 && botBase) {
@@ -144,7 +153,9 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
 
   // AGGRESSIVE FALLBACK: If no results in production, return user guilds anyway
   if (results.length === 0 && process.env.NODE_ENV === 'production') {
-    console.log('PRODUCTION FALLBACK: No intersecting guilds found, returning user guilds');
+    console.log('🚨 PRODUCTION FALLBACK TRIGGERED: No intersecting guilds found');
+    console.log('- User guilds available:', userGuilds.length);
+    console.log('- Bot base configured:', !!botBase);
     const userGuildsNormalized = userGuilds.map((g: any) => {
       const id = String((g && (g as any).id) || "");
       const icon = (g && (g as any).icon as string | null) || null;
@@ -172,6 +183,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
     });
   }
 
+  console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
   return NextResponse.json({ guilds: results });
 });
 
