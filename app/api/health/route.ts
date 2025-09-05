@@ -3,6 +3,15 @@ import { env } from "@/lib/env";
 
 export async function GET() {
 	const startedAt = new Date().toISOString();
+	console.log('🚨🚨🚨 HEALTH CHECK ENDPOINT CALLED 🚨🚨🚨');
+	console.log('Timestamp:', startedAt);
+	console.log('Environment:', process.env.NODE_ENV);
+	console.log('Process PID:', process.pid);
+	console.log('Node version:', process.version);
+	console.log('Platform:', process.platform);
+	console.log('Architecture:', process.arch);
+	console.log('Uptime:', process.uptime(), 'seconds');
+	console.log('Memory usage:', process.memoryUsage());
 
 	// DB health
 	let dbOk = false as boolean;
@@ -50,6 +59,15 @@ export async function GET() {
 		botError = "SERVER_API_BASE_URL not configured";
 		console.log('[HEALTH] SERVER_API_BASE_URL not configured');
 	}
+
+	// Additional debug info
+	console.log('Environment variables check:');
+	console.log('- SERVER_API_BASE_URL:', env.SERVER_API_BASE_URL ? 'SET' : 'NOT SET');
+	console.log('- DB_HOST:', env.DB_HOST ? 'SET' : 'NOT SET');
+	console.log('- DB_USER:', env.DB_USER ? 'SET' : 'NOT SET');
+	console.log('- DB_NAME:', env.DB_NAME ? 'SET' : 'NOT SET');
+	console.log('- NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? 'SET' : 'NOT SET');
+	console.log('- NEXTAUTH_URL:', process.env.NEXTAUTH_URL ? 'SET' : 'NOT SET');
 
 	const ok = dbOk && botOk;
 	return NextResponse.json({

@@ -11,6 +11,14 @@ const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken }) => {
   console.log('=== GUILDS API CALLED ===');
   console.log('Access token available:', !!accessToken);
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('All SERVER_* env vars:', {
+    SERVER_API_BASE_URL: process.env.SERVER_API_BASE_URL,
+    SERVER_API_URL: process.env.SERVER_API_URL,
+    BOT_API_URL: process.env.BOT_API_URL
+  });
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Process PID:', process.pid);
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
@@ -114,6 +122,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
   // If no guilds found and botBase is configured, also return user guilds for debugging
   if (results.length === 0 && botBase) {
     console.log('No intersecting guilds found, returning all user guilds for debugging');
+    console.log('Available user guilds:', userGuilds.map(g => ({ id: g.id, name: g.name })));
     const userGuildsNormalized = userGuilds.map((g: any) => {
       const id = String((g && (g as any).id) || "");
       const icon = (g && (g as any).icon as string | null) || null;
@@ -131,6 +140,36 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
       };
     });
     return NextResponse.json({ guilds: userGuildsNormalized });
+  }
+
+  // AGGRESSIVE FALLBACK: If no results in production, return user guilds anyway
+  if (results.length === 0 && process.env.NODE_ENV === 'production') {
+    console.log('PRODUCTION FALLBACK: No intersecting guilds found, returning user guilds');
+    const userGuildsNormalized = userGuilds.map((g: any) => {
+      const id = String((g && (g as any).id) || "");
+      const icon = (g && (g as any).icon as string | null) || null;
+      const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
+
+      return {
+        id,
+        name: String((g && (g as any).name) || ""),
+        memberCount: 0,
+        roleCount: 0,
+        iconUrl,
+        premium: false,
+        createdAt: null,
+        group: null,
+      };
+    });
+    return NextResponse.json({
+      guilds: userGuildsNormalized,
+      debug: {
+        environment: process.env.NODE_ENV,
+        botBaseConfigured: !!botBase,
+        userGuildsCount: userGuilds.length,
+        fallbackReason: 'production_no_results'
+      }
+    });
   }
 
   return NextResponse.json({ guilds: results });
