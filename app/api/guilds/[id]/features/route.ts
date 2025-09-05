@@ -122,11 +122,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         guildFeaturesRows = [];
       }
 
-      // Create a map of guild feature settings
+      // Create a map of guild feature settings using feature keys
       const guildFeaturesMap: Record<string, boolean> = {};
       guildFeaturesRows.forEach((row: any) => {
         console.log('[FEATURES-GET] Processing guild feature row:', row);
-        guildFeaturesMap[row.feature_name] = Boolean(row.enabled);
+        // Convert display name to feature key for the map
+        const featureKey = displayNameToKeyMap[row.feature_name];
+        if (featureKey) {
+          guildFeaturesMap[featureKey] = Boolean(row.enabled);
+        } else {
+          console.log(`[FEATURES-GET] No mapping found for ${row.feature_name}, using as-is`);
+          guildFeaturesMap[row.feature_name] = Boolean(row.enabled);
+        }
       });
 
       console.log('[FEATURES-GET] Guild features map:', guildFeaturesMap);
@@ -137,7 +144,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const displayName = row.feature_name;
         const actualFeatureKey = displayNameToKeyMap[displayName];
         const isEnabled = actualFeatureKey && guildFeaturesMap.hasOwnProperty(actualFeatureKey) ? guildFeaturesMap[actualFeatureKey] : false;
-        
+
         console.log(`[FEATURES-GET] Building feature ${displayName}:`, {
           displayName,
           actualFeatureKey,
@@ -146,9 +153,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
           isEnabled,
           guildFeaturesMap
         });
-        
-        features[displayName] = isEnabled;
-        features[`${displayName}_package`] = row.minimum_package;
+
+        // Use the actual feature key, not the display name
+        if (actualFeatureKey) {
+          features[actualFeatureKey] = isEnabled;
+          features[`${actualFeatureKey}_package`] = row.minimum_package;
+        } else {
+          console.log(`[FEATURES-GET] No mapping found for ${displayName}, skipping`);
+        }
       });
 
       console.log('[FEATURES-GET] Features response:', features);

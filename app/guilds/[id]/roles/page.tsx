@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { getToken } from "next-auth/jwt";
+import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import Section from "@/components/ui/section";
 import { type Guild, type Role } from "@/lib/api";
@@ -15,17 +17,41 @@ async function RolesPage({ params }: { params: Promise<Params> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin");
 
+  // Get access token from JWT (not session for security)
+  const cookieStore = await cookies();
+  const token = await getToken({ req: { cookies: cookieStore } as any, secret: process.env.NEXTAUTH_SECRET });
+  if (!token?.accessToken) redirect("/signin");
+
   const { id: guildId } = await params;
 
-  // Use the direct server function instead of HTTP API
-  const { getGuildsForUser } = await import('@/lib/guilds-server');
-  const guilds: Guild[] = await getGuildsForUser(session.accessToken as string);
+  // Fetch guilds using the authenticated API route
+  const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
+    headers: {
+      'Cookie': cookieStore.toString(), // Pass cookies for authentication
+    },
+  });
+
+  let guilds: Guild[] = [];
+  if (response.ok) {
+    const data = await response.json();
+    guilds = data.guilds || [];
+  }
+
   const guild = guilds.find((g) => g.id === guildId);
   if (!guild) return notFound();
 
-  // Use the direct server function instead of HTTP API
-  const { getRolesForGuild } = await import('@/lib/guilds-server');
-  const roles = await getRolesForGuild(guildId, session.accessToken as string);
+  // Fetch roles using the authenticated API route
+  const rolesResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds/${guildId}/roles`, {
+    headers: {
+      'Cookie': cookieStore.toString(), // Pass cookies for authentication
+    },
+  });
+
+  let roles: any[] = [];
+  if (rolesResponse.ok) {
+    const data = await rolesResponse.json();
+    roles = data.roles || [];
+  }
 
 
   return (

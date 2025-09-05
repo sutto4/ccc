@@ -112,6 +112,92 @@ CREATE TABLE IF NOT EXISTS user_notifications (
     INDEX idx_read_status (user_id, read_at)
 );
 
+-- Table for moderation cases
+CREATE TABLE IF NOT EXISTS moderation_cases (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guild_id VARCHAR(255) NOT NULL,
+    case_id VARCHAR(255) NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    target_user_id VARCHAR(20) NOT NULL,
+    target_username VARCHAR(255) NOT NULL,
+    moderator_user_id VARCHAR(20) NOT NULL,
+    moderator_username VARCHAR(255) NOT NULL,
+    reason TEXT,
+    duration_ms BIGINT NULL,
+    duration_label VARCHAR(100) NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Indexes for performance
+    INDEX idx_guild_id (guild_id),
+    INDEX idx_case_id (case_id),
+    INDEX idx_target_user (target_user_id),
+    INDEX idx_moderator_user (moderator_user_id),
+    INDEX idx_action_type (action_type),
+    INDEX idx_active (active),
+    INDEX idx_created_at (created_at),
+    UNIQUE KEY unique_guild_case (guild_id, case_id)
+);
+
+-- Table for moderation action logs
+CREATE TABLE IF NOT EXISTS moderation_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guild_id VARCHAR(255) NOT NULL,
+    case_id INT NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    user_id VARCHAR(20) NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    details JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Indexes for performance
+    INDEX idx_guild_id (guild_id),
+    INDEX idx_case_id (case_id),
+    INDEX idx_action (action),
+    INDEX idx_user_id (user_id),
+    INDEX idx_created_at (created_at),
+
+    -- Foreign key constraint
+    FOREIGN KEY (case_id) REFERENCES moderation_cases(id) ON DELETE CASCADE
+);
+
+-- Table for moderation evidence
+CREATE TABLE IF NOT EXISTS moderation_evidence (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    case_id INT NOT NULL,
+    guild_id VARCHAR(255) NOT NULL,
+    evidence_type VARCHAR(50) NOT NULL,
+    content TEXT,
+    uploaded_by VARCHAR(20) NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Indexes for performance
+    INDEX idx_case_id (case_id),
+    INDEX idx_guild_id (guild_id),
+    INDEX idx_evidence_type (evidence_type),
+    INDEX idx_uploaded_by (uploaded_by),
+    INDEX idx_uploaded_at (uploaded_at),
+
+    -- Foreign key constraint
+    FOREIGN KEY (case_id) REFERENCES moderation_cases(id) ON DELETE CASCADE
+);
+
+-- Table for slash command permissions
+CREATE TABLE IF NOT EXISTS slash_command_permissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guild_id VARCHAR(255) NOT NULL,
+    command_name VARCHAR(100) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Indexes for performance
+    INDEX idx_guild_id (guild_id),
+    INDEX idx_command_name (command_name),
+    UNIQUE KEY unique_guild_command (guild_id, command_name)
+);
+
 -- Enable all free features for the sample guild
 INSERT IGNORE INTO guild_features (guild_id, feature_name, enabled)
 SELECT '1403257704222429224', feature_name, TRUE

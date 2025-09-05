@@ -56,9 +56,10 @@ export function SoundNotification() {
           await audioContextRef.current.resume();
           setUserInteracted(true);
         }
-      } catch (error) {
-        console.warn('Could not resume audio context');
-      }
+              } catch (error) {
+          // AudioContext requires user interaction - this is expected
+          console.debug('AudioContext requires user interaction (this is normal)');
+        }
     };
 
     // Add event listeners for user interaction

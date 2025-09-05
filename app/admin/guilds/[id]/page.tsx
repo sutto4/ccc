@@ -97,11 +97,12 @@ export default function AdminGuildSettingsPage() {
       };
       
       const transformedFeatures = featuresData.features.map((feature: Feature) => {
-        // The guild features API now returns display names as keys, so we need to use feature_name
-        const guildFeature = guildFeaturesData.features[feature.feature_name];
+        // The guild features API now returns feature keys, so we need to use the mapped key
+        const featureKey = displayNameToFeatureKeyMap[feature.feature_name];
+        const guildFeature = featureKey ? guildFeaturesData.features[featureKey] : undefined;
         return {
           feature_name: feature.feature_name,
-          feature_key: displayNameToFeatureKeyMap[feature.feature_name], // Store the actual feature key for API calls
+          feature_key: featureKey, // Store the actual feature key for API calls
           enabled: guildFeature === true,
           package_override: undefined // We'll add this functionality later
         };
@@ -134,17 +135,10 @@ export default function AdminGuildSettingsPage() {
 
   const toggleFeature = async (displayName: string, enabled: boolean) => {
     try {
-      console.log('=== TOGGLE FEATURE CLICKED ===');
-      console.log('displayName:', displayName);
-      console.log('enabled:', enabled);
-      console.log('guildId:', guildId);
-      console.log('guildFeatures:', guildFeatures);
-      
       setSaving(true);
-      
+
       // Find the guild feature to get the actual feature key for the API call
       const guildFeature = guildFeatures.find(f => f.feature_name === displayName);
-      console.log('guildFeature found:', guildFeature);
       
       if (!guildFeature) {
         console.error(`Feature not found: ${displayName}`);
@@ -156,7 +150,6 @@ export default function AdminGuildSettingsPage() {
         enabled: enabled
       };
       
-      console.log('Making API call with body:', requestBody);
       
       const response = await fetch(`/api/guilds/${guildId}/features`, {
         method: 'PUT',

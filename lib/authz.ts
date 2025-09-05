@@ -8,39 +8,46 @@ export type AuthContext = {
 
 export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string; role?: string }> {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
-  
+
   let accessToken: string | null = null;
   let discordId: string | undefined;
   let role: string | undefined;
-  
+
   if (header) {
     const match = /^Bearer\s+(.+)$/i.exec(header.trim());
     if (match) {
       accessToken = match[1];
     }
   }
-  
-  // For server-side calls, always try to get the session
+
+  // For server-side calls, always try to get the session and JWT token
   try {
     const { getServerSession } = await import("next-auth");
+    const { getToken } = await import("next-auth/jwt");
     const { authOptions } = await import("@/lib/auth");
     const session = await getServerSession(authOptions as any);
-    
+
     if (session) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sessionToken = (session as any)?.accessToken as string | undefined;
-      if (sessionToken) {
-        accessToken = accessToken || sessionToken;
-      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       discordId = (session as any)?.user?.discordId as string | undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       role = (session as any)?.role as string | undefined;
     }
+
+    // Get access token from JWT instead of session for security
+    try {
+      const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+      if (token?.accessToken) {
+        accessToken = accessToken || token.accessToken;
+      }
+    } catch (error) {
+      console.error('Error getting token from JWT:', error);
+    }
+
   } catch (error) {
     console.error('Error getting session from cookie:', error);
   }
-  
+
   return { accessToken, discordId, role };
 }
 

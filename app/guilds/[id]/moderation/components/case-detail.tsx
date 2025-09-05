@@ -134,10 +134,7 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
         if (response.ok) {
           const session = await response.json();
           setCurrentUser(session?.user);
-          console.log('👤 Current user session:', session?.user);
-          console.log('👤 User ID:', session?.user?.id);
-          console.log('👤 User name:', session?.user?.name);
-          console.log('👤 User username:', session?.user?.username);
+          // Removed console logs that exposed sensitive session data
         }
       } catch (error) {
         console.error('Error fetching user session:', error);

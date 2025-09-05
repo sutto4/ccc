@@ -61,7 +61,20 @@ export default function MembersPage() {
       const role = roles.find(r => r.roleId === roleId);
 
       // Call API to persist - this will throw an error for hierarchy violations
-      await addRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
+      const response = await fetch(`/api/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: actor
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to add role (${response.status})`);
+      }
 
       // Show success toast
       toast({
@@ -124,7 +137,20 @@ export default function MembersPage() {
       const role = roles.find(r => r.roleId === roleId);
 
       // Call API to persist
-      await removeRole(guildId, userId, roleId, actor, (session as any)?.accessToken);
+      const response = await fetch(`/api/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: actor
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to remove role (${response.status})`);
+      }
 
       // Show success toast
       toast({

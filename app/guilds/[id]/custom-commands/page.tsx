@@ -83,11 +83,10 @@ export default function CustomCommandsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const token = (session as any)?.accessToken;
-      
+
       const [channelsData, rolesData] = await Promise.all([
-        fetchChannels(guildId, token),
-        fetchRoles(guildId, token)
+        fetchChannels(guildId),
+        fetchRoles(guildId)
       ]);
       
       // Transform channels to match CommandEditor interface

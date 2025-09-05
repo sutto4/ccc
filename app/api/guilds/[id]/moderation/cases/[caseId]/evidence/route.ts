@@ -122,9 +122,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const result = await query(insertQuery, [integerCaseId, guildId, evidence_type, content, uploaded_by, uploaded_by_id || uploaded_by]);
 
+    // Return the newly created evidence object
+    const newEvidence = {
+      id: (result as any).insertId,
+      case_id: integerCaseId,
+      evidence_type: evidence_type,
+      content: content,
+      uploaded_by: uploaded_by,
+      uploaded_by_id: uploaded_by_id || uploaded_by,
+      uploaded_at: new Date().toISOString()
+    };
+
     return NextResponse.json({
       success: true,
-      id: (result as any).insertId
+      evidence: newEvidence
     });
 
   } catch (error) {

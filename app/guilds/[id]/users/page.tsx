@@ -60,11 +60,25 @@ export default function UsersPage() {
         return;
       }
 
-      const token = (session as any)?.accessToken as string;
-      if (!token) return;
-      
       console.log(`[USERS] Attempting to add role ${roleId} to user ${userId}`);
-      await addRole(guildId, userId, roleId, (session as any)?.user?.id || 'unknown', token);
+
+      // Use fetch directly to the API endpoint which handles authentication server-side
+      const response = await fetch(`/api/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: (session as any)?.user?.id || 'unknown'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to add role (${response.status})`);
+      }
+
+      const result = await response.json();
       console.log(`[USERS] Successfully added role ${roleId} to user ${userId}`);
 
       // Show success toast
@@ -134,10 +148,23 @@ export default function UsersPage() {
         return;
       }
 
-      const token = (session as any)?.accessToken as string;
-      if (!token) return;
-      
-      await removeRole(guildId, userId, roleId, (session as any)?.user?.id || 'unknown', token);
+      // Use fetch directly to the API endpoint which handles authentication server-side
+      const response = await fetch(`/api/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: (session as any)?.user?.id || 'unknown'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to remove role (${response.status})`);
+      }
+
+      const result = await response.json();
 
       // Show success toast
       toast({

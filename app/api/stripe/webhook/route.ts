@@ -14,7 +14,7 @@ async function autoEnablePremiumFeatures(connection: any, guildId: string) {
     
     // Get all premium features from the features table
     const [premiumFeatures] = await connection.execute(`
-      SELECT feature_key, feature_name 
+      SELECT feature_key as feature_key, feature_name as feature_name 
       FROM features 
       WHERE minimum_package = 'premium' AND is_active = 1
     `);
@@ -71,7 +71,7 @@ async function autoDisablePremiumFeatures(connection: any, guildId: string) {
     
     // Get all premium features from the features table
     const [premiumFeatures] = await connection.execute(`
-      SELECT feature_key, feature_name 
+      SELECT feature_key as feature_key, feature_name as feature_name 
       FROM features 
       WHERE minimum_package = 'premium' AND is_active = 1
     `);

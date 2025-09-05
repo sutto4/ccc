@@ -35,7 +35,7 @@ export async function GET(
     let allFeatures;
     try {
       allFeatures = await query(
-        'SELECT feature_key, feature_name, description, minimum_package FROM features WHERE is_active = TRUE ORDER BY feature_name'
+        'SELECT feature_key as feature_key, feature_name as feature_name, description, minimum_package FROM features WHERE is_active = TRUE ORDER BY feature_name'
       );
       console.log('🚨🚨🚨 ALL FEATURES FROM DB:', allFeatures);
     } catch (error) {
@@ -58,7 +58,7 @@ export async function GET(
     let guildFeatures;
     try {
       guildFeatures = await query(
-        'SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?',
+        'SELECT gf.feature_name, gf.enabled, f.feature_name as display_name FROM guild_features gf LEFT JOIN features f ON gf.feature_name = f.feature_key WHERE gf.guild_id = ?',
         [guildId]
       );
       console.log('🚨🚨🚨 GUILD FEATURES FROM DB:', guildFeatures);
@@ -68,9 +68,10 @@ export async function GET(
       guildFeatures = [];
     }
 
-    // Convert guild features to object format
+    // Convert guild features to object format using feature keys
     const featureStates: Record<string, boolean> = {};
     guildFeatures.forEach((feature: any) => {
+      // feature_name column contains feature keys, not display names
       featureStates[feature.feature_name] = feature.enabled;
     });
 

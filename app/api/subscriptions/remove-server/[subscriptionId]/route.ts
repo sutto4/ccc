@@ -48,7 +48,7 @@ export async function POST(
 
       // Disable premium features for this guild
       const premiumFeatures = await query(
-        "SELECT feature_key, feature_name FROM features WHERE minimum_package = 'premium' AND is_active = 1"
+        "SELECT feature_key as feature_key, feature_name as feature_name FROM features WHERE minimum_package = 'premium' AND is_active = 1"
       );
 
       if (Array.isArray(premiumFeatures) && premiumFeatures.length > 0) {

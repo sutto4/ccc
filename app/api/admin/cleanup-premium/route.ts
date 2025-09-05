@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       // 2. Disable all premium features in guild_features table
       console.log(`Disabling premium features for ${guildId}...`);
       const [premiumFeatures] = await connection.execute(`
-        SELECT feature_key, feature_name 
+        SELECT feature_key as feature_key, feature_name as feature_name 
         FROM features 
         WHERE minimum_package = 'premium' AND is_active = 1
       `);

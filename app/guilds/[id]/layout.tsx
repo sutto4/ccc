@@ -10,6 +10,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { getServerSession } from "next-auth";
+import { getToken } from "next-auth/jwt";
+import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import Image from "next/image";
 
@@ -21,11 +23,25 @@ export default async function GuildLayout(
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin");
 
+  // Get access token from JWT (not session for security)
+  const cookieStore = await cookies();
+  const token = await getToken({ req: { cookies: cookieStore } as any, secret: process.env.NEXTAUTH_SECRET });
+  if (!token?.accessToken) redirect("/signin");
+
   const { id } = await props.params;
 
-  // Use the direct server function instead of HTTP API
-  const { getGuildsForUser } = await import('@/lib/guilds-server');
-  const guilds = await getGuildsForUser(session.accessToken as string);
+  // Fetch guilds using the authenticated API route
+  const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
+    headers: {
+      'Cookie': cookieStore.toString(), // Pass cookies for authentication
+    },
+  });
+
+  let guilds: any[] = [];
+  if (response.ok) {
+    const data = await response.json();
+    guilds = data.guilds || [];
+  }
   const guild = guilds.find((g) => g.id === id);
 
   // Log for debugging

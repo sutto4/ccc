@@ -28,10 +28,21 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
 
       // Fetch user's guilds for the welcome modal
       fetch('/api/guilds')
-        .then(res => res.json())
+        .then(res => {
+          console.log('Guilds API response status:', res.status);
+          if (!res.ok) {
+            console.error('Guilds API error:', res.status, res.statusText);
+            return res.text().then(text => console.error('Error response:', text));
+          }
+          return res.json();
+        })
         .then(data => {
+          console.log('Guilds API response data:', data);
           if (data.guilds) {
+            console.log('Found guilds:', data.guilds.length);
             setUserGuilds(data.guilds);
+          } else {
+            console.log('No guilds found in response');
           }
         })
         .catch(err => console.error('Error fetching guilds:', err));

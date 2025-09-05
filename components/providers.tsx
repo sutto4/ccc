@@ -3,7 +3,7 @@
 import { type PropsWithChildren, useState, createContext, useContext } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { SessionProvider, useSession as useNextAuthSession } from "next-auth/react";
+import { SessionProvider, useSession as useNextAuthSession, signIn, signOut } from "next-auth/react";
 import { ThemeProvider } from "@/components/theme-provider";
 
 // Create a shared session context to avoid duplicate session calls
@@ -16,6 +16,9 @@ export function useSharedSession() {
   }
   return context;
 }
+
+// Export NextAuth functions
+export { signIn, signOut };
 
 // Wrapper component that provides shared session
 function SharedSessionProvider({ children }: PropsWithChildren) {

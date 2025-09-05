@@ -24,7 +24,7 @@ export default function RolePermissionsPage() {
     }
 
     // Only load data when we have a valid session
-    if (session && session.accessToken) {
+    if (session) {
       console.log('Session loaded, calling loadRoles');
       loadRoles();
     }

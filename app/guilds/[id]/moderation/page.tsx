@@ -270,7 +270,7 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="cases" className="flex items-center space-x-2">
             <List className="h-4 w-4" />
             <span>Cases</span>
@@ -278,10 +278,6 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
           <TabsTrigger value="case-detail" className="flex items-center space-x-2">
             <Shield className="h-4 w-4" />
             <span>Case Detail</span>
-          </TabsTrigger>
-          <TabsTrigger value="actions" className="flex items-center space-x-2">
-            <Shield className="h-4 w-4" />
-            <span>Quick Actions</span>
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center space-x-2">
             <Settings className="h-4 w-4" />
@@ -341,73 +337,6 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
           )}
         </TabsContent>
 
-        <TabsContent value="actions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Take moderation actions quickly. All actions will be logged and can be reviewed later.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Button
-                  variant="danger"
-                  onClick={() => openActionModal("ban")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <Ban className="h-6 w-6" />
-                  <span>Ban User</span>
-                </Button>
-
-                <Button
-                  variant="danger"
-                  onClick={() => openActionModal("kick")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <UserX className="h-6 w-6" />
-                  <span>Kick User</span>
-                </Button>
-
-                <Button
-                  variant="primary"
-                  onClick={() => openActionModal("timeout")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <Clock className="h-6 w-6" />
-                  <span>Timeout User</span>
-                </Button>
-
-                <Button
-                  variant="primary"
-                  onClick={() => openActionModal("mute")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <VolumeX className="h-6 w-6" />
-                  <span>Mute User</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={() => openActionModal("unban")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <UserCheck className="h-6 w-6" />
-                  <span>Unban User</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={() => openActionModal("unmute")}
-                  className="h-20 flex flex-col items-center justify-center space-y-2"
-                >
-                  <Volume2 className="h-6 w-6" />
-                  <span>Unmute User</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
           {guildId ? (

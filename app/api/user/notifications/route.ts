@@ -16,13 +16,10 @@ export async function GET(request: NextRequest) {
       [session.user.id]
     );
 
-    console.log(`[USER-NOTIFICATIONS] Found ${notifications.length} notifications for user ${session.user.id}`);
-    console.log(`[USER-NOTIFICATIONS] Notifications:`, notifications.map(n => ({
-      id: n.id,
-      type: n.type,
-      message: n.message?.substring(0, 50) + '...',
-      read_at: n.read_at
-    })));
+    // Only log notification count in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[USER-NOTIFICATIONS] Found ${notifications.length} notifications for user ${session.user.id}`);
+    }
 
     return NextResponse.json(notifications);
 

@@ -112,9 +112,8 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   const [activeMentionField, setActiveMentionField] = useState<string | null>(null);
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null);
 
-  const authHeader = useMemo(() => (
-    (session as any)?.accessToken ? { Authorization: `Bearer ${(session as any).accessToken}` } : {}
-  ), [(session as any)?.accessToken]) as HeadersInit;
+  // Access token is handled server-side by withAuth wrapper, no need to include in client requests
+  const authHeader = useMemo(() => ({}), []) as HeadersInit;
 
   // Memoize the username lookup map for better performance
   const usernameMap = useMemo(() => {
@@ -381,7 +380,7 @@ export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean 
   useEffect(() => {
     hasLoadedData.current = false;
     isLoadingRef.current = false;
-  }, [session?.accessToken]);
+  }, [session]);
 
   // Cleanup effect to reset flags when component unmounts
   useEffect(() => {

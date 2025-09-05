@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { getToken } from 'next-auth/jwt';
 import { authOptions } from '@/lib/auth';
 
 export async function GET(
@@ -12,14 +13,20 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get access token from JWT (not session for security)
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (!token?.accessToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id: guildId } = await params;
-    
+
     // Try to get the guild name from the user's guilds list
     // This requires the user to have access to the guild
     try {
       const userGuildsResponse = await fetch("https://discord.com/api/v10/users/@me/guilds", {
-        headers: { 
-          Authorization: `Bearer ${session.accessToken}`,
+        headers: {
+          Authorization: `Bearer ${token.accessToken}`,
           'Content-Type': 'application/json'
         }
       });

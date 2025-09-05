@@ -68,10 +68,7 @@ export function useGuildMembers(guildId: string) {
     const loadRoles = async () => {
       try {
         setLoadingRoles(true);
-        const token = (session as any)?.accessToken as string;
-        if (!token) return;
-        
-        const rolesData = await fetchRoles(guildId, token);
+        const rolesData = await fetchRoles(guildId);
         // console.log('Roles loaded:', rolesData?.length || 0);
         setRoles(rolesData);
       } catch (err: any) {
@@ -95,15 +92,12 @@ export function useGuildMembers(guildId: string) {
       setLoading(true);
       setError(null);
       
-      const token = (session as any)?.accessToken as string;
-      if (!token) return;
-      
-      // Calculate offset
+        // Calculate offset
       const currentPage = resetPage ? 1 : page;
       const offset = (currentPage - 1) * pageSize;
-      
-      // Load members with search
-      const membersData = await fetchMembersLegacy(guildId, token);
+
+      // Load members with search (API handles authentication server-side)
+      const membersData = await fetchMembersLegacy(guildId);
       
       // console.log('API returned members:', membersData?.length || 0, 'members');
       
@@ -322,10 +316,7 @@ export function useGuildMembersKanban(guildId: string) {
     const loadRoles = async () => {
       try {
         setLoadingRoles(true);
-        const token = (session as any)?.accessToken as string;
-        if (!token) return;
-        
-        const rolesData = await fetchRoles(guildId, token);
+        const rolesData = await fetchRoles(guildId);
         setRoles(rolesData);
       } catch (err: any) {
         console.error('Failed to load roles:', err);
@@ -346,11 +337,8 @@ export function useGuildMembersKanban(guildId: string) {
       setLoading(true);
       setError(null);
       
-      const token = (session as any)?.accessToken as string;
-      if (!token) return;
-      
-      // Load all members
-      const membersData = await fetchMembersLegacy(guildId, token);
+      // Load all members (API handles authentication server-side)
+      const membersData = await fetchMembersLegacy(guildId);
       
       // console.log('Kanban API returned members:', membersData?.length || 0, 'members');
       

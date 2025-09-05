@@ -106,7 +106,7 @@ export default function GuildSettingsPage() {
       redirect("/signin");
     }
 
-    if (session && session.accessToken) {
+    if (session) {
       loadRoles();
       loadSubscription();
     }
@@ -285,7 +285,7 @@ export default function GuildSettingsPage() {
   const loadRoles = async () => {
     try {
       setLoading(true);
-      const fetchedRoles = await fetchRoles(guildId, session?.accessToken);
+      const fetchedRoles = await fetchRoles(guildId);
       
       console.log('Raw fetched roles:', fetchedRoles);
       console.log('Role structure:', fetchedRoles.map(r => ({

@@ -9,9 +9,12 @@ const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken }) => {
+  console.log('=== GUILDS API CALLED ===');
+  console.log('Access token available:', !!accessToken);
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
+  console.log('Bot base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
   const tokenKey = accessToken.slice(0, 24);
@@ -106,17 +109,46 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
   }
 
   const results = await intersectAndNormalize(userGuilds, botBase);
-  return NextResponse.json(results);
+  console.log('Final results:', { guildCount: results.length, guilds: results.map(g => ({ id: g.id, name: g.name })) });
+
+  // If no guilds found and botBase is configured, also return user guilds for debugging
+  if (results.length === 0 && botBase) {
+    console.log('No intersecting guilds found, returning all user guilds for debugging');
+    const userGuildsNormalized = userGuilds.map((g: any) => {
+      const id = String((g && (g as any).id) || "");
+      const icon = (g && (g as any).icon as string | null) || null;
+      const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
+
+      return {
+        id,
+        name: String((g && (g as any).name) || ""),
+        memberCount: 0,
+        roleCount: 0,
+        iconUrl,
+        premium: false,
+        createdAt: null,
+        group: null,
+      };
+    });
+    return NextResponse.json({ guilds: userGuildsNormalized });
+  }
+
+  return NextResponse.json({ guilds: results });
 });
 
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;
   let installedGuilds = cache.get<any[]>(igCacheKey) || [];
+  console.log('Installed guilds from cache:', installedGuilds.length);
+
   if (installedGuilds.length === 0 && botBase) {
+    console.log('Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
     try {
       const botRes = await fetch(`${botBase}/api/guilds`);
+      console.log('Bot API response status:', botRes.status);
       if (botRes.ok) {
         installedGuilds = (await botRes.json()) as any[];
+        console.log('Installed guilds from bot:', installedGuilds.length);
         cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
       } else {
         console.warn("/api/guilds bot endpoint failed:", botRes.status);

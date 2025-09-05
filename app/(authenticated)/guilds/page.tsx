@@ -1,5 +1,7 @@
 import { getServerSession } from "next-auth";
+import { getToken } from "next-auth/jwt";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { fetchGuilds, type Guild } from "@/lib/api";
 import Section from "@/components/ui/section";
@@ -14,16 +16,34 @@ import Link from "next/link";
 
 export default async function GuildsPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/signin');
   }
 
+  // Get access token from JWT (not session for security)
+  const cookieStore = await cookies();
+  const token = await getToken({ req: { cookies: cookieStore } as any, secret: process.env.NEXTAUTH_SECRET });
+
+  if (!token?.accessToken) {
+    redirect("/signin");
+  }
+
   let guilds: Guild[] = [];
   try {
-    // For server-side rendering, call the guilds logic directly instead of going through HTTP
-    const { getGuildsForUser } = await import('@/lib/guilds-server');
-    guilds = await getGuildsForUser(session.accessToken as string);
+    // Fetch guilds using the authenticated API route
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
+      headers: {
+        'Cookie': cookieStore.toString(), // Pass cookies for authentication
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      guilds = data.guilds || [];
+    } else {
+      console.error('Failed to fetch guilds:', response.status, response.statusText);
+    }
   } catch (error) {
     console.error('Failed to fetch guilds:', error);
   }

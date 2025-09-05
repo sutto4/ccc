@@ -40,6 +40,32 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: Re
 
 type Item = { href: string; label: string; icon: React.ComponentType<any> };
 
+// Map display names to feature keys for consistent lookup across all functions
+// Defined outside component to avoid recreation on every render
+const displayNameToFeatureKey: Record<string, string> = {
+  'Ban Syncing': 'ban_sync',
+  'Bot Customisation': 'bot_customisation',
+  'Creator Alerts': 'creator_alerts',
+  'Custom Commands': 'custom_commands',
+  'Custom Dot Command Prefix': 'custom_prefix',
+  'Custom Groups': 'custom_groups',
+  'Embedded Messages': 'embedded_messages',
+  'FDG Donator Sync': 'fdg_donator_sync',
+  'Feedback Collection': 'feedback_system',
+  'FiveM ESX Integration': 'fivem_esx',
+  'FiveM QBcore Integration': 'fivem_qbcore',
+  'Moderation Tools': 'moderation',
+  'Reaction Roles': 'reaction_roles',
+  'User Verification System': 'verification_system',
+  'Utilities': 'utilities'
+};
+
+// Reverse mapping for display purposes
+const featureKeyToDisplayName: Record<string, string> = {};
+Object.entries(displayNameToFeatureKey).forEach(([display, key]) => {
+  featureKeyToDisplayName[key] = display;
+});
+
 type NavLeafProps = {
   href: string;
   label: React.ReactNode;
@@ -100,17 +126,6 @@ const NavLeaf: React.FC<NavLeafProps> = ({
   const [showNoGuildMessage, setShowNoGuildMessage] = React.useState(false);
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('NavLeaf click:', {
-      label,
-      featureEnabled,
-      premiumRequired,
-      hasPremium,
-      featureNotAvailable,
-      isGreyed,
-      noGuildSelected,
-      guildSelected,
-      href
-    });
 
     if (noGuildSelected) {
       e.preventDefault();
@@ -120,14 +135,12 @@ const NavLeaf: React.FC<NavLeafProps> = ({
       return;
     } else if (featureNotAvailable || (premiumRequired && !hasPremium)) {
       // Show premium modal for any feature that's not available or requires premium
-      console.log('Opening premium modal for:', label);
       e.preventDefault();
       e.stopPropagation();
       setModalOpen(true);
       return;
     } else {
       // Feature is available and accessible - navigate to the href
-      console.log('Navigating to:', href);
       window.location.href = href;
     }
   };
@@ -182,11 +195,15 @@ const Sidebar = React.memo(function Sidebar() {
         return;
       }
       try {
+        console.log('Sidebar: Fetching features for guild:', guildId);
         const fx: FeaturesResponse = await fetchFeatures(guildId);
+        console.log('Sidebar: Received features response:', fx);
+        console.log('Sidebar: Features object:', fx?.features);
         if (!alive) return;
         setFeatures(fx?.features || {});
-      } catch {
+      } catch (error) {
         if (!alive) return;
+        console.warn('Sidebar: Failed to fetch guild features:', error);
         setFeatures({});
       }
     })();
@@ -230,10 +247,9 @@ const Sidebar = React.memo(function Sidebar() {
   // Helper function to determine if a feature should show crown icon
   const shouldShowCrown = (featureKey: string) => {
     if (!features) return false;
-    // Check if the feature's package requirement is "premium"
+
     const packageKey = `${featureKey}_package` as keyof Features;
     const packageType = features[packageKey];
-    console.log(`shouldShowCrown(${featureKey}): packageKey=${packageKey}, packageType=${packageType}, result=${packageType === "premium"}`);
     return packageType === "premium";
   };
 
@@ -248,27 +264,22 @@ const Sidebar = React.memo(function Sidebar() {
     const packageKey = `${featureKey}_package` as keyof Features;
     const packageType = features[packageKey];
 
-    console.log(`isFeatureAccessible(${featureKey}): isEnabled=${isEnabled}, packageKey=${packageKey}, packageType=${packageType}`);
 
     // Free features are always accessible if enabled
     if (packageType === "free" || packageType === undefined) {
-      console.log(`  -> Feature ${featureKey} is free, returning ${isEnabled}`);
       return isEnabled;
     }
 
     // Premium features require the feature to be enabled
     if (packageType === "premium") {
-      console.log(`  -> Feature ${featureKey} is premium, returning ${isEnabled}`);
       return isEnabled;
     }
 
     // Custom features require the feature to be enabled
     if (packageType === "custom") {
-      console.log(`  -> Feature ${featureKey} is custom, returning ${isEnabled}`);
       return isEnabled;
     }
 
-    console.log(`  -> Feature ${featureKey} has unknown package type, returning false`);
     return false;
   };
 
@@ -282,18 +293,15 @@ const Sidebar = React.memo(function Sidebar() {
 
     // If no package type is defined, assume it's not configured and hide it
     if (!packageType) {
-      console.log(`isFeatureVisible(${featureKey}): no package type defined, hiding feature`);
       return false;
     }
 
     // Custom features only appear if enabled
     if (packageType === "custom") {
-      console.log(`isFeatureVisible(${featureKey}): custom feature, visible=${isEnabled}`);
       return isEnabled;
     }
 
     // Free and premium features are always visible (but may be greyed out)
-    console.log(`isFeatureVisible(${featureKey}): ${packageType} feature, always visible`);
     return true;
   };
 

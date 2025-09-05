@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
 
     // Fetch all features from the features table with guild enablement statistics
     const features = await query(`
-      SELECT 
-        f.feature_name as feature_key,
+      SELECT
+        f.feature_key as feature_key,
         f.feature_name as feature_name,
         f.description,
         f.minimum_package,
@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
         SUM(CASE WHEN gf.enabled = 1 THEN 1 ELSE 0 END) as enabled_guilds,
         SUM(CASE WHEN gf.enabled = 0 THEN 1 ELSE 0 END) as disabled_guilds
       FROM features f
-      LEFT JOIN guild_features gf ON f.feature_name = gf.feature_name
-      GROUP BY f.feature_name, f.description, f.minimum_package, f.is_active
+      LEFT JOIN guild_features gf ON f.feature_key = gf.feature_name
+      GROUP BY f.feature_key, f.feature_name, f.description, f.minimum_package, f.is_active
       ORDER BY f.feature_name
     `);
 

@@ -70,16 +70,22 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/signin",
   },
-  // Add logging to debug the issue
+  // Configure logging (suppress debug messages in production)
   logger: {
     error(code, ...message) {
       console.error("NextAuth Error:", code, ...message);
     },
     warn(code, ...message) {
-      console.warn("NextAuth Warning:", code, ...message);
+      // Suppress the DEBUG_ENABLED warning in production
+      if (code !== 'DEBUG_ENABLED') {
+        console.warn("NextAuth Warning:", code, ...message);
+      }
     },
     debug(code, ...message) {
-      console.log("NextAuth Debug:", code, ...message);
+      // Only log debug messages in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log("NextAuth Debug:", code, ...message);
+      }
     },
   },
   callbacks: {
@@ -168,8 +174,8 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).discordId = (token as any).discordId
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(session as any).role = (token as any).role ?? "viewer"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(session as any).accessToken = (token as any).accessToken
+        // SECURITY: Never include access tokens in session - they should only be in JWT
+        // ;(session as any).accessToken = (token as any).accessToken
       }
       return session
     },

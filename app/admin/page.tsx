@@ -93,7 +93,6 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
   const [error, setError] = useState<string | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
-  const [notificationTested, setNotificationTested] = useState(false);
 
   // User activity state
   const [userActivityStats, setUserActivityStats] = useState({
@@ -112,38 +111,6 @@ export default function AdminDashboard() {
     // return () => clearInterval(interval);
   }, []);
 
-  const testNotification = async () => {
-    try {
-      setNotificationTested(false);
-
-      // Create a test notification in the database
-      const response = await fetch('/api/admin/test-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: 'Test notification: ServerMate added to Test Server!',
-          type: 'new_server',
-          data: {
-            guildId: 'test-guild-123',
-            guildName: 'Test Server',
-            timestamp: new Date().toISOString()
-          }
-        }),
-      });
-
-      if (response.ok) {
-        setNotificationTested(true);
-        // The sound notification component should pick this up automatically
-        setTimeout(() => {
-          setNotificationTested(false);
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Error testing notification:', error);
-    }
-  };
 
   const fetchDashboardData = async () => {
     try {
@@ -447,17 +414,6 @@ export default function AdminDashboard() {
               title="Test the premium modal functionality"
             >
               🧪 Test Modal
-            </button>
-            <button
-              onClick={testNotification}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
-                notificationTested
-                  ? 'bg-green-500 text-white hover:bg-green-600 animate-pulse'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-              title="Test the sound notification system - click anywhere on page first to enable audio"
-            >
-              {notificationTested ? '🎵 Sound Played!' : '🔊 Test Sound'}
             </button>
 
             <button

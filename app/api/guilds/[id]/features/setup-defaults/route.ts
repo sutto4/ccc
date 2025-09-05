@@ -31,7 +31,7 @@ export const POST = withAuth(async (_req, { params }, auth) => {
 
     // Get all active free features
     const featuresResult = await query(
-      `SELECT feature_key, feature_name FROM features 
+      `SELECT feature_key as feature_key, feature_name as feature_name FROM features 
        WHERE minimum_package = 'free' AND is_active = 1`
     );
 

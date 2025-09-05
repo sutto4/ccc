@@ -167,7 +167,10 @@ function u(path: string) {
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
   const url = u(path);
-  console.log(`[lib/api] fetching`, url, `BASE=${BASE || '(empty)'} RAW=${RAW || '(empty)'} isBrowser=${typeof window !== 'undefined'}`);
+  // Only log API calls in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[lib/api] fetching`, url, `BASE=${BASE || '(empty)'} RAW=${RAW || '(empty)'} isBrowser=${typeof window !== 'undefined'}`);
+  }
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -199,17 +202,20 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function fetchGuilds(accessToken?: string): Promise<Guild[]> {
   const headers: Record<string, string> = {}
+  // Note: accessToken is no longer passed from client-side due to security improvements
+  // Server-side APIs now get tokens from JWT via withAuth wrapper
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
   return j<Guild[]>('/guilds', { headers })
 }
 
 export async function fetchRoles(guildId: string, accessToken?: string): Promise<Role[]> {
   const headers: Record<string, string> = {}
-  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
-  
+  // Note: accessToken is no longer passed from client-side due to security improvements
+  // Server-side APIs now get tokens from JWT via withAuth wrapper
+
   // Try to fetch roles with permissions data
   const res = await j<any>(`/guilds/${guildId}/roles?include_permissions=true`, { headers })
-  
+
   if (Array.isArray(res)) return res as Role[]
   if (res && Array.isArray(res.roles)) return res.roles as Role[]
   return []
@@ -217,6 +223,8 @@ export async function fetchRoles(guildId: string, accessToken?: string): Promise
 
 export async function fetchChannels(guildId: string, accessToken?: string): Promise<{ id: string; name: string; type: number }[]> {
   const headers: Record<string, string> = {}
+  // Note: accessToken is no longer passed from client-side due to security improvements
+  // Server-side APIs now get tokens from JWT via withAuth wrapper
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`
   
   const res = await j<any>(`/guilds/${guildId}/channels`, { headers })
