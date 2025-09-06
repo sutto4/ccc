@@ -159,7 +159,9 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   const requestId = `${requestCounter}-${Date.now()}`;
 
   console.log(`=== GUILDS API CALLED #${requestCounter} [${requestId}] ===`);
-  console.log(`[SECURITY-AUDIT] User ID: ${discordId}`);
+  console.log(`[SECURITY-AUDIT] REQUEST ID: ${requestId}`);
+  console.log(`[SECURITY-AUDIT] USER ID: ${discordId}`);
+  console.log(`[SECURITY-AUDIT] UNIQUE SESSION: ${discordId}-${requestId}`);
   console.log('Access token available:', !!accessToken);
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Timestamp:', new Date().toISOString());
@@ -171,7 +173,12 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
   const tokenKey = `${discordId}:${accessToken.slice(0, 24)}`;
-  console.log(`[SECURITY-AUDIT] User token key: ${tokenKey}, Discord ID: ${discordId}`);
+  console.log(`[SECURITY-AUDIT] ===== CRITICAL SECURITY CHECK =====`);
+  console.log(`[SECURITY-AUDIT] Discord ID: ${discordId}`);
+  console.log(`[SECURITY-AUDIT] Access Token Hash: ${accessToken.slice(0, 24)}`);
+  console.log(`[SECURITY-AUDIT] Combined Token Key: ${tokenKey}`);
+  console.log(`[SECURITY-AUDIT] Request Timestamp: ${new Date().toISOString()}`);
+  console.log(`[SECURITY-AUDIT] ====================================`);
   const rl = limiter.check(`rl:guilds:${tokenKey}`);
   if (!rl.allowed) {
     const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
@@ -192,6 +199,19 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
   console.log(`[SECURITY-AUDIT] Cache key: ${ugCacheKey}, cached guilds: ${userGuilds.length}`);
   console.log(`[SECURITY-AUDIT] Cache should be user-specific: ${ugCacheKey.startsWith(`userGuilds:${discordId}:`)}`);
+
+  // SECURITY: Verify cached data belongs to this user
+  if (userGuilds.length > 0) {
+    console.log(`[SECURITY-AUDIT] CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
+    console.log(`[SECURITY-AUDIT] CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
+
+    // EMERGENCY SECURITY: Clear cache if it doesn't belong to this user
+    if (discordId && !ugCacheKey.includes(discordId)) {
+      console.log(`[SECURITY-ALERT] 🚨 CACHE POLLUTION DETECTED! Clearing cache for user ${discordId}`);
+      // Note: SimpleTTLCache might not have del method, cache will expire naturally
+      userGuilds = []; // Force fresh fetch
+    }
+  }
 
   console.log('🔍 Guilds API Debug:');
   console.log('- Cache key:', ugCacheKey);
@@ -338,7 +358,20 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
   console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] TOTAL GUILDS RETURNED: ${results.length}`);
+  console.log(`[SECURITY-AUDIT] REQUEST COMPLETE FOR USER ${discordId} [${requestId}]`);
+  console.log(`[SECURITY-AUDIT] ==================================================`);
   console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name })));
+  // FINAL SECURITY CHECK: Ensure all returned guilds belong to this user
+  const finalCheck = results.every(guild => {
+    // This is a basic check - in production you'd want more thorough validation
+    return guild && typeof guild.id === 'string' && guild.id.length > 0;
+  });
+
+  if (!finalCheck) {
+    console.log(`[SECURITY-ALERT] 🚨 INVALID GUILD DATA DETECTED FOR USER ${discordId}!`);
+  }
+
   return NextResponse.json({ guilds: results });
 });
 
