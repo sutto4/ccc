@@ -109,10 +109,10 @@ async function checkUserGuildPermission(userId: string, guildId: string, accessT
             // There are role restrictions - check if user has allowed roles
             console.log(`[PERMISSION] Guild ${guildId}: checking ${allowedRoleIds.length} configured roles`);
 
-            // For now, since Discord API is unreliable, allow access if roles are configured
-            // In production, you'd verify user's specific roles
-            hasRoleAccess = true;
-            console.log(`[PERMISSION] Guild ${guildId}: allowing access for configured roles (fallback)`);
+            // 🚨 SECURITY FIX: Actually check user's roles instead of allowing everyone
+            // For now, deny access if roles are configured but we can't verify them
+            hasRoleAccess = false;
+            console.log(`[PERMISSION] Guild ${guildId}: denying access - role verification not implemented yet`);
           } else {
             // No specific role restrictions configured
             hasRoleAccess = false;
