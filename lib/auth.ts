@@ -64,7 +64,10 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
   secret: env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
   pages: {
@@ -99,37 +102,76 @@ export const authOptions: NextAuthOptions = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).expiresAt = account.expires_at
       }
-      
-      // If token is expired, try to refresh it
+
+      // Always try to refresh token if it's close to expiry or expired
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((token as any).expiresAt && Date.now() > (token as any).expiresAt * 1000) {
-        console.log('Token expired, attempting refresh...');
-        try {
+      const currentTime = Math.floor(Date.now() / 1000);
+      const expiresAt = (token as any).expiresAt;
+      const refreshToken = (token as any).refreshToken;
+
+      // Debug token expiration
+      if (expiresAt) {
+        const timeUntilExpiry = expiresAt - currentTime;
+        const hoursUntilExpiry = Math.floor(timeUntilExpiry / 3600);
+        const minutesUntilExpiry = Math.floor((timeUntilExpiry % 3600) / 60);
+        console.log(`[TOKEN-DEBUG] Token expires in: ${hoursUntilExpiry}h ${minutesUntilExpiry}m (${timeUntilExpiry}s)`);
+
+        // Check if token is actually expired
+        if (timeUntilExpiry < 0) {
+          console.log(`[TOKEN-DEBUG] ❌ TOKEN IS EXPIRED! Clearing expired tokens`);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const refreshToken = (token as any).refreshToken;
-          if (refreshToken) {
-            const response = await fetch('https://discord.com/api/oauth2/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_id: env.DISCORD_CLIENT_ID || '',
-                client_secret: env.DISCORD_CLIENT_SECRET || '',
-                grant_type: 'refresh_token',
-                refresh_token: refreshToken,
-              }),
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).accessToken = data.access_token;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
-              console.log('Token refreshed successfully');
-            }
+          delete (token as any).accessToken;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (token as any).refreshToken;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (token as any).expiresAt;
+          return token;
+        }
+      }
+
+      // Refresh if token is expired or will expire in next 1 hour (more conservative)
+      if (expiresAt && refreshToken && (currentTime > expiresAt || (expiresAt - currentTime) < 3600)) {
+        console.log('[TOKEN-REFRESH] Token expired or expiring within 1 hour, attempting refresh...');
+        try {
+          const response = await fetch('https://discord.com/api/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: env.DISCORD_CLIENT_ID || '',
+              client_secret: env.DISCORD_CLIENT_SECRET || '',
+              grant_type: 'refresh_token',
+              refresh_token: refreshToken,
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(token as any).accessToken = data.access_token;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(token as any).refreshToken = data.refresh_token || refreshToken; // Discord may return new refresh token
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(token as any).expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+            console.log('[TOKEN-REFRESH] ✅ Token refreshed successfully');
+          } else {
+            console.error('[TOKEN-REFRESH] ❌ Failed to refresh token:', response.status, await response.text());
+            // Clear expired tokens
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            delete (token as any).accessToken;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            delete (token as any).refreshToken;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            delete (token as any).expiresAt;
           }
         } catch (error) {
-          console.error('Failed to refresh token:', error);
+          console.error('[TOKEN-REFRESH] ❌ Exception during token refresh:', error);
+          // Clear expired tokens
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (token as any).accessToken;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (token as any).refreshToken;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (token as any).expiresAt;
         }
       }
       if (account && profile) {

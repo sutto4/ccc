@@ -14,6 +14,7 @@ import { getToken } from "next-auth/jwt";
 import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import Image from "next/image";
+import mysql from 'mysql2/promise';
 
 type Params = { id: string };
 
@@ -30,10 +31,47 @@ export default async function GuildLayout(
 
   const { id } = await props.params;
 
-  // Fetch guilds using the authenticated API route
+  // Quick permission check using server_access_control table
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    database: process.env.DB_NAME || 'chester_bot',
+  });
+
+  let hasAccess = false;
+  try {
+    // Check server_access_control first (same as guilds API)
+    const [accessRows] = await connection.execute(
+      'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+      [id, token.sub]
+    );
+
+    hasAccess = (accessRows as any[]).length > 0;
+
+    if (!hasAccess) {
+      // Also try with discordId if available from token
+      const discordId = token.sub; // JWT sub should be Discord ID
+      const [accessRows2] = await connection.execute(
+        'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+        [id, discordId]
+      );
+
+      hasAccess = (accessRows2 as any[]).length > 0;
+    }
+  } finally {
+    await connection.end();
+  }
+
+  if (!hasAccess) {
+    console.log(`[GUILD_LAYOUT] Access denied for guild ${id}, user ${token.sub}`);
+    redirect("/guilds");
+  }
+
+  // If access granted, fetch guild info
   const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
     headers: {
-      'Cookie': cookieStore.toString(), // Pass cookies for authentication
+      'Cookie': cookieStore.toString(),
     },
   });
 
@@ -42,12 +80,13 @@ export default async function GuildLayout(
     const data = await response.json();
     guilds = data.guilds || [];
   }
+
   const guild = guilds.find((g) => g.id === id);
 
-  // Log for debugging
+  // If guild not in list (shouldn't happen if permissions are correct), redirect
   if (!guild) {
-    console.log(`Guild ${id} not found. Available guilds:`, guilds.map(g => ({ id: g.id, name: g.name })));
-    return notFound();
+    console.log(`[GUILD_LAYOUT] Guild ${id} access granted but not in guilds list`);
+    redirect("/guilds");
   }
 
   return (

@@ -36,12 +36,13 @@ export function usePermissions(guildId: string): PermissionCheck {
 
       // Get user's roles from session or fetch them
       const userRoles = (session?.user as any)?.roles || [];
-      
-      // console.log('Session data for permissions:', {
-      //   userId: (session?.user as any)?.id,
-      //   userRoles,
-      //   sessionUser: session?.user
-      // });
+      const userId = (session?.user as any)?.id;
+
+      console.log('usePermissions - Session data:', {
+        userId,
+        userRoles,
+        sessionUser: session?.user
+      });
       
       const response = await fetch(`/api/guilds/${guildId}/role-permissions/check`, {
         method: 'POST',

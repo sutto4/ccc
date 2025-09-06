@@ -40,9 +40,11 @@ export default async function GuildsPage() {
 
     if (response.ok) {
       const data = await response.json();
+      console.log('[GUILDS-DEBUG] All guilds received:', data.guilds.map(g => ({ id: g.id, name: g.name, iconUrl: g.iconUrl })));
+      console.log('[GUILDS-DEBUG] Guilds with icons:', data.guilds.filter(g => g.iconUrl).map(g => ({ id: g.id, name: g.name, iconUrl: g.iconUrl })));
       guilds = data.guilds || [];
     } else {
-      console.error('Failed to fetch guilds:', response.status, response.statusText);
+      console.error('[FRONTEND-GUILDS] Failed to fetch guilds:', response.status, response.statusText);
     }
   } catch (error) {
     console.error('Failed to fetch guilds:', error);
@@ -164,7 +166,7 @@ export default async function GuildsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {groupServers.map((guild) => (
-                        <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
+                        <Link key={guild.id} href={`/guilds/${guild.id}`} className="block group">
                           <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3">
@@ -175,11 +177,12 @@ export default async function GuildsPage() {
                                     width={40}
                                     height={40}
                                     className="rounded-lg"
+                                    unoptimized={true}
                                   />
                                 ) : (
-                                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                                    <span className="text-sm font-semibold text-muted-foreground">
-                                      {guild.name.charAt(0).toUpperCase()}
+                                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                                    <span className="text-sm font-bold text-white">
+                                      {guild.name && guild.name.length > 0 ? guild.name.charAt(0).toUpperCase() : '?'}
                                     </span>
                                   </div>
                                 )}
@@ -225,7 +228,7 @@ export default async function GuildsPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {individualGuilds.map((guild) => (
-                      <Link key={guild.id} href={`/guilds/${guild.id}/users`} className="block group">
+                      <Link key={guild.id} href={`/guilds/${guild.id}`} className="block group">
                         <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
