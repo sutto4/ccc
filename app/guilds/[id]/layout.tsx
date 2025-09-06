@@ -39,6 +39,8 @@ export default async function GuildLayout(
     database: process.env.DB_NAME || 'chester_bot',
   });
 
+  console.log(`[GUILD_LAYOUT] Checking access for guild ${id}, user token.sub: ${token.sub}`);
+
   let hasAccess = false;
   try {
     // Check server_access_control first (same as guilds API)
@@ -48,6 +50,7 @@ export default async function GuildLayout(
     );
 
     hasAccess = (accessRows as any[]).length > 0;
+    console.log(`[GUILD_LAYOUT] Access check 1 (token.sub): ${hasAccess}, rows found: ${(accessRows as any[]).length}`);
 
     if (!hasAccess) {
       // Also try with discordId if available from token
@@ -58,13 +61,15 @@ export default async function GuildLayout(
       );
 
       hasAccess = (accessRows2 as any[]).length > 0;
+      console.log(`[GUILD_LAYOUT] Access check 2 (discordId): ${hasAccess}, rows found: ${(accessRows2 as any[]).length}`);
     }
   } finally {
     await connection.end();
   }
 
   if (!hasAccess) {
-    console.log(`[GUILD_LAYOUT] Access denied for guild ${id}, user ${token.sub}`);
+    console.log(`[GUILD_LAYOUT] Access denied for guild ${id}, user ${token.sub} - REDIRECTING TO /guilds`);
+    console.log(`[GUILD_LAYOUT] Redirect URL: /guilds`);
     redirect("/guilds");
   }
 

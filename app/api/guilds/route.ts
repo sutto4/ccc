@@ -324,10 +324,15 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   for (const userGuild of botInstalledUserGuilds) {
     try {
-      console.log(`[GUILDS-DEBUG] Checking permission for guild ${userGuild.id} (${userGuild.name})`);
+      console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
       // Check if user has management permissions in this guild
       const hasPermission = await checkUserGuildPermission(userId, userGuild.id, accessToken);
-      console.log(`[GUILDS-DEBUG] Permission result for ${userGuild.id}: ${hasPermission}`);
+      console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
+
+      // EXTRA DEBUGGING: Let's see what checkUserGuildPermission is doing
+      if (!hasPermission) {
+        console.log(`[SECURITY-AUDIT] 🚨 PERMISSION DENIED for user ${userId} on guild ${userGuild.id}`);
+      }
 
       if (hasPermission) {
         accessibleUserGuilds.push(userGuild);
@@ -341,9 +346,9 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
     }
   }
 
-  console.log(`[GUILDS] Permission check results: ${accessibleUserGuilds.length}/${botInstalledUserGuilds.length} guilds accessible`);
-  console.log(`[GUILDS-DEBUG] accessibleUserGuilds:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[GUILDS-DEBUG] botInstalledUserGuilds:`, botInstalledUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${botInstalledUserGuilds.length} guilds accessible for user ${userId}`);
+  console.log(`[SECURITY-AUDIT] ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] TOTAL BOT GUILDS:`, botInstalledUserGuilds.map(g => ({ id: g.id, name: g.name })));
 
   // Since we've already filtered by bot installation, just normalize the results
   const results = await normalizeAccessibleGuilds(accessibleUserGuilds);
