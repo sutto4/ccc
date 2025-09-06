@@ -159,6 +159,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   const requestId = `${requestCounter}-${Date.now()}`;
 
   console.log(`=== GUILDS API CALLED #${requestCounter} [${requestId}] ===`);
+  console.log(`[SECURITY-AUDIT] User ID: ${discordId}`);
   console.log('Access token available:', !!accessToken);
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Timestamp:', new Date().toISOString());
@@ -169,7 +170,8 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   console.log('Bot base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
-  const tokenKey = accessToken.slice(0, 24);
+  const tokenKey = `${discordId}:${accessToken.slice(0, 24)}`;
+  console.log(`[SECURITY-AUDIT] User token key: ${tokenKey}, Discord ID: ${discordId}`);
   const rl = limiter.check(`rl:guilds:${tokenKey}`);
   if (!rl.allowed) {
     const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
@@ -188,6 +190,8 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
+  console.log(`[SECURITY-AUDIT] Cache key: ${ugCacheKey}, cached guilds: ${userGuilds.length}`);
+  console.log(`[SECURITY-AUDIT] Cache should be user-specific: ${ugCacheKey.startsWith(`userGuilds:${discordId}:`)}`);
 
   console.log('🔍 Guilds API Debug:');
   console.log('- Cache key:', ugCacheKey);
@@ -276,7 +280,8 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   // OPTIMIZATION: First filter by bot installation, then check permissions
   // This is much more efficient than checking permissions for all user's guilds
 
-  console.log(`[GUILDS] User has ${userGuilds.length} total Discord guilds`);
+  console.log(`[SECURITY-AUDIT] User ${discordId} has ${userGuilds.length} total Discord guilds`);
+  console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
 
   // Get bot-installed guilds first
   const installedGuilds = await fetchInstalledGuilds(botBase);
@@ -291,7 +296,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   // Now check permissions only for bot-installed guilds (much more efficient!)
   const accessibleUserGuilds = [];
-  const userId = discordId; // Get user ID from auth context
+  const userId = discordId!; // Get user ID from auth context (guaranteed by withAuth)
 
   console.log(`[GUILDS-DEBUG] Starting permission checks for ${botInstalledUserGuilds.length} guilds`);
   console.log(`[GUILDS-DEBUG] User ID: ${userId}`);
@@ -332,6 +337,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   // SECURITY: No fallbacks - only return authorized, bot-installed guilds
 
   console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
+  console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name })));
   console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name })));
   return NextResponse.json({ guilds: results });
 });
