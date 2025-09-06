@@ -2,14 +2,154 @@ import { NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { withAuth } from "@/lib/authz";
+import mysql from 'mysql2/promise';
 
 const limiter = createRateLimiter(10, 60_000); // 10 requests per minute per key
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
+// Helper function to check user permissions for a guild
+async function checkUserGuildPermission(userId: string, guildId: string, accessToken: string): Promise<boolean> {
+  try {
+    // Check server_access_control table first (most reliable)
+    let hasAccessControl = false;
+    try {
+      const connection = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASS || '',
+        database: process.env.DB_NAME || 'chester_bot',
+      });
+
+      try {
+        // Check if user has explicit access via server_access_control
+        const [accessResults] = await connection.execute(
+          'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+          [guildId, userId]
+        );
+
+        hasAccessControl = (accessResults as any[]).length > 0;
+        if (hasAccessControl) {
+          console.log(`[PERMISSION] Guild ${guildId}: user ${userId} has explicit access via server_access_control`);
+          return true; // Early return if user has explicit access
+        }
+      } finally {
+        await connection.end();
+      }
+    } catch (dbError) {
+      console.error('Database error checking server_access_control:', dbError);
+    }
+
+    // If no explicit access, check ownership via Discord API
+    let isOwner = false;
+    try {
+      const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (guildResponse.ok) {
+        const guildData = await guildResponse.json();
+        isOwner = userId === guildData.owner_id;
+        console.log(`[PERMISSION] Guild ${guildId}: user ${userId} is owner: ${isOwner}`);
+      } else {
+        console.log(`[PERMISSION] Could not verify ownership for guild ${guildId}`);
+        isOwner = false;
+      }
+    } catch (error) {
+      console.log(`[PERMISSION] Error checking ownership for guild ${guildId}`);
+      isOwner = false;
+    }
+
+    // Check if any of user's roles have app access by querying the database
+    let hasRoleAccess = false;
+
+    try {
+      const connection = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASS || '',
+        database: process.env.DB_NAME || 'chester_bot',
+      });
+
+      try {
+        // Check if the server_role_permissions table exists
+        const [tables] = await connection.execute(
+          "SHOW TABLES LIKE 'server_role_permissions'"
+        );
+
+        if ((tables as any[]).length > 0) {
+          // Query for role permissions
+          const [rows] = await connection.execute(
+            'SELECT role_id FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
+            [guildId]
+          );
+
+          const allowedRoleIds = (rows as any[]).map(row => row.role_id);
+
+          if (allowedRoleIds.length > 0) {
+            // There are role restrictions - check if user has allowed roles
+            try {
+              const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (memberResponse.ok) {
+                const memberData = await memberResponse.json();
+                const userRoles = memberData.roles || [];
+                hasRoleAccess = userRoles.some((roleId: string) => allowedRoleIds.includes(roleId));
+                console.log(`[PERMISSION] Guild ${guildId}: user has ${userRoles.length} roles, ${hasRoleAccess ? 'HAS' : 'NO'} allowed roles`);
+              } else {
+                // If we can't get member data but there are role restrictions,
+                // deny access for security (don't assume user has roles)
+                console.log(`[PERMISSION] Could not get member data for guild ${guildId}, denying role access`);
+                hasRoleAccess = false;
+              }
+            } catch (memberError) {
+              console.error('Failed to get user roles:', memberError);
+              // If we can't get member data but there are role restrictions,
+              // deny access for security (don't assume user has roles)
+              hasRoleAccess = false;
+            }
+          } else {
+            // No specific role restrictions - deny access (require explicit permissions)
+            hasRoleAccess = false;
+            console.log(`[PERMISSION] No role restrictions for guild ${guildId}, denying access`);
+          }
+        } else {
+          // If no permissions table exists, deny access (require explicit setup)
+          hasRoleAccess = false;
+          console.log(`[PERMISSION] No role permissions table found for guild ${guildId}, denying access`);
+        }
+      } finally {
+        await connection.end();
+      }
+    } catch (dbError) {
+      console.error('Database error checking permissions:', dbError);
+      // Deny access on database errors for strict security
+      hasRoleAccess = false;
+      console.log(`[PERMISSION] Database error for guild ${guildId}, denying access`);
+    }
+
+    const canUseApp = isOwner || hasRoleAccess;
+
+    console.log(`[PERMISSION] Guild ${guildId}: user=${userId}, owner=${isOwner}, roleAccess=${hasRoleAccess}, canUseApp=${canUseApp}`);
+
+    return canUseApp;
+  } catch (error) {
+    console.error('Error checking guild permission:', error);
+    return false; // Deny access on error
+  }
+}
+
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 let requestCounter = 0;
-export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken }) => {
+export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, discordId }) => {
   requestCounter++;
   const requestId = `${requestCounter}-${Date.now()}`;
 
@@ -120,7 +260,29 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
     }
   }
 
-  const results = await intersectAndNormalize(userGuilds, botBase);
+  // SECURITY: Check user permissions for each guild before showing in list
+  const accessibleUserGuilds = [];
+  const userId = discordId; // Get user ID from auth context
+
+  for (const userGuild of userGuilds) {
+    try {
+      // Check if user has management permissions in this guild
+      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, accessToken);
+      if (hasPermission) {
+        accessibleUserGuilds.push(userGuild);
+        console.log(`[GUILDS] User ${userId} has permission for guild ${userGuild.id}`);
+      } else {
+        console.log(`[GUILDS] User ${userId} denied permission for guild ${userGuild.id}`);
+      }
+    } catch (error) {
+      console.error(`[GUILDS] Error checking permission for guild ${userGuild.id}:`, error);
+      // Deny access if we can't verify permissions
+    }
+  }
+
+  console.log(`[GUILDS] Permission check results: ${accessibleUserGuilds.length}/${userGuilds.length} guilds accessible`);
+
+  const results = await intersectAndNormalize(accessibleUserGuilds, botBase);
   console.log('Final results:', {
     guildCount: results.length,
     guilds: results.map(g => ({ id: g.id, name: g.name })),
@@ -128,60 +290,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken })
     requestId: Math.random().toString(36).substr(2, 9)
   });
 
-  // If no guilds found and botBase is configured, also return user guilds for debugging
-  if (results.length === 0 && botBase) {
-    console.log('No intersecting guilds found, returning all user guilds for debugging');
-    console.log('Available user guilds:', userGuilds.map(g => ({ id: g.id, name: g.name })));
-    const userGuildsNormalized = userGuilds.map((g: any) => {
-      const id = String((g && (g as any).id) || "");
-      const icon = (g && (g as any).icon as string | null) || null;
-      const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
-
-      return {
-        id,
-        name: String((g && (g as any).name) || ""),
-        memberCount: 0,
-        roleCount: 0,
-        iconUrl,
-        premium: false,
-        createdAt: null,
-        group: null,
-      };
-    });
-    return NextResponse.json({ guilds: userGuildsNormalized });
-  }
-
-  // AGGRESSIVE FALLBACK: If no results in production, return user guilds anyway
-  if (results.length === 0 && process.env.NODE_ENV === 'production') {
-    console.log('🚨 PRODUCTION FALLBACK TRIGGERED: No intersecting guilds found');
-    console.log('- User guilds available:', userGuilds.length);
-    console.log('- Bot base configured:', !!botBase);
-    const userGuildsNormalized = userGuilds.map((g: any) => {
-      const id = String((g && (g as any).id) || "");
-      const icon = (g && (g as any).icon as string | null) || null;
-      const iconUrl = icon && id ? `https://cdn.discordapp.com/icons/${id}/${icon}.png` : null;
-
-      return {
-        id,
-        name: String((g && (g as any).name) || ""),
-        memberCount: 0,
-        roleCount: 0,
-        iconUrl,
-        premium: false,
-        createdAt: null,
-        group: null,
-      };
-    });
-    return NextResponse.json({
-      guilds: userGuildsNormalized,
-      debug: {
-        environment: process.env.NODE_ENV,
-        botBaseConfigured: !!botBase,
-        userGuildsCount: userGuilds.length,
-        fallbackReason: 'production_no_results'
-      }
-    });
-  }
+  // SECURITY: No fallbacks - only return authorized, bot-installed guilds
 
   console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
   return NextResponse.json({ guilds: results });

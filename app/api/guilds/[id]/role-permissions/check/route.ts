@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { getToken } from 'next-auth/jwt';
 import { authOptions } from '@/lib/auth';
 import mysql from 'mysql2/promise';
 import { env } from '@/lib/env';
@@ -25,6 +26,12 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get access token from JWT for Discord API calls
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (!token?.accessToken) {
+      return NextResponse.json({ error: 'No access token' }, { status: 401 });
+    }
+
     const { id: guildId } = await params;
     const body = await request.json();
     const { userId, userRoles } = body;
@@ -33,8 +40,46 @@ export async function POST(
       return NextResponse.json({ error: 'Missing userId or userRoles' }, { status: 400 });
     }
 
-    // Check if user is server owner (simplified check)
-    const isOwner = userId === session.user.id;
+    // CRITICAL SECURITY: Verify user actually has access to this guild via Discord API
+    let userGuildAccess = false;
+    let actualOwnerId = null;
+
+    try {
+      const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
+        headers: {
+          Authorization: `Bearer ${token.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (guildResponse.ok) {
+        const guildData = await guildResponse.json();
+        userGuildAccess = true;
+        actualOwnerId = guildData.owner_id;
+      } else if (guildResponse.status === 403) {
+        // User doesn't have access to this guild
+        console.log(`[PERMISSION] User ${userId} denied access to guild ${guildId}`);
+        return NextResponse.json({
+          canUseApp: false,
+          isOwner: false,
+          hasRoleAccess: false,
+          userId,
+          userRoles
+        });
+      }
+    } catch (discordError) {
+      console.error('Failed to verify guild access:', discordError);
+      return NextResponse.json({
+        canUseApp: false,
+        isOwner: false,
+        hasRoleAccess: false,
+        userId,
+        userRoles
+      });
+    }
+
+    // Check if user is the actual server owner
+    const isOwner = userId === actualOwnerId;
     
     // Check if any of user's roles have app access by querying the database
     let hasRoleAccess = false;
@@ -57,16 +102,18 @@ export async function POST(
           const allowedRoleIds = (rows as any[]).map(row => row.role_id);
           hasRoleAccess = userRoles.some((roleId: string) => allowedRoleIds.includes(roleId));
         } else {
-          // If no permissions table exists, allow access to all authenticated users
-          hasRoleAccess = true;
+          // If no permissions table exists, only allow server owner
+          hasRoleAccess = false;
+          console.log(`[PERMISSION] No role permissions table found for guild ${guildId}, restricting to owner only`);
         }
       } finally {
         await connection.end();
       }
     } catch (dbError) {
       console.error('Database error checking permissions:', dbError);
-      // If database fails, allow access to prevent blocking users
-      hasRoleAccess = true;
+      // SECURITY: If database fails, deny access to prevent unauthorized access
+      hasRoleAccess = false;
+      console.log(`[PERMISSION] Database error for guild ${guildId}, denying access for security`);
     }
     
     const canUseApp = isOwner || hasRoleAccess;
