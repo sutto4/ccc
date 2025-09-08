@@ -109,28 +109,46 @@ async function checkUserGuildPermission(userId: string, guildId: string, accessT
             // There are role restrictions - check if user has allowed roles
             console.log(`[PERMISSION] Guild ${guildId}: checking ${allowedRoleIds.length} configured roles`);
 
-            // 🚨 SECURITY FIX: Actually check user's roles instead of allowing everyone
-            // For now, deny access if roles are configured but we can't verify them
-            hasRoleAccess = false;
-            console.log(`[PERMISSION] Guild ${guildId}: denying access - role verification not implemented yet`);
+            // Check if user has any of the allowed roles by fetching from Discord API
+            try {
+              const userRolesResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+                headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }
+              });
+              
+              if (userRolesResponse.ok) {
+                const memberData = await userRolesResponse.json();
+                const userRoleIds = memberData.roles || [];
+                console.log(`[PERMISSION] User ${userId} has roles in guild ${guildId}:`, userRoleIds);
+                
+                // Check if any of user's roles are in the allowed list
+                hasRoleAccess = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
+                console.log(`[PERMISSION] User role access check result: ${hasRoleAccess}`);
+              } else {
+                console.log(`[PERMISSION] Failed to fetch user roles for guild ${guildId}:`, userRolesResponse.status);
+                hasRoleAccess = false;
+              }
+            } catch (roleError) {
+              console.error('[PERMISSION] Error fetching user roles:', roleError);
+              hasRoleAccess = false;
+            }
           } else {
-            // No specific role restrictions configured
-            hasRoleAccess = false;
-            console.log(`[PERMISSION] Guild ${guildId}: no role restrictions configured`);
+            // No specific role restrictions configured - allow access
+            hasRoleAccess = true;
+            console.log(`[PERMISSION] Guild ${guildId}: no role restrictions configured - allowing access`);
           }
         } else {
-          // If no permissions table exists, deny access (require explicit setup)
-          hasRoleAccess = false;
-          console.log(`[PERMISSION] No role permissions table found for guild ${guildId}, denying access`);
+          // If no permissions table exists, allow access by default
+          hasRoleAccess = true;
+          console.log(`[PERMISSION] No role permissions table found for guild ${guildId}, allowing access by default`);
         }
       } finally {
         await connection.end();
       }
     } catch (dbError) {
       console.error('Database error checking permissions:', dbError);
-      // Deny access on database errors for strict security
-      hasRoleAccess = false;
-      console.log(`[PERMISSION] Database error for guild ${guildId}, denying access`);
+      // Allow access on database errors to prevent blocking users
+      hasRoleAccess = true;
+      console.log(`[PERMISSION] Database error for guild ${guildId}, allowing access by default`);
     }
 
     const canUseApp = isOwner || hasRoleAccess;
@@ -162,6 +180,10 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   console.log(`[SECURITY-AUDIT] REQUEST ID: ${requestId}`);
   console.log(`[SECURITY-AUDIT] USER ID: ${discordId}`);
   console.log(`[SECURITY-AUDIT] UNIQUE SESSION: ${discordId}-${requestId}`);
+  console.log(`[SECURITY-AUDIT] ACCESS TOKEN START: ${accessToken?.substring(0, 20)}...`);
+  console.log(`[SECURITY-AUDIT] ENVIRONMENT: ${process.env.NODE_ENV}`);
+  console.log(`[SECURITY-AUDIT] BOT API URL: ${process.env.SERVER_API_BASE_URL}`);
+  console.log(`[SECURITY-AUDIT] DATABASE: ${process.env.DB_HOST}/${process.env.DB_NAME}`);
   console.log('Access token available:', !!accessToken);
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Timestamp:', new Date().toISOString());
@@ -202,13 +224,14 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
   // SECURITY: Verify cached data belongs to this user
   if (userGuilds.length > 0) {
-    console.log(`[SECURITY-AUDIT] CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
-    console.log(`[SECURITY-AUDIT] CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE KEY: ${ugCacheKey}`);
 
     // EMERGENCY SECURITY: Clear cache if it doesn't belong to this user
     if (discordId && !ugCacheKey.includes(discordId)) {
-      console.log(`[SECURITY-ALERT] 🚨 CACHE POLLUTION DETECTED! Clearing cache for user ${discordId}`);
-      // Note: SimpleTTLCache might not have del method, cache will expire naturally
+      console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - CACHE POLLUTION DETECTED! User ${discordId} got cache for different user`);
+      console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - FORCED FRESH FETCH for user ${discordId}`);
       userGuilds = []; // Force fresh fetch
     }
   }
@@ -346,9 +369,11 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
     }
   }
 
-  console.log(`[SECURITY-AUDIT] FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${botInstalledUserGuilds.length} guilds accessible for user ${userId}`);
-  console.log(`[SECURITY-AUDIT] ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[SECURITY-AUDIT] TOTAL BOT GUILDS:`, botInstalledUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${botInstalledUserGuilds.length} guilds accessible for user ${userId}`);
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL BOT GUILDS:`, botInstalledUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${botInstalledUserGuilds.length} available guilds`);
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
 
   // Since we've already filtered by bot installation, just normalize the results
   const results = await normalizeAccessibleGuilds(accessibleUserGuilds);
