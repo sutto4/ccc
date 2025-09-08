@@ -129,8 +129,8 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Refresh if token is expired or will expire in next 1 hour (more conservative)
-      if (expiresAt && refreshToken && (currentTime > expiresAt || (expiresAt - currentTime) < 3600)) {
+      // Refresh if token is expired or will expire in next 2 hours (more conservative)
+      if (expiresAt && refreshToken && (currentTime > expiresAt || (expiresAt - currentTime) < 7200)) {
         console.log('[TOKEN-REFRESH] Token expired or expiring within 1 hour, attempting refresh...');
         try {
           const response = await fetch('https://discord.com/api/oauth2/token', {

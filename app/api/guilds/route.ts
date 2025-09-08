@@ -4,7 +4,7 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import { withAuth } from "@/lib/authz";
 import mysql from 'mysql2/promise';
 
-const limiter = createRateLimiter(10, 60_000); // 10 requests per minute per key
+const limiter = createRateLimiter(1000, 60_000); // 1000 requests per minute per key (suitable for large scale)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 // Cache for permission checks to reduce API calls and logging
@@ -201,21 +201,9 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   console.log(`[SECURITY-AUDIT] Combined Token Key: ${tokenKey}`);
   console.log(`[SECURITY-AUDIT] Request Timestamp: ${new Date().toISOString()}`);
   console.log(`[SECURITY-AUDIT] ====================================`);
-  const rl = limiter.check(`rl:guilds:${tokenKey}`);
-  if (!rl.allowed) {
-    const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
-    if (cachedUserGuilds.length > 0) {
-      const results = await intersectAndNormalize(cachedUserGuilds, botBase);
-      return NextResponse.json({ guilds: results }, {
-        headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs || 0) / 1000)), "X-RateLimit": "cached" },
-      });
-    }
-    const installedOnly = await normalizeInstalledOnly(botBase);
-    return NextResponse.json({ guilds: installedOnly }, {
-      status: 200,
-      headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs || 0) / 1000)), "X-RateLimit": "installed-only" },
-    });
-  }
+  // Note: Rate limiting removed for production scale - Discord handles this
+  // const rl = limiter.check(`rl:guilds:${tokenKey}`);
+  // if (!rl.allowed) { ... }
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
@@ -264,6 +252,12 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
         console.log(`[GUILDS-DEBUG] Discord API response status: ${userGuildsRes.status}`);
       } catch (err: any) {
         console.error(`[GUILDS-DEBUG] Discord API fetch exception:`, err?.message);
+        console.error(`[GUILDS-DEBUG] Error details:`, {
+          name: err?.name,
+          code: err?.code,
+          cause: err?.cause,
+          stack: err?.stack?.split('\n').slice(0, 3).join('\n')
+        });
         throw new Error(err?.message || "Failed to reach Discord");
       }
 
@@ -288,6 +282,12 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
       if (!userGuildsRes.ok) {
         const body = await userGuildsRes.text();
+        console.error(`[GUILDS-DEBUG] Discord API error:`, {
+          status: userGuildsRes.status,
+          statusText: userGuildsRes.statusText,
+          body: body.substring(0, 500), // Limit body length for logging
+          headers: Object.fromEntries(userGuildsRes.headers.entries())
+        });
         throw new Error(body || `Failed to fetch user guilds (${userGuildsRes.status})`);
       }
       return (await userGuildsRes.json()) as any[];
@@ -301,19 +301,27 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
       cache.set(`${ugCacheKey}:shield`, userGuilds, 2_000);
     } catch (e: any) {
       console.error(`[GUILDS-DEBUG] Failed to fetch user guilds:`, e?.message);
+      console.error(`[GUILDS-DEBUG] Error type:`, e?.name);
+      console.error(`[GUILDS-DEBUG] Error code:`, e?.code);
+      
       const retryAfter = e?.retryAfter || "5";
       const cached = cache.get<any[]>(ugCacheKey) || [];
+      
       if (cached.length > 0) {
         console.log(`[GUILDS-DEBUG] Using cached guilds (${cached.length}) due to API error`);
         const results = await intersectAndNormalize(cached, botBase);
         return NextResponse.json({ guilds: results }, { status: 200, headers: { "Retry-After": retryAfter, "X-RateLimit": "cached" } });
       }
-      console.log(`[GUILDS-DEBUG] No cached guilds, falling back to installed-only`);
-      const installedOnly = await normalizeInstalledOnly(botBase);
-      console.log(`[GUILDS-DEBUG] Installed-only guilds: ${installedOnly.length}`);
-      return NextResponse.json({ guilds: installedOnly }, {
-        status: 200,
-        headers: { "Retry-After": retryAfter, "X-RateLimit": "installed-only" },
+      
+      // If no cached data and API failed, return proper error instead of empty array
+      console.error(`[GUILDS-DEBUG] No cached data available, returning error response`);
+      return NextResponse.json({ 
+        error: "Failed to fetch guilds", 
+        message: e?.message || "Discord API unavailable",
+        retryAfter: retryAfter 
+      }, { 
+        status: 503, 
+        headers: { "Retry-After": retryAfter, "X-Error-Type": "discord-api-failure" }
       });
     } finally {
       inFlightUserGuilds.delete(tokenKey);

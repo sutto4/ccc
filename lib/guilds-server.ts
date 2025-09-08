@@ -6,7 +6,7 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import mysql from 'mysql2/promise';
 import { env } from '@/lib/env';
 
-const limiter = createRateLimiter(10, 60_000); // 10 requests per minute per key
+const limiter = createRateLimiter(1000, 60_000); // 1000 requests per minute per key (suitable for large scale)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 export type Guild = {
@@ -63,15 +63,9 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
   // Per-token rate limit to avoid hammering Discord
   // Use user ID + token hash to ensure unique per-user caching
   const tokenKey = `user_${userId}_${Buffer.from(accessToken).toString('base64').slice(0, 32)}`;
-  const rl = limiter.check(`rl:guilds:${tokenKey}`);
-  
-  if (!rl.allowed) {
-    const cachedUserGuilds = cache.get<any[]>(`userGuilds:${tokenKey}`) || [];
-    if (cachedUserGuilds.length > 0) {
-      return await intersectAndNormalize(cachedUserGuilds, botBase);
-    }
-    return await normalizeInstalledOnly(botBase);
-  }
+  // Note: Rate limiting removed for production scale - Discord handles this
+  // const rl = limiter.check(`rl:guilds:${tokenKey}`);
+  // if (!rl.allowed) { ... }
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
@@ -153,7 +147,8 @@ export async function getGuildsForUser(accessToken: string): Promise<Guild[]> {
       if (cached.length > 0) {
         return await intersectAndNormalize(cached, botBase);
       }
-      return await normalizeInstalledOnly(botBase);
+      // SECURITY FIX: Never return all guilds as fallback - this is a major security vulnerability
+    return [];
     }
   }
 
