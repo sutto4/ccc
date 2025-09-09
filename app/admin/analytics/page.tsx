@@ -213,7 +213,7 @@ function RequestContextDetails({ request }: { request: RecentRequest }) {
   );
 }
 
-export default async function AdminAnalytics(undefined) {
+export default function AdminAnalytics() {
   return (
     <AuthErrorBoundary>
       <AdminAnalyticsContent undefined />
@@ -221,7 +221,7 @@ export default async function AdminAnalytics(undefined) {
   );
 }
 
-async function AdminAnalyticsContent(undefined) {
+function AdminAnalyticsContent() {
   
   const [stats, setStats] = useState<APIStats | null>(null);
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);

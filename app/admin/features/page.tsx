@@ -20,7 +20,7 @@ interface Feature {
   disabled_guilds: number;
 }
 
-export default async function AdminFeaturesPage(undefined) {
+export default function AdminFeaturesPage() {
   return (
     <AuthErrorBoundary>
       <AdminFeaturesPageContent undefined />
@@ -28,7 +28,7 @@ export default async function AdminFeaturesPage(undefined) {
   );
 }
 
-async function AdminFeaturesPageContent(undefined) {
+function AdminFeaturesPageContent() {
   
   const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState(true);

@@ -35,7 +35,7 @@ interface Guild {
   member_count?: number;
 }
 
-export default async function AdminGuildSettingsPage(undefined) {
+export default function AdminGuildSettingsPage() {
   return (
     <AuthErrorBoundary>
       <AdminGuildSettingsPageContent undefined />
@@ -43,7 +43,7 @@ export default async function AdminGuildSettingsPage(undefined) {
   );
 }
 
-async function AdminGuildSettingsPageContent(undefined) {
+function AdminGuildSettingsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id;

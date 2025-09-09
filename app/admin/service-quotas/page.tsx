@@ -53,7 +53,7 @@ interface QuotaViolation {
   createdAt: string;
 }
 
-export default async function ServiceQuotasPage(undefined) {
+export default function ServiceQuotasPage() {
   return (
     <AuthErrorBoundary>
       <ServiceQuotasPageContent undefined />
@@ -61,7 +61,7 @@ export default async function ServiceQuotasPage(undefined) {
   );
 }
 
-async function ServiceQuotasPageContent(undefined) {
+function ServiceQuotasPageContent() {
   
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus[]>([]);
   const [violations, setViolations] = useState<QuotaViolation[]>([]);

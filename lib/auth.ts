@@ -117,18 +117,14 @@ export const authOptions: NextAuthOptions = {
         ;(token as any).accessToken = account.access_token
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).refreshToken = account.refresh_token
-        // Handle expires_at format (might be in milliseconds or seconds)
+        // Discord returns expires_at in seconds (standard OAuth2)
         let expiresAt = account.expires_at;
-        if (expiresAt) {
-          // If expires_at is in milliseconds (much larger than current time in seconds), convert to seconds
-          if (expiresAt > Date.now()) {
-            expiresAt = Math.floor(expiresAt / 1000);
-            console.log('[AUTH] Converted expires_at from milliseconds to seconds');
-          }
-        } else {
+        if (!expiresAt) {
           // Default to 7 days if not provided
           expiresAt = Math.floor(Date.now() / 1000) + 604800;
           console.log('[AUTH] No expires_at provided, defaulting to 7 days');
+        } else {
+          console.log('[AUTH] Discord provided expires_at:', expiresAt, 'formatted:', new Date(expiresAt * 1000).toISOString());
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,7 +171,8 @@ export const authOptions: NextAuthOptions = {
         if ((profile as any).id) {
           SessionManager.updateSessionState((profile as any).id, {
             isValid: true,
-            refreshAttempts: 0
+            refreshAttempts: 0,
+            lastRefresh: Date.now()
           });
         }
 
@@ -199,9 +196,37 @@ export const authOptions: NextAuthOptions = {
         expiryTimeFormatted: expiresAt ? new Date(expiresAt * 1000).toISOString() : 'N/A'
       });
 
-      // Check if token needs refresh (only when expired - not prematurely)
-      if (accessToken && refreshToken && expiresAt && now > expiresAt) { // Only refresh when actually expired
-        console.log('[AUTH] Token expired or close to expiry, attempting refresh...');
+      // Check if token needs refresh (only when actually expired or very close to expiry)
+      const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
+      const shouldRefresh = accessToken && refreshToken && expiresAt && (now > expiresAt || timeUntilExpiry < 21600); // Refresh if expired or < 6 hours left
+
+      if (shouldRefresh) {
+        // Check if we should attempt refresh (prevent infinite loops)
+        const userId = (token as any).discordId;
+        const sessionState = userId ? SessionManager.getSessionState(userId) : null;
+
+        // Prevent refresh attempts more than once every 30 seconds
+        if (sessionState?.lastRefresh && (Date.now() - sessionState.lastRefresh) < 30000) {
+          console.log('[AUTH] Skipping refresh - too soon since last attempt');
+          return token;
+        }
+
+        // Limit refresh attempts to prevent infinite loops
+        if (sessionState && sessionState.refreshAttempts >= 3) {
+          console.log('[AUTH] Too many refresh attempts, forcing re-login');
+          (token as any).accessToken = null;
+          (token as any).refreshToken = null;
+          (token as any).expiresAt = null;
+          token.exp = Math.floor(Date.now() / 1000) - 1;
+          return token;
+        }
+
+        console.log('[AUTH] Token needs refresh:', {
+          timeUntilExpiry: `${Math.round(timeUntilExpiry / 3600)} hours (${Math.round(timeUntilExpiry)}s)`,
+          isExpired: now > expiresAt,
+          willExpireSoon: timeUntilExpiry < 21600,
+          refreshAttempts: sessionState?.refreshAttempts || 0
+        });
 
         try {
           const refreshResponse = await fetch('https://discord.com/api/oauth2/token', {
@@ -230,13 +255,32 @@ export const authOptions: NextAuthOptions = {
             (token as any).expiresAt = Math.floor(Date.now() / 1000) + (refreshData.expires_in || 604800); // Default to 7 days
 
             console.log('[AUTH] Updated token with refreshed data');
+
+            // Update session state on successful refresh
+            if (userId) {
+              SessionManager.updateSessionState(userId, {
+                isValid: true,
+                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
+                lastRefresh: Date.now()
+              });
+            }
           } else {
-            console.error('[AUTH] ❌ Token refresh failed:', refreshResponse.status);
+            console.error('[AUTH] ❌ Token refresh failed:', refreshResponse.status, await refreshResponse.text());
             // Clear tokens to force re-login
             (token as any).accessToken = null;
             (token as any).refreshToken = null;
             (token as any).expiresAt = null;
             token.exp = Math.floor(Date.now() / 1000) - 1; // Force session expiry
+            console.log('[AUTH] Cleared tokens due to refresh failure - user will need to re-login');
+
+            // Update session state on refresh failure
+            if (userId) {
+              SessionManager.updateSessionState(userId, {
+                isValid: false,
+                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
+                lastRefresh: Date.now()
+              });
+            }
           }
         } catch (error) {
           console.error('[AUTH] Token refresh error:', error);
@@ -245,6 +289,15 @@ export const authOptions: NextAuthOptions = {
           (token as any).refreshToken = null;
           (token as any).expiresAt = null;
           token.exp = Math.floor(Date.now() / 1000) - 1; // Force session expiry
+
+          // Update session state on refresh error
+          if (userId) {
+            SessionManager.updateSessionState(userId, {
+              isValid: false,
+              refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
+              lastRefresh: Date.now()
+            });
+          }
         }
       }
 
@@ -265,3 +318,42 @@ export const authOptions: NextAuthOptions = {
     },
   },
 }
+
+// Utility function to force token refresh for API routes
+export async function forceTokenRefresh(req: NextRequest): Promise<boolean> {
+  try {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET
+    });
+
+    if (!token || !(token as any).accessToken || !(token as any).refreshToken) {
+      return false;
+    }
+
+    const refreshToken = (token as any).refreshToken;
+    const refreshResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID || '',
+        client_secret: process.env.DISCORD_CLIENT_SECRET || '',
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+
+    if (refreshResponse.ok) {
+      console.log('[AUTH] Force token refresh successful');
+      return true;
+    }
+
+    console.error('[AUTH] Force token refresh failed:', refreshResponse.status);
+    return false;
+  } catch (error) {
+    console.error('[AUTH] Force token refresh error:', error);
+    return false;
+  }
+}
+
+export default NextAuth(authOptions);
