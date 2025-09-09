@@ -72,7 +72,7 @@ export default async function AdminDashboard() {
   );
 }
 
-async function AdminDashboardContent() {
+function AdminDashboardContent() {
   
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
