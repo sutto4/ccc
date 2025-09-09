@@ -6,6 +6,7 @@ import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crown, Shield, Settings } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface Feature {
   feature_key: string;
@@ -34,7 +35,16 @@ interface Guild {
   member_count?: number;
 }
 
-export default function AdminGuildSettingsPage() {
+export default async function AdminGuildSettingsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <AdminGuildSettingsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function AdminGuildSettingsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id;
   
@@ -589,4 +599,5 @@ export default function AdminGuildSettingsPage() {
       </div>
     </Section>
   );
+
 }

@@ -1,12 +1,15 @@
 // Lightweight authorization helpers to standardize API route handling
+import { TokenManager } from './token-manager';
+import { SessionManager } from './session-manager';
 
 export type AuthContext = { 
   accessToken: string;
   discordId?: string;
   role?: string;
+  isValid: boolean;
 };
 
-export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string; role?: string }> {
+export async function getAccessTokenFromRequest(req: Request): Promise<{ accessToken: string | null; discordId?: string; role?: string; isValid: boolean }> {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
 
   let accessToken: string | null = null;
@@ -32,6 +35,14 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
       discordId = (session as any)?.user?.discordId as string | undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       role = (session as any)?.role as string | undefined;
+      
+      // DEBUG: Log session data to identify the mismatch
+      console.log('[AUTHZ-DEBUG] Session user:', {
+        id: (session as any)?.user?.id,
+        discordId: (session as any)?.user?.discordId,
+        name: (session as any)?.user?.name,
+        email: (session as any)?.user?.email
+      });
     }
 
     // Get access token from JWT instead of session for security
@@ -39,6 +50,19 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
       const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
       if (token?.accessToken) {
         accessToken = accessToken || token.accessToken;
+        
+        // CRITICAL: Ensure token and session belong to the same user
+        const tokenDiscordId = (token as any)?.discordId;
+        if (tokenDiscordId && discordId && tokenDiscordId !== discordId) {
+          console.error('[AUTHZ-ERROR] 🚨 TOKEN/SESSION MISMATCH!', {
+            sessionDiscordId: discordId,
+            tokenDiscordId: tokenDiscordId,
+            accessToken: accessToken?.substring(0, 20) + '...'
+          });
+          // Clear the mismatched data
+          discordId = undefined;
+          accessToken = null;
+        }
       }
     } catch (error) {
       console.error('Error getting token from JWT:', error);
@@ -48,7 +72,23 @@ export async function getAccessTokenFromRequest(req: Request): Promise<{ accessT
     console.error('Error getting session from cookie:', error);
   }
 
-  return { accessToken, discordId, role };
+  // Validate authentication if we have all required data
+  let isValid = false;
+  if (accessToken && discordId) {
+    try {
+      const tokenStatus = await TokenManager.validateToken(accessToken);
+      isValid = tokenStatus.isValid;
+      
+      if (!isValid) {
+        SessionManager.invalidateSession(discordId);
+      }
+    } catch (error) {
+      console.error('[AUTHZ] Token validation error:', error);
+      isValid = false;
+    }
+  }
+
+  return { accessToken, discordId, role, isValid };
 }
 
 export function authHeader(accessToken: string): Record<string, string> {
@@ -61,14 +101,27 @@ export function withAuth<TCtx = any>(
   handler: (req: Request, ctx: TCtx, auth: AuthContext) => Promise<Response> | Response
 ) {
   return async (req: Request, ctx: TCtx) => {
-    const { accessToken, discordId, role } = await getAccessTokenFromRequest(req);
-    if (!accessToken) {
-      return new Response(JSON.stringify({ error: "No access token" }), {
+    const { accessToken, discordId, role, isValid } = await getAccessTokenFromRequest(req);
+    
+    if (!isValid || !accessToken || !discordId) {
+      console.error('[AUTHZ-ERROR] Invalid authentication state');
+      return new Response(JSON.stringify({ 
+        error: "Authentication required",
+        message: "Please login to continue",
+        redirectTo: "/signin"
+      }), {
         status: 401,
-        headers: { "content-type": "application/json" },
+        headers: { 
+          "content-type": "application/json",
+          "X-Auth-Required": "true",
+          "X-Redirect-To": "/signin"
+        },
       });
     }
-    return handler(req, ctx, { accessToken, discordId, role });
+
+    console.log(`[AUTHZ-SUCCESS] User ${discordId} authenticated`);
+    
+    return handler(req, ctx, { accessToken, discordId, role, isValid });
   };
 }
 

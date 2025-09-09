@@ -8,18 +8,19 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Bot, 
-  MessageSquare, 
-  Shield, 
-  Users, 
-  Settings, 
-  Zap, 
+import {
+  Bot,
+  MessageSquare,
+  Shield,
+  Users,
+  Settings,
+  Zap,
   Crown,
   CheckCircle,
   XCircle,
   AlertCircle
 } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface Feature {
   feature_name: string;
@@ -39,7 +40,16 @@ interface FeaturesResponse {
   features: GuildFeatures;
 }
 
-export default function GuildFeaturesSettings() {
+export default async function GuildFeaturesSettings(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <GuildFeaturesSettingsContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function GuildFeaturesSettingsContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
@@ -411,6 +421,7 @@ export default function GuildFeaturesSettings() {
       </div>
     </Section>
   );
+
 }
 
 // Helper function to get feature icons

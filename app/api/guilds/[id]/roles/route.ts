@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
@@ -114,7 +114,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
   }
 }
 
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   const { id: guildId } = await params;
   if (!/^[0-9]{5,20}$/.test(guildId)) {
     return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });

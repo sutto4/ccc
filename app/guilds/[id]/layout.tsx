@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import Image from "next/image";
 import mysql from 'mysql2/promise';
+import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 
 type Params = { id: string };
 
@@ -116,7 +117,9 @@ export default async function GuildLayout(
           <p className="text-muted-foreground text-sm">Guild ID: {guild.id}</p>
         </div>
       </div>
-      <div>{props.children}</div>
+      <AuthErrorBoundary>
+        <div>{props.children}</div>
+      </AuthErrorBoundary>
     </div>
   );
 }

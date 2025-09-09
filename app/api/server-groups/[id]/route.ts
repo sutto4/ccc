@@ -1,12 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/authz';
+import { getToken } from 'next-auth/jwt';
 import { query } from '@/lib/db';
 
-export const GET = withAuth(async (
+export const GET = async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-  auth
+  { params }: { params: Promise<{ id: string }> }
 ) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
     const { id } = await params;
     const groupId = parseInt(id);
@@ -23,7 +65,7 @@ export const GET = withAuth(async (
         id, name, description, created_at, updated_at
       FROM server_groups 
       WHERE id = ? AND owner_user_id = ?
-    `, [groupId, auth.discordId]);
+      `, [groupId, discordId]);
 
     if (!group) {
       return NextResponse.json(
@@ -46,9 +88,9 @@ export const GET = withAuth(async (
       ORDER BY g.guild_name
     `, [groupId]);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       group: { ...group, server_count: servers.length },
-      servers 
+      servers
     });
   } catch (error) {
     console.error('Error fetching server group:', error);
@@ -57,13 +99,55 @@ export const GET = withAuth(async (
       { status: 500 }
     );
   }
-});
+};
 
-export const PUT = withAuth(async (
+export const PUT = async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-  auth
+  { params }: { params: Promise<{ id: string }> }
 ) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
     const { id } = await params;
     const groupId = parseInt(id);
@@ -112,13 +196,55 @@ export const PUT = withAuth(async (
       { status: 500 }
     );
   }
-});
+};
 
-export const DELETE = withAuth(async (
+export const DELETE = async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-  auth
+  { params }: { params: Promise<{ id: string }> }
 ) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
     const { id } = await params;
     const groupId = parseInt(id);
@@ -131,9 +257,9 @@ export const DELETE = withAuth(async (
 
     // Delete the group (only if owner) - this will cascade to members
     const result = await query(`
-      DELETE FROM server_groups 
+      DELETE FROM server_groups
       WHERE id = ? AND owner_user_id = ?
-    `, [groupId, auth.discordId]);
+    `, [groupId, discordId]);
 
     if ((result as any).affectedRows === 0) {
       return NextResponse.json(
@@ -150,4 +276,4 @@ export const DELETE = withAuth(async (
       { status: 500 }
     );
   }
-});
+};

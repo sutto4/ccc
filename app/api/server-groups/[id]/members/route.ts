@@ -1,8 +1,51 @@
-import { NextResponse } from 'next/server';
-import { withAuth } from '@/lib/authz';
+import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import { query } from '@/lib/db';
 
-export const POST = withAuth(async (req, { params }: { params: Promise<{ id: string }> }, { discordId }) => {
+export const POST = async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  // Simple auth validation
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
     const { id } = await params;
     const groupId = parseInt(id);
@@ -13,10 +56,6 @@ export const POST = withAuth(async (req, { params }: { params: Promise<{ id: str
     const { guildId } = await req.json();
     if (!guildId) {
       return NextResponse.json({ error: 'Guild ID is required' }, { status: 400 });
-    }
-
-    if (!discordId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Verify group ownership
@@ -62,9 +101,51 @@ export const POST = withAuth(async (req, { params }: { params: Promise<{ id: str
     console.error('Error adding server to group:', error);
     return NextResponse.json({ error: 'Failed to add server to group' }, { status: 500 });
   }
-});
+};
 
-export const DELETE = withAuth(async (req, { params }: { params: Promise<{ id: string }> }, { discordId }) => {
+export const DELETE = async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  // Simple auth validation
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const discordId = (token as any).discordId as string;
+
+  if (!discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
     const { id } = await params;
     const groupId = parseInt(id);
@@ -105,4 +186,4 @@ export const DELETE = withAuth(async (req, { params }: { params: Promise<{ id: s
     console.error('Error removing server from group:', error);
     return NextResponse.json({ error: 'Failed to remove server from group' }, { status: 500 });
   }
-});
+};

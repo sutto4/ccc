@@ -18,13 +18,23 @@ import PremiumModal from "@/components/premium-modal";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
 import GuildVIPBadge from "@/components/guild-vip-badge";
 import ServerGroupsManager from "@/components/server-groups-manager";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface RolePermission {
   roleId: string;
   canUseApp: boolean;
 }
 
-export default function GuildSettingsPage() {
+export default async function GuildSettingsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <GuildSettingsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function GuildSettingsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session, status } = useSession();
@@ -1566,4 +1576,5 @@ export default function GuildSettingsPage() {
       )}
     </div>
   );
+
 }

@@ -25,6 +25,7 @@ import {
   UserPlus
 } from "lucide-react";
 import PremiumModal from "@/components/premium-modal";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface Guild {
   id: string;
@@ -63,7 +64,16 @@ interface HealthStatus {
   };
 }
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  return (
+    <AuthErrorBoundary>
+      <AdminDashboardContent />
+    </AuthErrorBoundary>
+  );
+}
+
+async function AdminDashboardContent() {
+  
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalServers: 0,
@@ -447,7 +457,7 @@ export default function AdminDashboard() {
                   }
                 } catch (error) {
                   console.error('❌ Manual sync error:', error);
-                  alert(`❌ Manual sync error: ${error.message}`);
+                  alert(`❌ Manual sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 }
               }}
               className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors font-semibold"
@@ -1047,4 +1057,5 @@ export default function AdminDashboard() {
       <PremiumModal open={testModalOpen} onOpenChange={setTestModalOpen} />
     </div>
   );
+
 }

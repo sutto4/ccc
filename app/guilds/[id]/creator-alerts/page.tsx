@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Trash2, Edit2, Plus, Save } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 type Platform = "twitch" | "youtube" | "x" | "tiktok" | "kick";
 
@@ -32,7 +33,16 @@ const PLATFORM_META: Record<Platform, { label: string; color: string; icon: stri
   kick: { label: "Kick", color: "#0077B6", icon: "👋" },
 };
 
-export default function CreatorAlertsPage() {
+export default async function CreatorAlertsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <CreatorAlertsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function CreatorAlertsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
 
@@ -394,6 +404,7 @@ export default function CreatorAlertsPage() {
       </Card>
     </div>
   );
+
 }
 
 

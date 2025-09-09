@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
 // PUT update feature
-export const PUT = withAuth(async (req, { params }, auth) => {
+export const PUT = AuthMiddleware.withAuth(async (req, { params }, auth) => {
   // Check if user is admin
   if (auth?.role !== 'admin' && auth?.role !== 'owner') {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
@@ -47,7 +47,7 @@ export const PUT = withAuth(async (req, { params }, auth) => {
 });
 
 // DELETE feature
-export const DELETE = withAuth(async (_req, { params }, auth) => {
+export const DELETE = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
   // Check if user is admin
   if (auth?.role !== 'admin' && auth?.role !== 'owner') {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });

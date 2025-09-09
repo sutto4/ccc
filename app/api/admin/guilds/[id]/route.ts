@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 
 // Database connection helper for Discord bot database
 async function query(sql: string, params?: any[]) {
@@ -21,7 +21,7 @@ async function query(sql: string, params?: any[]) {
 }
 
 // GET individual guild info for admin
-export const GET = withAuth(async (_req, { params }, auth) => {
+export const GET = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
   console.log('[ADMIN-GUILDS] Auth context:', { 
     hasAccessToken: !!auth?.accessToken, 
     hasDiscordId: !!auth?.discordId, 

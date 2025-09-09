@@ -4,8 +4,18 @@ import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import EmbeddedMessagesBuilder from "@/components/embedded-messages-builder";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default function EmbeddedMessagesPage() {
+export default function EmbeddedMessagesPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <EmbeddedMessagesPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+function EmbeddedMessagesPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params.id;
   const { data: session, status } = useSession();
@@ -22,4 +32,5 @@ export default function EmbeddedMessagesPage() {
   const premium = true;
 
   return <EmbeddedMessagesBuilder premium={premium} />;
+
 }

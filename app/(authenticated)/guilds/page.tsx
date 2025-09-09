@@ -1,53 +1,97 @@
-import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { authOptions } from "@/lib/auth";
-import { fetchGuilds, type Guild } from "@/lib/api";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import Section from "@/components/ui/section";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Folder, Users, Shield } from "lucide-react";
+import { Folder, Users, Shield, Bot, Zap, Star } from "lucide-react";
+import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 
-import { Bot, Zap, Star } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+interface Guild {
+  id: string;
+  name: string;
+  iconUrl?: string;
+  memberCount: number;
+  premium: boolean;
+  status: string;
+  createdAt: string;
+  features: string[];
+}
 
-export default async function GuildsPage() {
-  const session = await getServerSession(authOptions);
+export default function GuildsPage() {
+  return (
+    <AuthErrorBoundary>
+      <GuildsPageContent />
+    </AuthErrorBoundary>
+  );
+}
 
-  if (!session) {
-    redirect('/signin');
-  }
+function GuildsPageContent() {
+  const router = useRouter();
+  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Get access token from JWT (not session for security)
-  const cookieStore = await cookies();
-  const token = await getToken({ req: { cookies: cookieStore } as any, secret: process.env.NEXTAUTH_SECRET });
+  useEffect(() => {
+    async function fetchGuilds() {
+      try {
+        console.log('[GUILDS] Fetching guilds...');
 
-  if (!token?.accessToken) {
-    redirect("/signin");
-  }
+        // Since we're in authenticated layout, we should have valid session
+        // Just fetch the data directly
+        const response = await fetch('/api/guilds');
+        console.log('[GUILDS] Guilds API response:', response.status);
 
-  let guilds: Guild[] = [];
-  try {
-    // Fetch guilds using the authenticated API route
-    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
-      headers: {
-        'Cookie': cookieStore.toString(), // Pass cookies for authentication
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[GUILDS-DEBUG] All guilds received:', data.guilds.map(g => ({ id: g.id, name: g.name, iconUrl: g.iconUrl })));
-      console.log('[GUILDS-DEBUG] Guilds with icons:', data.guilds.filter(g => g.iconUrl).map(g => ({ id: g.id, name: g.name, iconUrl: g.iconUrl })));
-      guilds = data.guilds || [];
-    } else {
-      console.error('[FRONTEND-GUILDS] Failed to fetch guilds:', response.status, response.statusText);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[GUILDS] Guilds fetched successfully:', data.guilds?.length || 0, 'guilds');
+          setGuilds(data.guilds || []);
+        } else if (response.status === 401) {
+          console.log('[GUILDS] 401 response - redirecting to signin');
+          router.replace('/signin');
+          return;
+        } else {
+          console.error('[GUILDS] Unexpected response:', response.status);
+          // For other errors, show empty state instead of redirecting
+          setGuilds([]);
+        }
+      } catch (error) {
+        console.error('[GUILDS] Error fetching guilds:', error);
+        // On network errors, show empty state instead of redirecting
+        setGuilds([]);
+      } finally {
+        setLoading(false);
+      }
     }
-  } catch (error) {
-    console.error('Failed to fetch guilds:', error);
+
+    fetchGuilds();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="pl-4 pr-4 md:pr-6 md:pl-4 py-8">
+        <Section title="My Servers">
+          <div className="text-center py-12">
+            <div className="mx-auto max-w-2xl">
+              <div className="mb-8">
+                <div className="mx-auto h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-4">
+                  <Bot className="h-8 w-8 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                  Loading Your Servers
+                </h2>
+                <p className="text-lg text-gray-600 mb-8">
+                  Please wait while we fetch your Discord servers...
+                </p>
+              </div>
+            </div>
+          </div>
+        </Section>
+      </div>
+    );
   }
 
   if (guilds.length === 0) {

@@ -1,15 +1,57 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
-import { withAuth } from "@/lib/authz";
+import { getToken } from 'next-auth/jwt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const limiter = createRateLimiter(30, 60_000);
 
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: req,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
 	const { id: guildId } = await params;
 	if (!/^[0-9]{5,20}$/.test(guildId)) {
 		return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });
@@ -89,5 +131,5 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
 	];
 	cache.set(cacheKey, mock, 60_000);
 	return NextResponse.json(mock);
-});
+};
 

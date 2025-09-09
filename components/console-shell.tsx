@@ -17,45 +17,88 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
     if (session?.user) {
       // Check if this is the user's first visit
       const hasVisited = localStorage.getItem('servermate-first-visit');
-      
+
       // For testing: uncomment the next line to always show the modal
       // localStorage.removeItem('servermate-first-visit');
-      
+
       if (!hasVisited) {
         setShowWelcomeModal(true);
         localStorage.setItem('servermate-first-visit', 'true');
       }
 
-      // Fetch user's guilds for the welcome modal
-      fetch('/api/guilds')
-        .then(res => {
-          console.log('Guilds API response status:', res.status);
-          if (!res.ok) {
-            console.error('Guilds API error:', res.status, res.statusText);
-            return res.text().then(text => console.error('Error response:', text));
-          }
-          return res.json();
-        })
-        .then(data => {
-          console.log('Guilds API response data:', data);
-          if (data.guilds) {
-            console.log('Found guilds:', data.guilds.length);
-            setUserGuilds(data.guilds);
-          } else {
-            console.log('No guilds found in response');
-          }
-        })
-        .catch(err => console.error('Error fetching guilds:', err));
+      // Only fetch guilds if we haven't already loaded them successfully
+      // This prevents repeated failed requests
+      if (userGuilds.length === 0) {
+        console.log('ConsoleShell: Fetching user guilds for navigation...');
+        fetch('/api/guilds')
+          .then(res => {
+            console.log('ConsoleShell: Guilds API response status:', res.status);
+            if (!res.ok) {
+              // Log the error but don't throw - just set empty guilds
+              console.warn('ConsoleShell: Guilds API returned', res.status, '- skipping guild fetch');
+              return res.text().then(text => {
+                console.debug('ConsoleShell: Guilds API error details:', text);
+                // Don't throw error, just return null to indicate failure
+                return null;
+              });
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data && data.guilds) {
+              console.log('ConsoleShell: Successfully loaded', data.guilds.length, 'guilds');
+              setUserGuilds(data.guilds);
+            } else if (data === null) {
+              // API failed, set empty array
+              console.log('ConsoleShell: Guilds API failed, using empty array');
+              setUserGuilds([]);
+            } else {
+              console.log('ConsoleShell: No guilds found in response');
+              setUserGuilds([]);
+            }
+          })
+          .catch(err => {
+            console.warn('ConsoleShell: Error fetching guilds, using empty array:', err.message);
+            setUserGuilds([]); // Set empty array on error
+          });
+      }
 
-      // Check premium status
-      fetch('/api/user/premium-status')
-        .then(res => res.json())
-        .then(data => {
-          setIsPremium(data.isPremium || false);
-        })
-        .catch(err => console.error('Error fetching premium status:', err));
+      // Only check premium status if we haven't already
+      if (!isPremium) {
+        console.log('ConsoleShell: Checking premium status...');
+        fetch('/api/user/premium-status')
+          .then(res => {
+            console.log('ConsoleShell: Premium API response status:', res.status);
+            if (!res.ok) {
+              // Log warning but don't fail - just use default
+              console.warn('ConsoleShell: Premium API returned', res.status, '- using default false');
+              return res.text().then(text => {
+                console.debug('ConsoleShell: Premium API error details:', text);
+                return null;
+              });
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data && typeof data.isPremium === 'boolean') {
+              console.log('ConsoleShell: Premium status loaded:', data.isPremium);
+              setIsPremium(data.isPremium);
+            } else if (data === null) {
+              // API failed, keep default
+              console.log('ConsoleShell: Premium API failed, keeping default false');
+              setIsPremium(false);
+            } else {
+              console.log('ConsoleShell: Invalid premium response, defaulting to false');
+              setIsPremium(false);
+            }
+          })
+          .catch(err => {
+            console.warn('ConsoleShell: Error fetching premium status, using false:', err.message);
+            setIsPremium(false); // Default to false on error
+          });
+      }
     }
-  }, [session]);
+  }, [session, userGuilds.length, isPremium]);
 
   return (
     <div className="min-h-screen">

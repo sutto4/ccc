@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { getToken } from 'next-auth/jwt';
-import { authOptions } from '@/lib/auth';
 import mysql from 'mysql2/promise';
 import { env } from '@/lib/env';
 
@@ -16,24 +14,51 @@ async function getDbConnection() {
   });
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m No session found`);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get access token from JWT for Discord API calls
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    if (!token?.accessToken) {
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m No access token found`);
-      return NextResponse.json({ error: 'No access token' }, { status: 401 });
-    }
-
     const { id: guildId } = await params;
     const body = await request.json();
     const { userId, userRoles } = body;
@@ -54,7 +79,7 @@ export async function POST(
       console.log(`\x1b[31m[PERMISSION]\x1b[0m Making Discord API call to: https://discord.com/api/v10/guilds/${guildId}`);
       const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
         headers: {
-          Authorization: `Bearer ${token.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -72,7 +97,7 @@ export async function POST(
         console.log(`\x1b[31m[PERMISSION]\x1b[0m Fetching user roles from Discord API`);
         const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
           headers: {
-            Authorization: `Bearer ${token.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           }
         });
@@ -92,59 +117,9 @@ export async function POST(
           userGuildAccess = false; // Mark as failed so we use fallback
         }
       } else if (guildResponse.status === 401) {
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 401 - Token expired, attempting refresh...`);
-
-        // Try to refresh the token
-        try {
-          // Get refresh token from JWT
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const refreshToken = (token as any).refreshToken;
-          if (!refreshToken) {
-            console.log(`\x1b[31m[PERMISSION]\x1b[0m No refresh token available`);
-            userGuildAccess = false;
-          } else {
-            const refreshResponse = await fetch('https://discord.com/api/oauth2/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_id: process.env.DISCORD_CLIENT_ID || '',
-                client_secret: process.env.DISCORD_CLIENT_SECRET || '',
-                grant_type: 'refresh_token',
-                refresh_token: refreshToken,
-              }),
-            });
-
-            if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json();
-              console.log(`\x1b[31m[PERMISSION]\x1b[0m Token refresh successful, retrying guild API call...`);
-
-              // Retry the guild API call with new token
-              const retryResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
-                headers: {
-                  Authorization: `Bearer ${refreshData.access_token}`,
-                  'Content-Type': 'application/json'
-                }
-              });
-
-              if (retryResponse.ok) {
-                console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API retry successful after token refresh`);
-                const guildData = await retryResponse.json();
-                userGuildAccess = true;
-                actualOwnerId = guildData.owner_id;
-                console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API success after refresh - Guild owner: ${actualOwnerId}`);
-              } else {
-                console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API retry failed after refresh: ${retryResponse.status}`);
-                userGuildAccess = false;
-              }
-            } else {
-              console.log(`\x1b[31m[PERMISSION]\x1b[0m Token refresh failed: ${refreshResponse.status}`);
-              userGuildAccess = false;
-            }
-          }
-        } catch (refreshError) {
-          console.error(`\x1b[31m[PERMISSION]\x1b[0m Exception during token refresh:`, refreshError);
-          userGuildAccess = false;
-        }
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 401 - Token expired, user needs to re-authenticate`);
+        // Don't attempt refresh here - NextAuth JWT callback handles token refresh
+        userGuildAccess = false;
       } else if (guildResponse.status === 403) {
         console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 403 - User not authorized for guild ${guildId}`);
       } else if (guildResponse.status === 404) {
@@ -331,4 +306,4 @@ export async function POST(
     console.error('Error checking user permissions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};

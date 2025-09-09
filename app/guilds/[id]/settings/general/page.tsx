@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface GeneralSettings {
   server_name: string;
@@ -22,7 +23,16 @@ interface GeneralSettings {
   log_channel: string;
 }
 
-export default function GeneralSettingsPage() {
+export default async function GeneralSettingsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <GeneralSettingsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function GeneralSettingsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
@@ -325,4 +335,5 @@ export default function GeneralSettingsPage() {
       </div>
     </Section>
   );
+
 }

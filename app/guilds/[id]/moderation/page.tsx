@@ -21,6 +21,7 @@ import CasesList from "./components/cases-list";
 import ModerationSettings from "./components/moderation-settings";
 import CaseDetail from "./components/case-detail";
 import { useBanSyncMock } from "./hooks/use-ban-sync-mock";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 // Mock function to get guild info - replace with real API call
 const getGuildInfo = async (guildId: string) => {

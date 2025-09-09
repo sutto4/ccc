@@ -2,6 +2,7 @@ import ReactionRolesSetup from "@/components/reaction-roles-setup";
 import { getGuildPremiumStatus } from "@/lib/premium";
 import ReactionRolesMenuBuilder from "@/components/reaction-roles-menu-builder";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 export default async function ReactionRolesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

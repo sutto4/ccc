@@ -85,32 +85,35 @@ export function useGuildMembers(guildId: string) {
   // Load members with search and pagination
   const loadMembers = useCallback(async (resetPage = false) => {
     if (!guildId || !session) return;
-    
+
+    // Prevent multiple simultaneous loads
+    if (loading) return;
+
     // console.log('loadMembers called with:', { resetPage, hasLoadedMembers: hasLoadedMembers.current });
-    
+
     try {
       setLoading(true);
       setError(null);
-      
-        // Calculate offset
+
+      // Calculate offset
       const currentPage = resetPage ? 1 : page;
       const offset = (currentPage - 1) * pageSize;
 
       // Load members with search (API handles authentication server-side)
       const membersData = await fetchMembersLegacy(guildId);
-      
+
       // console.log('API returned members:', membersData?.length || 0, 'members');
-      
+
       // Single loop: transform, filter, and count in one pass
       const searchTerm = debouncedSearch.trim().toLowerCase();
       const hasSearch = searchTerm.length > 0;
-      
+
       const allFilteredMembers: Member[] = [];
-      
+
       // console.log('Starting to process', membersData?.length || 0, 'members');
       // console.log('Search term:', searchTerm, 'hasSearch:', hasSearch);
       // console.log('Role filter:', roleFilter);
-      
+
       for (const mem of membersData) {
         // Transform member data (only what's needed)
         const member: Member = {
@@ -119,7 +122,7 @@ export function useGuildMembers(guildId: string) {
           accountid: mem.accountid || null,
           joinedAt: (mem as any).joinedAt || null
         };
-        
+
         // Apply search filter
         let shouldInclude = true;
         if (hasSearch) {
@@ -127,45 +130,45 @@ export function useGuildMembers(guildId: string) {
           const idMatch = member.discordUserId.toLowerCase().includes(searchTerm);
           shouldInclude = usernameMatch || idMatch;
         }
-        
+
         // Apply role filter
         if (shouldInclude && roleFilter) {
           shouldInclude = member.roleIds.includes(roleFilter);
         }
-        
+
         if (shouldInclude) {
           allFilteredMembers.push(member);
         }
       }
-      
+
       // console.log('After filtering,', allFilteredMembers.length, 'members remain');
-      
+
       // Update total count
       setTotalMembers(allFilteredMembers.length);
-      
+
       // console.log('Filtered members:', allFilteredMembers.length, 'total, showing page with offset:', offset);
-      
+
       // Apply pagination
       const startIndex = offset;
       const endIndex = Math.min(startIndex + pageSize, allFilteredMembers.length);
       const pageMembers = allFilteredMembers.slice(startIndex, endIndex);
-      
+
       // console.log('Page members:', pageMembers.length, 'members');
-      
+
       setMembers(pageMembers);
       setHasMore(endIndex < allFilteredMembers.length);
-      
+
       if (resetPage) {
         setPage(1);
       }
-      
+
     } catch (err: any) {
       console.error('Failed to load members:', err);
       setError(err?.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [guildId, session, debouncedSearch, roleFilter, pageSize, page]);
+  }, [guildId, session, debouncedSearch, roleFilter, pageSize, page, loading]);
 
   // Initial load of members (only once when roles are ready)
   useEffect(() => {
@@ -182,7 +185,7 @@ export function useGuildMembers(guildId: string) {
       hasLoadedMembers.current = false;
       lastLoadParams.current = { search: "", roleFilter: "", pageSize: 100, page: 1 };
     };
-  }, [guildId, session, roles.length, loadMembers]);
+  }, [guildId, session, roles.length]);
 
   // Load members when search/filter dependencies change
   useEffect(() => {
@@ -197,7 +200,7 @@ export function useGuildMembers(guildId: string) {
         loadMembers(true);
       }
     }
-  }, [debouncedSearch, roleFilter, pageSize, loadMembers]);
+  }, [debouncedSearch, roleFilter, pageSize]);
 
   // Load more members (next page)
   const loadMore = useCallback(() => {
@@ -210,7 +213,7 @@ export function useGuildMembers(guildId: string) {
     if (page > 1 && hasLoadedMembers.current) {
       loadMembers(false);
     }
-  }, [page, loadMembers]);
+  }, [page]);
 
   // Role map for efficient lookups
   const roleMap = useMemo(() => new Map(roles.map(r => [r.roleId, r])), [roles]);

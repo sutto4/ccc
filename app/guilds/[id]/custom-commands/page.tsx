@@ -9,6 +9,7 @@ import CommandEditor from "@/components/custom-commands/command-editor";
 import { fetchChannels, fetchRoles, type Role } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface InteractiveButton {
   id: string;
@@ -51,7 +52,16 @@ interface CustomCommand {
   updatedAt: string;
 }
 
-export default function CustomCommandsPage() {
+export default async function CustomCommandsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <CustomCommandsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function CustomCommandsPageContent(undefined) {
+  
   const params = useParams();
   const guildId = params.id as string;
   const { data: session } = useSession();
@@ -339,4 +349,5 @@ export default function CustomCommandsPage() {
       </div>
     </Section>
   );
+
 }

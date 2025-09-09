@@ -10,6 +10,7 @@ import RoleKanbanWrapper from "@/components/role-kanban-wrapper";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 import MassRoleAssign from "./mass-role-assign";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 type Params = { id: string };
 

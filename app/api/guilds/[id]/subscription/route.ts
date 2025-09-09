@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 import mysql from 'mysql2/promise';
 
@@ -83,7 +83,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
 }
 
 // GET: Fetch subscription data for a guild
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   try {
     const { id: guildId } = await params;
     const userId = auth?.discordId;

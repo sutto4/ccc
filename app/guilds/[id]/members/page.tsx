@@ -9,8 +9,18 @@ import { addRole, removeRole, type Role } from "@/lib/api";
 import { UserRoleModal } from "@/components/ui/user-role-modal";
 import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
 import { useToast } from "@/hooks/use-toast";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default function MembersPage() {
+export default async function MembersPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <MembersPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function MembersPageContent(undefined) {
+  
   const { data: session } = useSession();
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
@@ -529,4 +539,5 @@ export default function MembersPage() {
       )}
     </Section>
   );
+
 }

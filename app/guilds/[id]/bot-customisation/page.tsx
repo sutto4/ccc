@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageIcon, SaveIcon, RefreshCwIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default function BotCustomisationPage() {
+export default async function BotCustomisationPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <BotCustomisationPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function BotCustomisationPageContent(undefined) {
+  
   const { data: session } = useSession();
   const [botName, setBotName] = useState("");
   const [botAvatarUrl, setBotAvatarUrl] = useState("");
@@ -197,4 +207,5 @@ export default function BotCustomisationPage() {
       </div>
     </Section>
   );
+
 }

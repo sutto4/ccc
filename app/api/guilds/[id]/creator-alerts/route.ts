@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
 // GET list
-export const GET = withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const rows = await query(
     `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, notes, enabled
@@ -14,7 +14,7 @@ export const GET = withAuth(async (_req, { params }: { params: Promise<{ id: str
 });
 
 // POST create
-export const POST = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const POST = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const body = await req.json();
   const { platform, creator, roleId, channelId, discordUserId, notes, enabled } = body || {};
@@ -30,7 +30,7 @@ export const POST = withAuth(async (req, { params }: { params: Promise<{ id: str
 });
 
 // PUT update
-export const PUT = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const body = await req.json();
   const { id, platform, creator, roleId, channelId, discordUserId, notes, enabled } = body || {};
@@ -61,7 +61,7 @@ export const PUT = withAuth(async (req, { params }: { params: Promise<{ id: stri
 });
 
 // DELETE remove
-export const DELETE = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const DELETE = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

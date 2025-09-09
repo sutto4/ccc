@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crown, Plus, Edit, Trash2 } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface Feature {
   feature_key: string;
@@ -19,7 +20,16 @@ interface Feature {
   disabled_guilds: number;
 }
 
-export default function AdminFeaturesPage() {
+export default async function AdminFeaturesPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <AdminFeaturesPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function AdminFeaturesPageContent(undefined) {
+  
   const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -339,5 +349,6 @@ export default function AdminFeaturesPage() {
       </div>
     </Section>
   );
+
 }
 

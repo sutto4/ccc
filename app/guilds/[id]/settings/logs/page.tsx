@@ -10,11 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { 
-  FileText, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  FileText,
+  Search,
+  Filter,
+  Download,
   RefreshCw,
   AlertCircle,
   CheckCircle,
@@ -22,6 +22,7 @@ import {
   XCircle,
   Clock
 } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface LogEntry {
   id: string;
@@ -35,7 +36,16 @@ interface LogEntry {
   details?: any;
 }
 
-export default function LogsPage() {
+export default async function LogsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <LogsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function LogsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
@@ -473,4 +483,5 @@ export default function LogsPage() {
       </div>
     </Section>
   );
+
 }

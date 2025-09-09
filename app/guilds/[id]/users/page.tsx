@@ -11,8 +11,18 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useToast } from "@/hooks/use-toast";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 export default function UsersPage() {
+  return (
+    <AuthErrorBoundary>
+      <UsersPageContent />
+    </AuthErrorBoundary>
+  );
+}
+
+function UsersPageContent() {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
@@ -558,4 +568,5 @@ export default function UsersPage() {
       )}
     </Section>
   );
+
 }

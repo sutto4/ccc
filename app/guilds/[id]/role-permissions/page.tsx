@@ -7,8 +7,18 @@ import { redirect } from "next/navigation";
 import RolePermissionSettings from "@/components/ui/role-permission-settings";
 import { fetchRoles } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default function RolePermissionsPage() {
+export default async function RolePermissionsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <RolePermissionsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function RolePermissionsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params.id;
   const { data: session, status } = useSession();
@@ -70,4 +80,5 @@ export default function RolePermissionsPage() {
       <RolePermissionSettings guildId={guildId} roles={roles} />
     </div>
   );
+
 }

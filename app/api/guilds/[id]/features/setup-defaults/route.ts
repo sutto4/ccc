@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
 // POST setup default features for a guild
-export const POST = withAuth(async (_req, { params }, auth) => {
+export const POST = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
   console.log('[SETUP-DEFAULTS] Setting up default features for guild');
   
   try {

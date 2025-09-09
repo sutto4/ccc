@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 import mysql from 'mysql2/promise';
 
@@ -83,7 +83,7 @@ async function checkAdminAccess(guildId: string, userId: string): Promise<boolea
 }
 
 // GET: List all users with access to this guild
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   const { id: guildId } = await params;
   const userId = auth?.discordId;
 
@@ -131,7 +131,7 @@ export const GET = withAuth(async (req: Request, { params }: { params: Promise<{
 });
 
 // POST: Grant access to a user
-export const POST = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const POST = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   const { id: guildId } = await params;
   const userId = auth?.discordId;
 
@@ -178,7 +178,7 @@ export const POST = withAuth(async (req: Request, { params }: { params: Promise<
 });
 
 // DELETE: Revoke access from a user
-export const DELETE = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const DELETE = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
   const { id: guildId } = await params;
   const userId = auth?.discordId;
 

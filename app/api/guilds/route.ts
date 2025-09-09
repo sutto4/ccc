@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
-import { withAuth } from "@/lib/authz";
+import { getToken } from 'next-auth/jwt';
+import { apiAnalytics } from "@/lib/api-analytics-db";
 import mysql from 'mysql2/promise';
 
 const limiter = createRateLimiter(1000, 60_000); // 1000 requests per minute per key (suitable for large scale)
@@ -172,7 +173,50 @@ async function checkUserGuildPermission(userId: string, guildId: string, accessT
 // GET /api/guilds
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 let requestCounter = 0;
-export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, discordId }) => {
+export const GET = async (req: NextRequest, _ctx: unknown) => {
+  // Simple auth validation
+  const token = await getToken({
+    req: req,
+    secret: process.env.NEXTAUTH_SECRET
+  });
+
+  if (!token || !(token as any).discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  const accessToken = (token as any).accessToken as string;
+  const discordId = (token as any).discordId as string;
+
+  if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+  const startTime = Date.now();
   requestCounter++;
   const requestId = `${requestCounter}-${Date.now()}`;
 
@@ -184,6 +228,8 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   console.log(`[SECURITY-AUDIT] ENVIRONMENT: ${process.env.NODE_ENV}`);
   console.log(`[SECURITY-AUDIT] BOT API URL: ${process.env.SERVER_API_BASE_URL}`);
   console.log(`[SECURITY-AUDIT] DATABASE: ${process.env.DB_HOST}/${process.env.DB_NAME}`);
+
+  // Authentication is handled by middleware
   console.log('Access token available:', !!accessToken);
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Timestamp:', new Date().toISOString());
@@ -246,8 +292,16 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
       let userGuildsRes: Response;
       console.log(`[GUILDS-DEBUG] Fetching user guilds from Discord API`);
       try {
+        // Validate token before making the call
+        if (!accessToken || accessToken.length < 10) {
+          throw new Error('Invalid access token');
+        }
+        
         userGuildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
-          headers: { Authorization: `Bearer ${accessToken}` }
+          headers: { 
+            Authorization: `Bearer ${accessToken}`,
+            'User-Agent': 'ServerMate/1.0'
+          }
         });
         console.log(`[GUILDS-DEBUG] Discord API response status: ${userGuildsRes.status}`);
       } catch (err: any) {
@@ -288,6 +342,19 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
           body: body.substring(0, 500), // Limit body length for logging
           headers: Object.fromEntries(userGuildsRes.headers.entries())
         });
+        
+        // If 401 Unauthorized, the token is invalid
+        if (userGuildsRes.status === 401) {
+          console.error(`[GUILDS-DEBUG] 401 UNAUTHORIZED - Token invalid for user ${discordId}`);
+
+          // Clear cached data
+          cache.delete(ugCacheKey);
+          cache.delete(`${ugCacheKey}:shield`);
+
+          // Throw an error that will be caught and handled properly
+          throw new Error('AUTH_EXPIRED');
+        }
+        
         throw new Error(body || `Failed to fetch user guilds (${userGuildsRes.status})`);
       }
       return (await userGuildsRes.json()) as any[];
@@ -295,7 +362,11 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
 
     inFlightUserGuilds.set(tokenKey, promise);
     try {
-      userGuilds = (await promise) || [];
+      const result = await promise;
+
+      // Handle successful response
+      userGuilds = Array.isArray(result) ? result : [];
+
       console.log(`[GUILDS-DEBUG] Successfully fetched ${userGuilds.length} user guilds from Discord`);
       cache.set(ugCacheKey, userGuilds, 5 * 60_000); // cache 5 minutes
       cache.set(`${ugCacheKey}:shield`, userGuilds, 2_000);
@@ -303,39 +374,57 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
       console.error(`[GUILDS-DEBUG] Failed to fetch user guilds:`, e?.message);
       console.error(`[GUILDS-DEBUG] Error type:`, e?.name);
       console.error(`[GUILDS-DEBUG] Error code:`, e?.code);
-      
-      const retryAfter = e?.retryAfter || "5";
-      const cached = cache.get<any[]>(ugCacheKey) || [];
-      
-      if (cached.length > 0) {
-        console.log(`[GUILDS-DEBUG] Using cached guilds (${cached.length}) due to API error`);
-        const results = await intersectAndNormalize(cached, botBase);
-        return NextResponse.json({ guilds: results }, { status: 200, headers: { "Retry-After": retryAfter, "X-RateLimit": "cached" } });
+
+      // Handle authentication expired error
+      if (e?.message === 'AUTH_EXPIRED') {
+        return NextResponse.json({
+          error: "Authentication expired",
+          message: "Please login again",
+          redirectTo: "/signin"
+        }, {
+          status: 401,
+          headers: {
+            "X-Redirect-To": "/signin"
+          }
+        });
       }
-      
-      // If no cached data and API failed, return proper error instead of empty array
-      console.error(`[GUILDS-DEBUG] No cached data available, returning error response`);
-      return NextResponse.json({ 
-        error: "Failed to fetch guilds", 
-        message: e?.message || "Discord API unavailable",
-        retryAfter: retryAfter 
-      }, { 
-        status: 503, 
-        headers: { "Retry-After": retryAfter, "X-Error-Type": "discord-api-failure" }
-      });
+
+      // For other errors, use empty array
+      userGuilds = [];
+      console.log(`[GUILDS-DEBUG] Using empty guilds array due to API error`);
     } finally {
       inFlightUserGuilds.delete(tokenKey);
     }
-  }
+      
+      // Log analytics for error
+      const responseTime = Date.now() - startTime;
+      setImmediate(() => {
+        apiAnalytics.logRequest({
+          endpoint: '/api/guilds',
+          method: 'GET',
+          userId: discordId,
+          userName: 'Unknown',
+          discordId: discordId,
+          userAgent: req.headers.get('user-agent') || 'unknown',
+          ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+          statusCode: 503,
+          responseTime,
+          error: "Discord API unavailable",
+          rateLimited: false,
+          environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
+          instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }).catch(error => {
+          console.error('❌ Failed to log analytics request:', error);
+        });
+      });
+    }
 
-  // OPTIMIZATION: First filter by bot installation, then check permissions
-  // This is much more efficient than checking permissions for all user's guilds
+    // Continue with normal processing after successful fetch or error handling
+    console.log(`[SECURITY-AUDIT] User ${discordId} has ${userGuilds.length} total Discord guilds`);
+    console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
 
-  console.log(`[SECURITY-AUDIT] User ${discordId} has ${userGuilds.length} total Discord guilds`);
-  console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
-
-  // Get bot-installed guilds first
-  const installedGuilds = await fetchInstalledGuilds(botBase);
+    // Get bot-installed guilds first
+    const installedGuilds = await fetchInstalledGuilds(botBase);
   const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
   console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
@@ -400,6 +489,7 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
   console.log(`[SECURITY-AUDIT] REQUEST COMPLETE FOR USER ${discordId} [${requestId}]`);
   console.log(`[SECURITY-AUDIT] ==================================================`);
   console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name })));
+  
   // FINAL SECURITY CHECK: Ensure all returned guilds belong to this user
   const finalCheck = results.every(guild => {
     // This is a basic check - in production you'd want more thorough validation
@@ -410,8 +500,29 @@ export const GET = withAuth(async (req: Request, _ctx: unknown, { accessToken, d
     console.log(`[SECURITY-ALERT] 🚨 INVALID GUILD DATA DETECTED FOR USER ${discordId}!`);
   }
 
+  // Log analytics
+  const responseTime = Date.now() - startTime;
+  setImmediate(() => {
+    apiAnalytics.logRequest({
+      endpoint: '/api/guilds',
+      method: 'GET',
+      userId: discordId,
+      userName: 'Unknown', // We don't have user name here easily
+      discordId: discordId,
+      userAgent: req.headers.get('user-agent') || 'unknown',
+      ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      statusCode: 200,
+      responseTime,
+      rateLimited: false,
+      environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
+      instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }).catch(error => {
+      console.error('❌ Failed to log analytics request:', error);
+    });
+  });
+
   return NextResponse.json({ guilds: results });
-});
+};
 
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;

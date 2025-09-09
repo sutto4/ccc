@@ -10,17 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Shield, 
-  Users, 
-  Crown, 
-  Settings, 
-  CheckCircle, 
+import {
+  Shield,
+  Users,
+  Crown,
+  Settings,
+  CheckCircle,
   XCircle,
   AlertTriangle,
   UserCheck,
   UserX
 } from "lucide-react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
 interface RolePermission {
   roleId: string;
@@ -34,7 +35,16 @@ interface RolePermission {
   isAdmin: boolean;
 }
 
-export default function RolePermissionsPage() {
+export default async function RolePermissionsPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <RolePermissionsPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+async function RolePermissionsPageContent(undefined) {
+  
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   const { data: session } = useSession();
@@ -425,4 +435,5 @@ export default function RolePermissionsPage() {
       </div>
     </Section>
   );
+
 }

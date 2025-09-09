@@ -2,8 +2,18 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default function GuildPage() {
+export default function GuildPage(undefined) {
+  return (
+    <AuthErrorBoundary>
+      <GuildPageContent undefined />
+    </AuthErrorBoundary>
+  );
+}
+
+function GuildPageContent(undefined) {
+  
   const params = useParams();
   const router = useRouter();
   const guildId = params?.id as string;
@@ -23,5 +33,6 @@ export default function GuildPage() {
       </div>
     </div>
   );
+
 }
 

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
 	const { id: guildId } = await params;
 	if (!/^[0-9]{5,20}$/.test(guildId)) {
 		return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });
