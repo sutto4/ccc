@@ -87,7 +87,7 @@ class BotMonitor {
       const startTime = Date.now();
 
       // Get bot status
-      const statusResponse = await fetch(`${this.botBaseUrl}/api/status`, {
+      const statusResponse = await fetch(`${this.botBaseUrl}/api/bot-status`, {
         timeout: 5000,
         headers: {
           'User-Agent': 'ServerMate-E2E-Monitor/1.0'
@@ -98,15 +98,20 @@ class BotMonitor {
         const statusData = await statusResponse.json();
         const responseTime = Date.now() - startTime;
 
+        // Check if bot is online based on freshness (within last 2 minutes)
+        const isOnline = statusData.isFresh !== false && (Date.now() - (statusData.lastActivity || 0)) < 120000;
+
+        console.log(`🤖 [BOT-MONITOR] Status received: online=${isOnline}, guilds=${statusData.activeGuilds || statusData.guilds || 0}, fresh=${statusData.isFresh}`);
+
         this.lastStatus = {
-          online: true,
+          online: isOnline,
           uptime: statusData.uptime || 0,
-          activeGuilds: statusData.guilds || 0,
-          totalUsers: statusData.users || 0,
+          activeGuilds: statusData.activeGuilds || statusData.guilds || 0,
+          totalUsers: statusData.totalUsers || statusData.users || 0,
           commandsProcessed: statusData.commandsProcessed || 0,
           memoryUsage: statusData.memoryUsage || 0,
           cpuUsage: statusData.cpuUsage || 0,
-          lastActivity: Date.now(),
+          lastActivity: statusData.lastActivity || Date.now(),
           version: statusData.version || 'unknown',
           nodeVersion: statusData.nodeVersion || 'unknown'
         };
@@ -164,13 +169,13 @@ class BotMonitor {
   // Poll bot activities
   private async pollBotActivities(): Promise<void> {
     try {
-      const activitiesResponse = await fetch(`${this.botBaseUrl}/api/activities?limit=10`, {
+      const activitiesResponse = await fetch(`${this.botBaseUrl}/api/bot-activity?limit=10`, {
         timeout: 3000
       });
 
       if (activitiesResponse.ok) {
         const activitiesData = await activitiesResponse.json();
-        this.recentActivities = activitiesData.activities || [];
+        this.recentActivities = activitiesData.activities || activitiesData || [];
 
         // Log recent command activities
         this.recentActivities.forEach(activity => {
@@ -204,20 +209,46 @@ class BotMonitor {
   // Poll health metrics
   private async pollHealthMetrics(): Promise<void> {
     try {
-      const healthResponse = await fetch(`${this.botBaseUrl}/api/health`, {
+      const healthResponse = await fetch(`${this.botBaseUrl}/api/health/db`, {
         timeout: 3000
       });
 
       if (healthResponse.ok) {
         const healthData = await healthResponse.json();
+        // Handle DB health endpoint response
+        if (healthData.ok === true) {
+          this.healthMetrics = {
+            websocketPing: this.lastStatus ? Date.now() - this.lastStatus.lastActivity : 0,
+            apiLatency: 0, // Would need actual measurement
+            memoryUsagePercent: this.lastStatus?.memoryUsage || 0,
+            cpuUsagePercent: this.lastStatus?.cpuUsage || 0,
+            activeVoiceConnections: 0, // Not available from current endpoints
+            queuedCommands: 0, // Not available from current endpoints
+            errorRate: 0 // Would need error tracking
+          };
+        } else {
+          // DB health check failed, set degraded health
+          this.healthMetrics = {
+            websocketPing: 9999,
+            apiLatency: 9999,
+            memoryUsagePercent: 100,
+            cpuUsagePercent: 100,
+            activeVoiceConnections: 0,
+            queuedCommands: 0,
+            errorRate: 100
+          };
+        }
+      } else {
+        console.warn(`🤖 [BOT-MONITOR] Health check failed: ${healthResponse.status}`);
+        // Set fallback health metrics
         this.healthMetrics = {
-          websocketPing: healthData.websocketPing || 0,
-          apiLatency: healthData.apiLatency || 0,
-          memoryUsagePercent: healthData.memoryUsagePercent || 0,
-          cpuUsagePercent: healthData.cpuUsagePercent || 0,
-          activeVoiceConnections: healthData.activeVoiceConnections || 0,
-          queuedCommands: healthData.queuedCommands || 0,
-          errorRate: healthData.errorRate || 0
+          websocketPing: 9999,
+          apiLatency: 9999,
+          memoryUsagePercent: this.lastStatus?.memoryUsage || 0,
+          cpuUsagePercent: this.lastStatus?.cpuUsage || 0,
+          activeVoiceConnections: 0,
+          queuedCommands: 0,
+          errorRate: 0
         };
       }
     } catch (error) {
