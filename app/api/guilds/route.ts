@@ -536,6 +536,34 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Create a set of accessible guild IDs for fast lookup
   const accessibleGuildIds = new Set(accessibleUserGuilds.map((g: any) => String(g.id)));
 
+  // Fetch group information for all accessible guilds
+  let groupInfo: any = {};
+  try {
+    const db = await import('@/lib/db');
+    const groups = await db.query(`
+      SELECT
+        g.guild_id,
+        sg.id as group_id,
+        sg.name as group_name,
+        sg.description as group_description
+      FROM guilds g
+      LEFT JOIN server_groups sg ON g.group_id = sg.id
+      WHERE g.guild_id IN (${accessibleGuildIds.size > 0 ? Array.from(accessibleGuildIds).map(() => '?').join(',') : 'NULL'})
+    `, Array.from(accessibleGuildIds));
+
+    groups.forEach((g: any) => {
+      groupInfo[g.guild_id] = {
+        groupId: g.group_id,
+        groupName: g.group_name,
+        groupDescription: g.group_description
+      };
+    });
+
+    console.log(`[SECURITY-AUDIT] GROUP INFO: Found groups for ${Object.keys(groupInfo).length} guilds`);
+  } catch (error) {
+    console.warn('[SECURITY-AUDIT] Failed to fetch group info:', error);
+  }
+
   // Filter installedGuilds to only include guilds the user has access to
   const accessibleInstalledGuilds = (installedGuilds || []).filter((botGuild: any) => {
     const botGuildId = String(botGuild.id || botGuild.guild_id || "");
@@ -546,19 +574,26 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   console.log(`[SECURITY-AUDIT] FINAL FILTER: ${accessibleInstalledGuilds.length} accessible guilds out of ${installedGuilds?.length || 0} installed guilds`);
 
-  // Now map with memberCount/roleCount data
+  // Now map with memberCount/roleCount data AND group info
   const results = accessibleInstalledGuilds.map((botGuild: any) => {
-    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}`);
+    const botGuildId = String(botGuild.id || botGuild.guild_id || "");
+    const group = groupInfo[botGuildId];
+
+    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? group.groupName : 'NONE'}`);
 
     return {
-      id: String(botGuild.id || botGuild.guild_id || ""),
+      id: botGuildId,
       name: String(botGuild.name || botGuild.guild_name || "Unknown Guild"),
       memberCount: Number(botGuild.memberCount) || 0,
       roleCount: Number(botGuild.roleCount) || 0,
       iconUrl: botGuild.iconUrl || null,
       premium: Boolean(botGuild.premium || false),
       createdAt: null,
-      group: null
+      group: group ? {
+        id: group.groupId,
+        name: group.groupName,
+        description: group.groupDescription
+      } : null
     };
   });
 
