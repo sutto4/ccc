@@ -19,7 +19,7 @@ import {
   Command,
   MessageSquare
 } from "lucide-react";
-import { e2eTracker } from '@/lib/e2e-tracker';
+// Note: We use dynamic imports to avoid mysql2 bundling issues
 
 interface SessionSummary {
   sessionId: string;
@@ -85,84 +85,16 @@ export default function E2EMonitoringPage() {
     setRefreshing(true);
 
     try {
-      // Get all active sessions
-      const allSessions = e2eTracker.getAllSessions();
-      const sessionSummaries: SessionSummary[] = allSessions.map(session => ({
-        sessionId: session.sessionId,
-        userId: session.userId,
-        discordId: session.discordId,
-        startTime: session.startTime,
-        currentStep: session.currentStep || 'unknown',
-        totalSteps: session.journey.length,
-        totalErrors: session.errors.length,
-        duration: Date.now() - session.startTime,
-        lastActivity: session.journey.length > 0
-          ? session.journey[session.journey.length - 1].timestamp
-          : session.startTime
-      }));
-
-      setSessions(sessionSummaries);
-
-      // Get bot data dynamically to avoid build issues
-      let botSummary = { status: 'offline', uptime: 'Unknown', activeGuilds: 0, recentCommands: 0, healthScore: 0, lastActivity: 0 };
-      let recentBotActivities = [];
-      let botHealthMetrics = null;
-
-      try {
-        const { botMonitor: dynamicBotMonitor } = await import('@/lib/bot-monitor');
-        botSummary = dynamicBotMonitor.getBotSummary();
-        recentBotActivities = dynamicBotMonitor.getRecentActivities(20);
-        botHealthMetrics = dynamicBotMonitor.getHealthMetrics();
-      } catch (error) {
-        console.warn('Bot monitoring not available:', error);
+      // Fetch data from API to avoid client-side database imports
+      const response = await fetch('/api/admin/e2e-monitoring-data');
+      if (!response.ok) {
+        throw new Error('Failed to fetch monitoring data');
       }
+      const data = await response.json();
 
-      // Calculate system stats
-      const activeSessions = e2eTracker.getActiveSessionCount();
-      const totalSessionsToday = sessionSummaries.filter(s =>
-        new Date(s.startTime).toDateString() === new Date().toDateString()
-      ).length;
-
-      const averageSessionDuration = sessionSummaries.length > 0
-        ? sessionSummaries.reduce((sum, s) => sum + s.duration, 0) / sessionSummaries.length
-        : 0;
-
-      const totalErrors = sessionSummaries.reduce((sum, s) => sum + s.totalErrors, 0);
-      const errorRate = totalSessionsToday > 0 ? (totalErrors / totalSessionsToday) * 100 : 0;
-
-      // Get error type distribution
-      const errorTypeCounts = new Map<string, number>();
-      allSessions.forEach(session => {
-        session.errors.forEach(error => {
-          const count = errorTypeCounts.get(error.type) || 0;
-          errorTypeCounts.set(error.type, count + 1);
-        });
-      });
-
-      const topErrorTypes = Array.from(errorTypeCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([type, count]) => ({ type, count }));
-
-      setSystemStats({
-        activeSessions,
-        totalSessionsToday,
-        averageSessionDuration,
-        errorRate,
-        topErrorTypes,
-        performanceMetrics: {
-          averagePageLoad: 0, // Would be calculated from actual performance data
-          slowestEndpoint: '/api/guilds', // Would be calculated from analytics
-          apiSuccessRate: 95.2 // Would be calculated from analytics
-        },
-        botStats: {
-          status: botSummary,
-          recentActivities: recentBotActivities,
-          commandCount: recentBotActivities.length,
-          activeGuilds: botSummary.activeGuilds,
-          healthScore: botSummary.healthScore
-        }
-      });
+      // Use the data from API response
+      setSessions(data.sessionSummaries);
+      setSystemStats(data.systemStats);
 
     } catch (error) {
       console.error('Failed to refresh E2E monitoring data:', error);
@@ -173,30 +105,14 @@ export default function E2EMonitoringPage() {
 
   const loadSessionDetails = async (sessionId: string) => {
     try {
-      const session = e2eTracker.getSession(sessionId);
-
-      // Get bot activities dynamically
-      let botActivities = [];
-      try {
-        const { botMonitor: dynamicBotMonitor } = await import('@/lib/bot-monitor');
-        const allBotActivities = dynamicBotMonitor.getRecentActivities(100);
-        const userDiscordId = session.discordId;
-
-        // Filter activities by the user's Discord ID
-        botActivities = allBotActivities.filter(activity =>
-          activity.userId === userDiscordId ||
-          activity.guildId === session.journey.find(step =>
-            step.step.includes('guild_select') && step.metadata?.guildId
-          )?.metadata?.guildId
-        );
-      } catch (error) {
-        console.warn('Bot activities not available:', error);
+      // Fetch session details from API
+      const response = await fetch(`/api/admin/e2e-monitoring-data?sessionId=${sessionId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch session details');
       }
+      const data = await response.json();
 
-      setSessionDetails({
-        ...session,
-        relatedBotActivities: botActivities
-      });
+      setSessionDetails(data.sessionDetails);
       setSelectedSession(sessionId);
     } catch (error) {
       console.error('Failed to load session details:', error);
@@ -212,7 +128,7 @@ export default function E2EMonitoringPage() {
       })),
       systemStats,
       exportTime: new Date().toISOString(),
-      totalActiveSessions: e2eTracker.getActiveSessionCount()
+      totalActiveSessions: sessions.length
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -227,17 +143,6 @@ export default function E2EMonitoringPage() {
   };
 
   useEffect(() => {
-    // Start bot monitoring dynamically
-    const startMonitoring = async () => {
-      try {
-        const { startBotMonitoring } = await import('@/lib/bot-monitor');
-        startBotMonitoring(30000); // Poll every 30 seconds
-      } catch (error) {
-        console.warn('Bot monitoring initialization failed:', error);
-      }
-    };
-
-    startMonitoring();
     refreshData();
 
     // Refresh every 30 seconds
