@@ -168,7 +168,7 @@ export function E2ETrackingProvider({
 
       // End session on unmount
       if (newSessionId) {
-        endUserSession(newSessionId);
+        endUserSession(newSessionId).catch(err => console.error('Failed to end E2E session:', err));
         console.log(`🛑 [E2E] Session ended: ${newSessionId}`);
       }
     };

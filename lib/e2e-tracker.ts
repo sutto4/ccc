@@ -187,7 +187,7 @@ class E2ETracker {
     }
   }
 
-  endSession(sessionId: string): UserSession | null {
+  async endSession(sessionId: string): Promise<UserSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       console.warn(`⚠️ [E2E-TRACKER] Cannot end session - not found: ${sessionId}`);
@@ -313,8 +313,8 @@ export function trackUserError(sessionId: string, error: Parameters<E2ETracker['
   e2eTracker.trackError(sessionId, error);
 }
 
-export function endUserSession(sessionId: string): UserSession | null {
-  return e2eTracker.endSession(sessionId);
+export async function endUserSession(sessionId: string): Promise<UserSession | null> {
+  return await e2eTracker.endSession(sessionId);
 }
 
 // React hook for frontend integration
