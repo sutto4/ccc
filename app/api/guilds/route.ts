@@ -174,6 +174,8 @@ async function checkUserGuildPermission(userId: string, guildId: string, accessT
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 let requestCounter = 0;
 export const GET = async (req: NextRequest, _ctx: unknown) => {
+  console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
+
   // Simple auth validation
   const token = await getToken({
     req: req,
@@ -530,9 +532,13 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   // Map Discord guilds with bot data
   console.log(`[GUILDS-API] DEBUG: About to start mapping ${accessibleUserGuilds.length} guilds`);
+  console.log(`[GUILDS-API] CRITICAL: MAPPING CODE IS BEING EXECUTED`);
   console.log(`[GUILDS-API] DEBUG: First guild in accessibleUserGuilds:`, accessibleUserGuilds[0]);
   console.log(`[GUILDS-API] DEBUG: Installed guilds count:`, (installedGuilds || []).length);
   console.log(`[GUILDS-API] DEBUG: First installed guild:`, (installedGuilds || [])[0]);
+
+  console.log(`[GUILDS-API] DEBUG: Full accessibleUserGuilds:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[GUILDS-API] DEBUG: Full installedGuilds:`, installedGuilds.map(g => ({ id: g.id, name: g.name, memberCount: g.memberCount, roleCount: g.roleCount })));
 
   let results: any[] = [];
   try {
@@ -541,6 +547,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       .map((g: any) => {
       console.log(`[GUILDS-API] MAPPING: Processing guild ${g?.id} - ${g?.name}`);
       console.log(`[GUILDS-API] MAPPING: Guild object:`, g);
+
+      // Force debug log to ensure this code runs
+      console.log(`[GUILDS-API] MAPPING: STARTING PROCESSING FOR GUILD ${g?.id}`);
+
       const id = String((g && (g as any).id) || "");
 
       // Create a simple lookup map for faster matching
@@ -559,16 +569,23 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         installedKeys: Object.keys(installed)
       });
 
-      const memberCount = Number(installed.memberCount) || 0;
-      const roleCount = Number(installed.roleCount) || 0;
+      // Try different ways to get the data
+      const memberCount = installed.memberCount || installed.approximate_member_count || 0;
+      const roleCount = installed.roleCount || installed.roles || 0;
 
-      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${memberCount}, roleCount=${roleCount}`);
+      console.log(`[GUILDS-API] DEBUG: Extracted values - memberCount: ${memberCount} (type: ${typeof memberCount}), roleCount: ${roleCount} (type: ${typeof roleCount})`);
+
+      // Ensure they're numbers
+      const finalMemberCount = Number(memberCount) || 0;
+      const finalRoleCount = Number(roleCount) || 0;
+
+      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${finalMemberCount}, roleCount=${finalRoleCount}`);
 
       const result = {
         id,
         name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
-        memberCount,
-        roleCount,
+        memberCount: finalMemberCount,
+        roleCount: finalRoleCount,
         iconUrl: installed.iconUrl ||
                  ((g && (g as any).icon && id) ? `https://cdn.discordapp.com/icons/${id}/${(g as any).icon}.png` : null),
         premium: Boolean(installed.premium || false),
