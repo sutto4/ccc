@@ -530,75 +530,25 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
 
-  // Map Discord guilds with bot data
-  console.log(`[GUILDS-API] DEBUG: About to start mapping ${accessibleUserGuilds.length} guilds`);
-  console.log(`[GUILDS-API] CRITICAL: MAPPING CODE IS BEING EXECUTED`);
-  console.log(`[GUILDS-API] DEBUG: First guild in accessibleUserGuilds:`, accessibleUserGuilds[0]);
-  console.log(`[GUILDS-API] DEBUG: Installed guilds count:`, (installedGuilds || []).length);
-  console.log(`[GUILDS-API] DEBUG: First installed guild:`, (installedGuilds || [])[0]);
+  // SIMPLIFIED FIX: Directly return data from installedGuilds
+  console.log(`[GUILDS-API] SIMPLIFIED FIX: Returning data directly from installedGuilds`);
 
-  console.log(`[GUILDS-API] DEBUG: Full accessibleUserGuilds:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[GUILDS-API] DEBUG: Full installedGuilds:`, installedGuilds.map(g => ({ id: g.id, name: g.name, memberCount: g.memberCount, roleCount: g.roleCount })));
+  const results = (installedGuilds || []).map((botGuild: any) => {
+    console.log(`[GUILDS-API] PROCESSING BOT GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}`);
 
-  let results: any[] = [];
-  try {
-    console.log(`[GUILDS-API] MAPPING: Starting map operation for ${accessibleUserGuilds.length} guilds`);
-    results = accessibleUserGuilds
-      .map((g: any) => {
-      console.log(`[GUILDS-API] MAPPING: Processing guild ${g?.id} - ${g?.name}`);
-      console.log(`[GUILDS-API] MAPPING: Guild object:`, g);
+    return {
+      id: String(botGuild.id || botGuild.guild_id || ""),
+      name: String(botGuild.name || botGuild.guild_name || "Unknown Guild"),
+      memberCount: Number(botGuild.memberCount) || 0,
+      roleCount: Number(botGuild.roleCount) || 0,
+      iconUrl: botGuild.iconUrl || null,
+      premium: Boolean(botGuild.premium || false),
+      createdAt: null,
+      group: null
+    };
+  });
 
-      // Force debug log to ensure this code runs
-      console.log(`[GUILDS-API] MAPPING: STARTING PROCESSING FOR GUILD ${g?.id}`);
-
-      const id = String((g && (g as any).id) || "");
-
-      // Create a simple lookup map for faster matching
-      const botGuildMap = new Map();
-      (installedGuilds || []).forEach((botGuild: any) => {
-        const botId = String(botGuild.id || botGuild.guild_id || botGuild.guildId || "");
-        botGuildMap.set(botId, botGuild);
-      });
-
-      let installed = botGuildMap.get(id) || {};
-
-      console.log(`[GUILDS-API] DEBUG: Match result for ${id}:`, {
-        found: !!installed.id,
-        hasMemberCount: !!installed.memberCount,
-        hasRoleCount: !!installed.roleCount,
-        installedKeys: Object.keys(installed)
-      });
-
-      // Try different ways to get the data
-      const memberCount = installed.memberCount || installed.approximate_member_count || 0;
-      const roleCount = installed.roleCount || installed.roles || 0;
-
-      console.log(`[GUILDS-API] DEBUG: Extracted values - memberCount: ${memberCount} (type: ${typeof memberCount}), roleCount: ${roleCount} (type: ${typeof roleCount})`);
-
-      // Ensure they're numbers
-      const finalMemberCount = Number(memberCount) || 0;
-      const finalRoleCount = Number(roleCount) || 0;
-
-      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${finalMemberCount}, roleCount=${finalRoleCount}`);
-
-      const result = {
-        id,
-        name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
-        memberCount: finalMemberCount,
-        roleCount: finalRoleCount,
-        iconUrl: installed.iconUrl ||
-                 ((g && (g as any).icon && id) ? `https://cdn.discordapp.com/icons/${id}/${(g as any).icon}.png` : null),
-        premium: Boolean(installed.premium || false),
-        createdAt: null as string | null,
-        group: null
-      };
-
-      return result;
-    });
-  } catch (mappingError) {
-    console.error('[GUILDS] Error in guild mapping:', mappingError);
-    results = [];
-  }
+  console.log(`[GUILDS-API] SIMPLIFIED RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles`));
 
   console.log('Final results:', {
     guildCount: results.length,
