@@ -585,6 +585,16 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     });
   });
 
+  console.log(`[GUILDS-API] DEBUG: Final API response:`, {
+    guildCount: results.length,
+    firstGuild: results[0] ? {
+      id: results[0].id,
+      name: results[0].name,
+      memberCount: results[0].memberCount,
+      roleCount: results[0].roleCount
+    } : null
+  });
+
   return NextResponse.json({ guilds: results });
 };
 
@@ -837,7 +847,8 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         memberCount: result.memberCount,
         roleCount: result.roleCount,
         memberCountType: typeof result.memberCount,
-        roleCountType: typeof result.roleCount
+        roleCountType: typeof result.roleCount,
+        fullResult: result
       });
 
       return result;
