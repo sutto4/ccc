@@ -17,30 +17,6 @@ export default function Topbar() {
           src="/brand/sm-light.png"
           alt="ServerMate"
           className="h-12 md:h-18 w-auto object-contain"
-          onError={(e) => {
-            const img = e.target as HTMLImageElement;
-            console.log('ServerMate logo failed to load from:', img.src, 'trying alternatives...');
-
-            if (img.src.includes('/brand/sm-light.png')) {
-              console.log('Trying: /sm-light.png');
-              img.src = '/sm-light.png';
-            } else if (img.src.includes('/sm-light.png')) {
-              console.log('Trying: /brand/sm-dark.png');
-              img.src = '/brand/sm-dark.png';
-            } else if (img.src.includes('/brand/sm-dark.png')) {
-              console.log('Trying: /sm-dark.png');
-              img.src = '/sm-dark.png';
-            } else if (img.src.includes('/sm-dark.png')) {
-              console.log('Trying: /placeholder-logo.png');
-              img.src = '/placeholder-logo.png';
-            } else {
-              console.log('All image paths failed, falling back to text logo');
-              const parent = img.parentElement;
-              if (parent) {
-                parent.innerHTML = '<span class="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">ServerMate</span>';
-              }
-            }
-          }}
         />
       </div>
       {/* Actions */}
