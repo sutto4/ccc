@@ -590,8 +590,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;
+  // Clear cache to force fresh fetch
+  cache.delete(igCacheKey);
   let installedGuilds = cache.get<any[]>(igCacheKey) || [];
-  console.log('[BOT-API] Installed guilds from cache:', installedGuilds.length);
+  console.log('[BOT-API] Installed guilds from cache (after clear):', installedGuilds.length);
 
   if (installedGuilds.length === 0 && botBase) {
     console.log('[BOT-API] Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
@@ -613,6 +615,10 @@ async function fetchInstalledGuilds(botBase: string) {
               keys: Object.keys(installedGuilds[0]),
               data: installedGuilds[0]
             });
+
+            // Check if the data has the expected fields
+            console.log('[BOT-API] DEBUG: memberCount in first guild:', installedGuilds[0].memberCount, 'type:', typeof installedGuilds[0].memberCount);
+            console.log('[BOT-API] DEBUG: roleCount in first guild:', installedGuilds[0].roleCount, 'type:', typeof installedGuilds[0].roleCount);
           }
 
           cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
@@ -780,6 +786,10 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         allKeys: installed.guild_id ? Object.keys(installed) : []
       });
 
+      console.log(`[GUILDS-API] DEBUG: Raw installed object keys:`, Object.keys(installed));
+      console.log(`[GUILDS-API] DEBUG: memberCount raw value:`, installed.memberCount, `type:`, typeof installed.memberCount);
+      console.log(`[GUILDS-API] DEBUG: roleCount raw value:`, installed.roleCount, `type:`, typeof installed.roleCount);
+
       const memberCount =
         typeof installed.memberCount === "number"
           ? installed.memberCount
@@ -793,6 +803,10 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
           ? installed.roles
           : null;
 
+      console.log(`[GUILDS-API] DEBUG: After processing - memberCount: ${memberCount} (${typeof memberCount}), roleCount: ${roleCount} (${typeof roleCount})`);
+      console.log(`[GUILDS-API] DEBUG: installed.memberCount check: ${typeof installed.memberCount === "number"} (${installed.memberCount})`);
+      console.log(`[GUILDS-API] DEBUG: installed.roleCount check: ${typeof installed.roleCount === "number"} (${installed.roleCount})`);
+
       console.log(`[GUILDS-API] Guild ${g?.name || id}: final counts - memberCount: ${memberCount}, roleCount: ${roleCount}`);
 
       // Use iconUrl from bot data if available, otherwise construct from Discord icon
@@ -804,7 +818,7 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       // Get group information for this guild
       const group = groupInfo[id] || null;
 
-      return {
+      const result = {
         id,
         name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
         memberCount: memberCount ?? 0,
@@ -818,5 +832,14 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
           description: group.groupDescription
         } : null,
       };
+
+      console.log(`[GUILDS-API] DEBUG: Final result for guild ${g?.name || id}:`, {
+        memberCount: result.memberCount,
+        roleCount: result.roleCount,
+        memberCountType: typeof result.memberCount,
+        roleCountType: typeof result.roleCount
+      });
+
+      return result;
     });
 }
