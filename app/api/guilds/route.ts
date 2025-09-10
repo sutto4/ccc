@@ -780,15 +780,25 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
 
   console.log(`[GUILDS-DEBUG] After filtering: ${filtered.length} guilds`);
 
-  return filtered
-    .map((g: any) => {
+  console.log(`[GUILDS-API] DEBUG: About to start mapping ${filtered.length} guilds`);
+
+  try {
+    const results = filtered
+      .map((g: any) => {
+      console.log(`[GUILDS-API] DEBUG: Processing Discord guild:`, { id: g?.id, name: g?.name });
       const id = String((g && (g as any).id) || "");
       const installed = (installedGuilds || []).find((x: any) => {
         const xId = String(x.id || x.guildId || x.guild_id || (x as any).guild_id || (x as any).guildId || "");
         const match = xId === id;
-        console.log(`[GUILDS-API] DEBUG: Looking for guild ${id}, checking ${xId}, match: ${match}`);
+        console.log(`[GUILDS-API] DEBUG: Looking for guild ${id} (type: ${typeof id}), checking ${xId} (type: ${typeof xId}), match: ${match}`);
         return match;
       }) || {};
+
+      if (!installed.id) {
+        console.log(`[GUILDS-API] DEBUG: NO MATCH FOUND for guild ${id}! Available bot guild IDs:`, installedGuilds?.map(x => x.id));
+      }
+
+      console.log(`[GUILDS-API] DEBUG: Match result for ${id}:`, { found: !!installed.id, hasMemberCount: !!installed.memberCount });
 
       console.log(`[GUILDS-API] DEBUG: Found installed data for ${id}:`, {
         found: !!installed.id,
@@ -796,6 +806,18 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         memberCount: installed.memberCount,
         roleCount: installed.roleCount
       });
+
+      // If no match found, try to find by other ID fields
+      if (!installed.id) {
+        console.log(`[GUILDS-API] DEBUG: Trying fallback match for ${id}`);
+        const fallbackMatch = (installedGuilds || []).find((x: any) => {
+          return String(x.guild_id || "") === id || String(x.guildId || "") === id;
+        });
+        if (fallbackMatch) {
+          console.log(`[GUILDS-API] DEBUG: Fallback match found!`, fallbackMatch);
+          installed = fallbackMatch;
+        }
+      }
 
       console.log(`[GUILDS-API] Guild ${g?.name || id}: installed data found = ${!!installed.guild_id}, installed =`, {
         id: installed.guild_id || installed.id,
@@ -840,8 +862,8 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       const result = {
         id,
         name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
-        memberCount: memberCount ?? 0,
-        roleCount: roleCount ?? 0,
+        memberCount: memberCount ?? installed.memberCount ?? 0,
+        roleCount: roleCount ?? installed.roleCount ?? 0,
         iconUrl,
         premium: Boolean(installed.premium || false),
         createdAt: null as string | null,
@@ -851,6 +873,8 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
           description: group.groupDescription
         } : null,
       };
+
+      console.log(`[GUILDS-API] DEBUG: Final result for ${id}: memberCount=${result.memberCount}, roleCount=${result.roleCount}`);
 
       console.log(`[GUILDS-API] DEBUG: Final result for guild ${g?.name || id}:`, {
         memberCount: result.memberCount,
@@ -862,4 +886,23 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
 
       return result;
     });
+
+    console.log(`[GUILDS-API] DEBUG: Mapping completed successfully, ${results.length} results`);
+    return results;
+
+  } catch (error) {
+    console.error(`[GUILDS-API] ERROR: Failed during guild mapping:`, error);
+    console.error(`[GUILDS-API] ERROR: filtered guilds:`, filtered);
+    console.error(`[GUILDS-API] ERROR: installed guilds:`, installedGuilds);
+    return filtered.map((g: any) => ({
+      id: String((g && (g as any).id) || ""),
+      name: String((g && (g as any).name) || ""),
+      memberCount: 0,
+      roleCount: 0,
+      iconUrl: null,
+      premium: false,
+      createdAt: null,
+      group: null
+    }));
+  }
 }
