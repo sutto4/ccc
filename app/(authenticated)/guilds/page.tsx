@@ -50,7 +50,7 @@ function GuildsPageContent() {
 
           // Debug member/role counts
           data.guilds?.forEach((guild: any) => {
-            console.log(`[GUILDS] Guild "${guild.name}" - memberCount: ${guild.memberCount} (type: ${typeof guild.memberCount}), roleCount: ${guild.roleCount} (type: ${typeof guild.roleCount})`);
+            console.log(`[GUILDS] Guild "${guild.name || 'Unknown Server'}" - memberCount: ${guild.memberCount} (type: ${typeof guild.memberCount}), roleCount: ${guild.roleCount} (type: ${typeof guild.roleCount})`);
           });
 
           trackStep('guilds_fetch_success', {
@@ -220,7 +220,7 @@ function GuildsPageContent() {
               groupedGuilds.reduce<Map<number, { id: number; name: string; description: string | null; servers: Guild[] }>>(
                 (acc, g) => {
                   const gr = g.group!;
-                  const cur = acc.get(gr.id) || { id: gr.id, name: gr.name, description: gr.description, servers: [] };
+                  const cur = acc.get(gr.id) || { id: gr.id, name: gr.name || 'Unnamed Group', description: gr.description, servers: [] };
                   cur.servers.push(g);
                   acc.set(gr.id, cur);
                   return acc;
@@ -228,10 +228,10 @@ function GuildsPageContent() {
                 new Map()
               ).values()
             )
-              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+              .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
 
             return groups.map(group => {
-              const groupServers = [...group.servers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+              const groupServers = [...group.servers].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
 
               return (
                 <Card key={group.id} className="border-2 border-blue-100 bg-blue-50/30">
@@ -270,7 +270,7 @@ function GuildsPageContent() {
                                     {guild.iconUrl ? (
                                       <Image
                                         src={guild.iconUrl}
-                                        alt={guild.name}
+                                        alt={guild.name || 'Unknown Server'}
                                         width={40}
                                         height={40}
                                         className="rounded-lg"
@@ -285,7 +285,7 @@ function GuildsPageContent() {
                                     )}
                                     <div>
                                       <h4 className="font-medium group-hover:text-primary transition-colors">
-                                        {guild.name}
+                                        {guild.name || 'Unknown Server'}
                                       </h4>
                                       <p className="text-xs text-muted-foreground">
                                         {guild.memberCount !== null && guild.memberCount !== undefined && guild.memberCount !== 0 ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined && guild.roleCount !== 0 ? guild.roleCount.toLocaleString() : 'N/A'} roles
@@ -352,13 +352,13 @@ function GuildsPageContent() {
                                   ) : (
                                     <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
                                       <span className="text-sm font-semibold text-muted-foreground">
-                                        {guild.name.charAt(0).toUpperCase()}
+                                        {(guild.name && guild.name.length > 0) ? guild.name.charAt(0).toUpperCase() : '?'}
                                       </span>
                                     </div>
                                   )}
                                   <div>
                                     <h4 className="font-medium group-hover:text-primary transition-colors">
-                                      {guild.name}
+                                      {guild.name || 'Unknown Server'}
                                     </h4>
                                     <p className="text-xs text-muted-foreground">
                                       {guild.memberCount !== null && guild.memberCount !== undefined && guild.memberCount !== 0 ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined && guild.roleCount !== 0 ? guild.roleCount.toLocaleString() : 'N/A'} roles

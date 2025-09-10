@@ -554,7 +554,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     groups.forEach((g: any) => {
       groupInfo[g.guild_id] = {
         groupId: g.group_id,
-        groupName: g.group_name,
+        groupName: g.group_name || 'Unnamed Group',
         groupDescription: g.group_description
       };
     });
