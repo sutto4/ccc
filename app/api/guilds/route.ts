@@ -530,11 +530,25 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
 
-  // SIMPLIFIED FIX: Directly return data from installedGuilds
-  console.log(`[GUILDS-API] SIMPLIFIED FIX: Returning data directly from installedGuilds`);
+  // SECURITY FIX: Only return guilds user has access to AND bot is installed
+  console.log(`[SECURITY-AUDIT] ACCESS CONTROL: Filtering installedGuilds to only accessible guilds`);
 
-  const results = (installedGuilds || []).map((botGuild: any) => {
-    console.log(`[GUILDS-API] PROCESSING BOT GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}`);
+  // Create a set of accessible guild IDs for fast lookup
+  const accessibleGuildIds = new Set(accessibleUserGuilds.map((g: any) => String(g.id)));
+
+  // Filter installedGuilds to only include guilds the user has access to
+  const accessibleInstalledGuilds = (installedGuilds || []).filter((botGuild: any) => {
+    const botGuildId = String(botGuild.id || botGuild.guild_id || "");
+    const isAccessible = accessibleGuildIds.has(botGuildId);
+    console.log(`[SECURITY-AUDIT] Guild ${botGuild.name} (${botGuildId}): ${isAccessible ? 'ACCESSIBLE' : 'NOT ACCESSIBLE'}`);
+    return isAccessible;
+  });
+
+  console.log(`[SECURITY-AUDIT] FINAL FILTER: ${accessibleInstalledGuilds.length} accessible guilds out of ${installedGuilds?.length || 0} installed guilds`);
+
+  // Now map with memberCount/roleCount data
+  const results = accessibleInstalledGuilds.map((botGuild: any) => {
+    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}`);
 
     return {
       id: String(botGuild.id || botGuild.guild_id || ""),
@@ -548,7 +562,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     };
   });
 
-  console.log(`[GUILDS-API] SIMPLIFIED RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles`));
+  console.log(`[GUILDS-API] SECURE RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles`));
 
   console.log('Final results:', {
     guildCount: results.length,
