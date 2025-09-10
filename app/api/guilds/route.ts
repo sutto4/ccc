@@ -597,7 +597,6 @@ async function fetchInstalledGuilds(botBase: string) {
         installedGuilds = (await botRes.json()) as any[];
         console.log('[BOT-API] ✅ Bot API returned', installedGuilds.length, 'guilds with member/role data');
         cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
-      }
       } else {
         console.warn("[BOT-API] ❌ /api/guilds bot endpoint failed:", botRes.status);
         const errorText = await botRes.text();
