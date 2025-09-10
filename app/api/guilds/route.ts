@@ -429,6 +429,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
   console.log(`[GUILDS-DEBUG] Bot installed guild IDs:`, Array.from(installedGuildIds));
+  console.log(`[GUILDS-DEBUG] Bot installed guilds data:`, installedGuilds.map(g => ({
+    id: g.id || g.guildId || g.guild_id,
+    name: g.name || g.guildName || g.guild_name,
+    memberCount: g.memberCount,
+    roleCount: g.roleCount
+  })));
 
   // Get all guilds where user has database access
   const userId = discordId!;
@@ -735,6 +741,7 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       }) || {};
 
       console.log(`[GUILDS-API] Guild ${id}: found installed data = ${!!installed.iconUrl}, iconUrl = ${installed.iconUrl}`);
+      console.log(`[GUILDS-API] Guild ${id}: installed object =`, JSON.stringify(installed, null, 2));
 
       const memberCount =
         typeof installed.memberCount === "number"
@@ -748,6 +755,8 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
           : typeof installed.roles === "number"
           ? installed.roles
           : null;
+
+      console.log(`[GUILDS-API] Guild ${id}: extracted memberCount = ${memberCount}, roleCount = ${roleCount}`);
 
       // Use iconUrl from bot data if available, otherwise construct from Discord icon
       const iconUrl = installed.iconUrl ||
