@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { e2eTracker } from '@/lib/e2e-tracker';
 import { botMonitor } from '@/lib/bot-monitor';
 
+// POST endpoint for client-side tracking data
+export async function POST(req: NextRequest) {
+  try {
+    const trackingData = await req.json();
+
+    // Store client tracking data in memory for now
+    // In production, you'd want to persist this data
+    console.log('📊 [CLIENT-TRACKING] Received:', trackingData);
+
+    // For now, just log the data. In a real implementation,
+    // you'd store this in a database or queue it for processing
+    if (trackingData.sessionId && trackingData.step) {
+      console.log(`📍 [CLIENT-TRACKING] ${trackingData.sessionId}: ${trackingData.step}`);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[CLIENT-TRACKING] Error processing tracking data:', error);
+    return NextResponse.json(
+      { error: 'Failed to process tracking data' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);

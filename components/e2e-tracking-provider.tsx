@@ -1,11 +1,11 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-// Note: We avoid importing e2e-tracker directly to prevent mysql2 bundling issues
+import { useClientE2ETracking, startClientSession, endClientSession } from '@/lib/client-e2e-tracker';
 
 interface E2ETrackingContextType {
   sessionId: string | null;
-  trackStep: (step: string, metadata?: any) => Promise<void>;
+  trackStep: (step: string, metadata?: any) => void;
   trackError: (error: any) => void;
   isTracking: boolean;
 }
@@ -27,196 +27,115 @@ export function E2ETrackingProvider({
 }: E2ETrackingProviderProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isTracking, setIsTracking] = useState(false);
+  const { trackStep, trackError } = useClientE2ETracking();
 
   useEffect(() => {
-    if (!enableTracking || !userId || !discordId) {
+    if (!enableTracking || !userId) {
       return;
     }
 
-    // Start session when user is authenticated (dynamic import to avoid bundling issues)
-    const startSession = async () => {
-      try {
-        const { startUserSession, useE2ETracking, endUserSession } = await import('@/lib/e2e-tracker');
-        const newSessionId = startUserSession(userId, discordId);
-        setSessionId(newSessionId);
-        setIsTracking(true);
+    // Start client-side session
+    const newSessionId = startClientSession(userId, discordId);
+    setSessionId(newSessionId);
+    setIsTracking(true);
 
-        console.log(`🚀 [E2E] Session started: ${newSessionId} for user ${userId}`);
+    console.log(`🚀 [CLIENT-E2E] Session started: ${newSessionId} for user ${userId}`);
 
-        // Track page load
-        const tracking = useE2ETracking(newSessionId);
+    // Track initial page load
+    trackStep('page_load', {
+      url: typeof window !== 'undefined' ? window.location.href : '',
+      referrer: typeof document !== 'undefined' ? document.referrer : '',
+      timestamp: Date.now(),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+    });
 
-        // Browser info
-        tracking.updateBrowserInfo({
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          language: navigator.language,
-          cookieEnabled: navigator.cookieEnabled,
-          online: navigator.onLine
-        });
-
-        // Performance data
-        if (performance.timing) {
-          const perfData = {
-            domContentLoaded: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart,
-            firstContentfulPaint: performance.getEntriesByType('paint').find(entry => entry.name === 'first-contentful-paint')?.startTime,
-            largestContentfulPaint: performance.getEntriesByType('largest-contentful-paint')[0]?.startTime,
-            firstInputDelay: performance.getEntriesByType('first-input')[0]?.processingStart - performance.getEntriesByType('first-input')[0]?.startTime,
-            cumulativeLayoutShift: (performance.getEntriesByType('layout-shift') as any[]).reduce((sum, entry) => sum + entry.value, 0)
-          };
-          tracking.updatePerformanceData(perfData);
+    // Global error tracking
+    const handleError = (event: ErrorEvent) => {
+      trackError({
+        type: 'js',
+        message: event.message,
+        stack: event.error?.stack,
+        context: {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno
         }
+      });
+    };
 
-        // Track initial page load
-        await tracking.trackStep('page_load', {
-          url: window.location.href,
-          referrer: document.referrer,
-          timestamp: Date.now()
-        });
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      trackError({
+        type: 'js',
+        message: `Unhandled promise rejection: ${event.reason}`,
+        context: {
+          reason: event.reason?.toString(),
+          stack: event.reason?.stack
+        }
+      });
+    };
 
-        // Global error tracking
-        const handleError = (event: ErrorEvent) => {
-          tracking.trackError({
-            type: 'js',
-            message: event.message,
-            stack: event.error?.stack,
-            context: {
-              filename: event.filename,
-              lineno: event.lineno,
-              colno: event.colno
-            }
-          });
+    // User interaction tracking
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target) {
+        const elementInfo = {
+          tagName: target.tagName,
+          id: target.id,
+          className: target.className,
+          textContent: target.textContent?.slice(0, 50),
+          dataAttributes: Object.fromEntries(
+            Object.entries(target.dataset).filter(([key]) => key.startsWith('e2e'))
+          )
         };
 
-        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-          tracking.trackError({
-            type: 'js',
-            message: `Unhandled promise rejection: ${event.reason}`,
-            context: {
-              reason: event.reason?.toString(),
-              stack: event.reason?.stack
-            }
-          });
-        };
-
-        // Network error tracking
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-          const startTime = Date.now();
-          const [resource] = args;
-
-          return originalFetch.apply(this, args)
-            .then(async (response) => {
-              const duration = Date.now() - startTime;
-              await tracking.trackStep('network_request', {
-                url: typeof resource === 'string' ? resource : (resource as Request).url,
-                method: typeof resource === 'string' ? 'GET' : (resource as Request).method,
-                status: response.status,
-                duration,
-                success: response.ok
-              });
-              return response;
-            })
-            .catch(async (error) => {
-              await tracking.trackError({
-                type: 'network',
-                message: `Network request failed: ${error.message}`,
-                context: {
-                  url: typeof resource === 'string' ? resource : (resource as Request).url,
-                  method: typeof resource === 'string' ? 'GET' : (resource as Request).method,
-                  duration: Date.now() - startTime
-                }
-              });
-              throw error;
-            });
-        };
-
-        // User interaction tracking
-        const handleClick = async (event: MouseEvent) => {
-          const target = event.target as HTMLElement;
-          if (target) {
-            const elementInfo = {
-              tagName: target.tagName,
-              id: target.id,
-              className: target.className,
-              textContent: target.textContent?.slice(0, 50),
-              dataAttributes: Object.fromEntries(
-                Object.entries(target.dataset).filter(([key]) => key.startsWith('e2e'))
-              )
-            };
-
-            await tracking.trackStep('user_click', elementInfo);
-          }
-        };
-
-        const handleNavigation = async () => {
-          await tracking.trackStep('navigation', {
-            from: window.location.href,
-            timestamp: Date.now()
-          });
-        };
-
-        // Event listeners
-        window.addEventListener('error', handleError);
-        window.addEventListener('unhandledrejection', handleUnhandledRejection);
-        window.addEventListener('click', handleClick);
-        window.addEventListener('beforeunload', handleNavigation);
-
-        // Return cleanup function and session ID
-        return {
-          cleanup: () => {
-            window.removeEventListener('error', handleError);
-            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-            window.removeEventListener('click', handleClick);
-            window.removeEventListener('beforeunload', handleNavigation);
-
-            // End session on unmount
-            if (newSessionId) {
-              endUserSession(newSessionId).catch(err => console.error('Failed to end E2E session:', err));
-              console.log(`🛑 [E2E] Session ended: ${newSessionId}`);
-            }
-          },
-          sessionId: newSessionId
-        };
-      } catch (error) {
-        console.warn('E2E tracking initialization failed:', error);
-        return null;
+        trackStep('user_click', elementInfo);
       }
     };
 
-    startSession().then((result) => {
-      if (result) {
-        // Store cleanup function for later use
-        (window as any)._e2eCleanup = result.cleanup;
+    const handleNavigation = () => {
+      trackStep('navigation', {
+        from: typeof window !== 'undefined' ? window.location.href : '',
+        timestamp: Date.now()
+      });
+    };
+
+    // Event listeners
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', handleError);
+      window.addEventListener('unhandledrejection', handleUnhandledRejection);
+      window.addEventListener('click', handleClick);
+      window.addEventListener('beforeunload', handleNavigation);
+    }
+
+    // Cleanup function
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('error', handleError);
+        window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        window.removeEventListener('click', handleClick);
+        window.removeEventListener('beforeunload', handleNavigation);
       }
-    });
-  }, [userId, discordId, enableTracking]);
+
+      // End session on unmount
+      endClientSession().catch(err => console.error('Failed to end client session:', err));
+    };
+  }, [userId, discordId, enableTracking, trackStep, trackError]);
 
   const value: E2ETrackingContextType = {
     sessionId,
-    trackStep: async (step: string, metadata?: any) => {
+    trackStep: (step: string, metadata?: any) => {
       if (sessionId) {
-        try {
-          const { useE2ETracking } = await import('@/lib/e2e-tracker');
-          await useE2ETracking(sessionId).trackStep(step, metadata);
-        } catch (error) {
-          // Silently fail if tracking is not available
-        }
+        trackStep(step, metadata);
       }
     },
-    trackError: async (error: any) => {
+    trackError: (error: any) => {
       if (sessionId) {
-        try {
-          const { useE2ETracking } = await import('@/lib/e2e-tracker');
-          useE2ETracking(sessionId).trackError({
-            type: 'js',
-            message: error.message || 'Unknown error',
-            stack: error.stack,
-            context: { ...error }
-          });
-        } catch (err) {
-          // Silently fail if tracking is not available
-        }
+        trackError({
+          type: 'js',
+          message: error.message || 'Unknown error',
+          stack: error.stack,
+          context: { ...error }
+        });
       }
     },
     isTracking
