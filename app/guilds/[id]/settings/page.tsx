@@ -25,7 +25,7 @@ interface RolePermission {
   canUseApp: boolean;
 }
 
-export default async function GuildSettingsPage(undefined) {
+export default function GuildSettingsPage() {
   return (
     <AuthErrorBoundary>
       <GuildSettingsPageContent undefined />
@@ -33,7 +33,7 @@ export default async function GuildSettingsPage(undefined) {
   );
 }
 
-async function GuildSettingsPageContent(undefined) {
+function GuildSettingsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";

@@ -8,7 +8,7 @@ import { ImageIcon, SaveIcon, RefreshCwIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default async function BotCustomisationPage(undefined) {
+export default function BotCustomisationPage() {
   return (
     <AuthErrorBoundary>
       <BotCustomisationPageContent undefined />
@@ -16,7 +16,7 @@ export default async function BotCustomisationPage(undefined) {
   );
 }
 
-async function BotCustomisationPageContent(undefined) {
+function BotCustomisationPageContent() {
   
   const { data: session } = useSession();
   const [botName, setBotName] = useState("");

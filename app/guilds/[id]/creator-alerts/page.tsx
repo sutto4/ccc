@@ -33,7 +33,7 @@ const PLATFORM_META: Record<Platform, { label: string; color: string; icon: stri
   kick: { label: "Kick", color: "#0077B6", icon: "👋" },
 };
 
-export default async function CreatorAlertsPage(undefined) {
+export default function CreatorAlertsPage() {
   return (
     <AuthErrorBoundary>
       <CreatorAlertsPageContent undefined />
@@ -41,7 +41,7 @@ export default async function CreatorAlertsPage(undefined) {
   );
 }
 
-async function CreatorAlertsPageContent(undefined) {
+function CreatorAlertsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";

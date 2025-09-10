@@ -36,7 +36,7 @@ interface LogEntry {
   details?: any;
 }
 
-export default async function LogsPage(undefined) {
+export default function LogsPage() {
   return (
     <AuthErrorBoundary>
       <LogsPageContent undefined />
@@ -44,7 +44,7 @@ export default async function LogsPage(undefined) {
   );
 }
 
-async function LogsPageContent(undefined) {
+function LogsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";

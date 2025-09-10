@@ -9,7 +9,7 @@ import { fetchRoles } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default async function RolePermissionsPage(undefined) {
+export default function RolePermissionsPage() {
   return (
     <AuthErrorBoundary>
       <RolePermissionsPageContent undefined />
@@ -17,7 +17,7 @@ export default async function RolePermissionsPage(undefined) {
   );
 }
 
-async function RolePermissionsPageContent(undefined) {
+function RolePermissionsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params.id;

@@ -11,7 +11,7 @@ import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
 import { useToast } from "@/hooks/use-toast";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
-export default async function MembersPage(undefined) {
+export default function MembersPage() {
   return (
     <AuthErrorBoundary>
       <MembersPageContent undefined />
@@ -19,7 +19,7 @@ export default async function MembersPage(undefined) {
   );
 }
 
-async function MembersPageContent(undefined) {
+function MembersPageContent() {
   
   const { data: session } = useSession();
   const params = useParams<{ id: string }>();

@@ -40,7 +40,7 @@ interface FeaturesResponse {
   features: GuildFeatures;
 }
 
-export default async function GuildFeaturesSettings(undefined) {
+export default function GuildFeaturesSettings() {
   return (
     <AuthErrorBoundary>
       <GuildFeaturesSettingsContent undefined />
@@ -48,7 +48,7 @@ export default async function GuildFeaturesSettings(undefined) {
   );
 }
 
-async function GuildFeaturesSettingsContent(undefined) {
+function GuildFeaturesSettingsContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";

@@ -64,7 +64,7 @@ interface HealthStatus {
   };
 }
 
-export default async function AdminDashboard() {
+export default function AdminDashboard() {
   return (
     <AuthErrorBoundary>
       <AdminDashboardContent />

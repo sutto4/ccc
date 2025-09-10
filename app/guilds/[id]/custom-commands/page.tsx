@@ -52,7 +52,7 @@ interface CustomCommand {
   updatedAt: string;
 }
 
-export default async function CustomCommandsPage(undefined) {
+export default function CustomCommandsPage() {
   return (
     <AuthErrorBoundary>
       <CustomCommandsPageContent undefined />
@@ -60,7 +60,7 @@ export default async function CustomCommandsPage(undefined) {
   );
 }
 
-async function CustomCommandsPageContent(undefined) {
+function CustomCommandsPageContent() {
   
   const params = useParams();
   const guildId = params.id as string;

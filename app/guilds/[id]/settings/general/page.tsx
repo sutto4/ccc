@@ -23,7 +23,7 @@ interface GeneralSettings {
   log_channel: string;
 }
 
-export default async function GeneralSettingsPage(undefined) {
+export default function GeneralSettingsPage() {
   return (
     <AuthErrorBoundary>
       <GeneralSettingsPageContent undefined />
@@ -31,7 +31,7 @@ export default async function GeneralSettingsPage(undefined) {
   );
 }
 
-async function GeneralSettingsPageContent(undefined) {
+function GeneralSettingsPageContent() {
   
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
