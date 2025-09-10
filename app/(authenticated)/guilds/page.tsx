@@ -11,17 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Folder, Users, Shield, Bot, Zap, Star } from "lucide-react";
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 import { useE2ETrackingContext } from '@/components/e2e-tracking-provider';
-
-interface Guild {
-  id: string;
-  name: string;
-  iconUrl?: string;
-  memberCount: number;
-  premium: boolean;
-  status: string;
-  createdAt: string;
-  features: string[];
-}
+import type { Guild } from "@/lib/api";
 
 export default function GuildsPage() {
   return (
@@ -56,6 +46,12 @@ function GuildsPageContent() {
           const fetchDuration = Date.now() - startTime;
 
           console.log('[GUILDS] Guilds fetched successfully:', guildCount, 'guilds');
+          console.log('[GUILDS] Raw guilds data:', data.guilds);
+
+          // Debug member/role counts
+          data.guilds?.forEach((guild: any) => {
+            console.log(`[GUILDS] Guild "${guild.name}" - memberCount: ${guild.memberCount} (type: ${typeof guild.memberCount}), roleCount: ${guild.roleCount} (type: ${typeof guild.roleCount})`);
+          });
 
           trackStep('guilds_fetch_success', {
             guildCount,
@@ -292,7 +288,7 @@ function GuildsPageContent() {
                                         {guild.name}
                                       </h4>
                                       <p className="text-xs text-muted-foreground">
-                                        {guild.memberCount !== null && guild.memberCount !== undefined ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined ? guild.roleCount.toLocaleString() : 'N/A'} roles
+                                        {guild.memberCount !== null && guild.memberCount !== undefined && guild.memberCount !== 0 ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined && guild.roleCount !== 0 ? guild.roleCount.toLocaleString() : 'N/A'} roles
                                       </p>
                                     </div>
                                   </div>
@@ -365,7 +361,7 @@ function GuildsPageContent() {
                                       {guild.name}
                                     </h4>
                                     <p className="text-xs text-muted-foreground">
-                                      {guild.memberCount !== null && guild.memberCount !== undefined ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined ? guild.roleCount.toLocaleString() : 'N/A'} roles
+                                      {guild.memberCount !== null && guild.memberCount !== undefined && guild.memberCount !== 0 ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined && guild.roleCount !== 0 ? guild.roleCount.toLocaleString() : 'N/A'} roles
                                     </p>
                                   </div>
                                 </div>
