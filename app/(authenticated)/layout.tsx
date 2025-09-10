@@ -3,6 +3,7 @@ import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 import { E2ETrackingProvider } from '@/components/e2e-tracking-provider';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import AuthRedirectHandler from '@/components/auth-redirect-handler';
 
 export default async function AuthenticatedLayout({
   children,
@@ -21,6 +22,7 @@ export default async function AuthenticatedLayout({
         discordId={discordId}
         enableTracking={process.env.NODE_ENV === 'production' || process.env.E2E_TRACKING_ENABLED === 'true'}
       >
+        <AuthRedirectHandler />
         <ConsoleShell>{children}</ConsoleShell>
       </E2ETrackingProvider>
     </AuthErrorBoundary>

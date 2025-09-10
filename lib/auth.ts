@@ -1,6 +1,8 @@
 import type { NextAuthOptions } from "next-auth"
 import NextAuth from "next-auth"
 import DiscordProvider from "next-auth/providers/discord"
+import { getToken } from "next-auth/jwt"
+import type { NextRequest } from "next/server"
 import { env } from "@/lib/env"
 import { isAdmin } from "@/lib/db"
 import { TokenManager } from "./token-manager"
@@ -99,6 +101,14 @@ export const authOptions: NextAuthOptions = {
     },
   },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // Allow relative URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      // Allow same-origin URLs
+      else if (new URL(url).origin === baseUrl) return url
+      // Default to home page
+      return baseUrl
+    },
     async jwt({ token, account, profile }) {
       // Handle initial login
       if (account && profile) {
@@ -172,8 +182,7 @@ export const authOptions: NextAuthOptions = {
         if ((profile as any).id) {
           SessionManager.updateSessionState((profile as any).id, {
             isValid: true,
-            refreshAttempts: 0,
-            lastRefresh: Date.now()
+            refreshAttempts: 0
           });
         }
 
@@ -207,7 +216,7 @@ export const authOptions: NextAuthOptions = {
         const sessionState = userId ? SessionManager.getSessionState(userId) : null;
 
         // Prevent refresh attempts more than once every 30 seconds
-        if (sessionState?.lastRefresh && (Date.now() - sessionState.lastRefresh) < 30000) {
+        if (sessionState?.lastValidated && (Date.now() - sessionState.lastValidated) < 30000) {
           console.log('[AUTH] Skipping refresh - too soon since last attempt');
           return token;
         }
@@ -261,8 +270,7 @@ export const authOptions: NextAuthOptions = {
             if (userId) {
               SessionManager.updateSessionState(userId, {
                 isValid: true,
-                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
-                lastRefresh: Date.now()
+                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1
               });
             }
           } else {
@@ -278,8 +286,7 @@ export const authOptions: NextAuthOptions = {
             if (userId) {
               SessionManager.updateSessionState(userId, {
                 isValid: false,
-                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
-                lastRefresh: Date.now()
+                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1
               });
             }
           }
@@ -291,14 +298,13 @@ export const authOptions: NextAuthOptions = {
           (token as any).expiresAt = null;
           token.exp = Math.floor(Date.now() / 1000) - 1; // Force session expiry
 
-          // Update session state on refresh error
-          if (userId) {
-            SessionManager.updateSessionState(userId, {
-              isValid: false,
-              refreshAttempts: (sessionState?.refreshAttempts || 0) + 1,
-              lastRefresh: Date.now()
-            });
-          }
+            // Update session state on refresh error
+            if (userId) {
+              SessionManager.updateSessionState(userId, {
+                isValid: false,
+                refreshAttempts: (sessionState?.refreshAttempts || 0) + 1
+              });
+            }
         }
       }
 
