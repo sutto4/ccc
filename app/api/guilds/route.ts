@@ -787,37 +787,22 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       .map((g: any) => {
       console.log(`[GUILDS-API] DEBUG: Processing Discord guild:`, { id: g?.id, name: g?.name });
       const id = String((g && (g as any).id) || "");
-      const installed = (installedGuilds || []).find((x: any) => {
-        const xId = String(x.id || x.guildId || x.guild_id || (x as any).guild_id || (x as any).guildId || "");
-        const match = xId === id;
-        console.log(`[GUILDS-API] DEBUG: Looking for guild ${id} (type: ${typeof id}), checking ${xId} (type: ${typeof xId}), match: ${match}`);
-        return match;
-      }) || {};
 
-      if (!installed.id) {
-        console.log(`[GUILDS-API] DEBUG: NO MATCH FOUND for guild ${id}! Available bot guild IDs:`, installedGuilds?.map(x => x.id));
-      }
-
-      console.log(`[GUILDS-API] DEBUG: Match result for ${id}:`, { found: !!installed.id, hasMemberCount: !!installed.memberCount });
-
-      console.log(`[GUILDS-API] DEBUG: Found installed data for ${id}:`, {
-        found: !!installed.id,
-        installedKeys: Object.keys(installed),
-        memberCount: installed.memberCount,
-        roleCount: installed.roleCount
+      // Create a simple lookup map for faster matching
+      const botGuildMap = new Map();
+      (installedGuilds || []).forEach((botGuild: any) => {
+        const botId = String(botGuild.id || botGuild.guild_id || botGuild.guildId || "");
+        botGuildMap.set(botId, botGuild);
       });
 
-      // If no match found, try to find by other ID fields
-      if (!installed.id) {
-        console.log(`[GUILDS-API] DEBUG: Trying fallback match for ${id}`);
-        const fallbackMatch = (installedGuilds || []).find((x: any) => {
-          return String(x.guild_id || "") === id || String(x.guildId || "") === id;
-        });
-        if (fallbackMatch) {
-          console.log(`[GUILDS-API] DEBUG: Fallback match found!`, fallbackMatch);
-          installed = fallbackMatch;
-        }
-      }
+      let installed = botGuildMap.get(id) || {};
+
+      console.log(`[GUILDS-API] DEBUG: Match result for ${id}:`, {
+        found: !!installed.id,
+        hasMemberCount: !!installed.memberCount,
+        hasRoleCount: !!installed.roleCount,
+        installedKeys: Object.keys(installed)
+      });
 
       console.log(`[GUILDS-API] Guild ${g?.name || id}: installed data found = ${!!installed.guild_id}, installed =`, {
         id: installed.guild_id || installed.id,
@@ -854,16 +839,14 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       const iconUrl = installed.iconUrl ||
                      ((g && (g as any).icon && id) ? `https://cdn.discordapp.com/icons/${id}/${(g as any).icon}.png` : null);
 
-      console.log(`[GUILDS-API] Guild ${g?.name || g?.id || 'unknown'} (${id}): bot iconUrl = ${(g as any)?.iconUrl}, final iconUrl = ${iconUrl}`);
-
       // Get group information for this guild
       const group = groupInfo[id] || null;
 
       const result = {
         id,
         name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
-        memberCount: memberCount ?? installed.memberCount ?? 0,
-        roleCount: roleCount ?? installed.roleCount ?? 0,
+        memberCount: Number(installed.memberCount) || 0,
+        roleCount: Number(installed.roleCount) || 0,
         iconUrl,
         premium: Boolean(installed.premium || false),
         createdAt: null as string | null,
@@ -874,15 +857,7 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         } : null,
       };
 
-      console.log(`[GUILDS-API] DEBUG: Final result for ${id}: memberCount=${result.memberCount}, roleCount=${result.roleCount}`);
-
-      console.log(`[GUILDS-API] DEBUG: Final result for guild ${g?.name || id}:`, {
-        memberCount: result.memberCount,
-        roleCount: result.roleCount,
-        memberCountType: typeof result.memberCount,
-        roleCountType: typeof result.roleCount,
-        fullResult: result
-      });
+      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${result.memberCount}, roleCount=${result.roleCount}`);
 
       return result;
     });
@@ -905,4 +880,11 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       group: null
     }));
   }
-}
+
+  console.log(`[GUILDS-API] FINAL RESPONSE: ${results.length} guilds`);
+  results.forEach((guild, index) => {
+    console.log(`[GUILDS-API] Guild ${index + 1}: ${guild.name} - ${guild.memberCount} members, ${guild.roleCount} roles`);
+  });
+
+  return NextResponse.json({ guilds: results });
+};
