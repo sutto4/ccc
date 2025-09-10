@@ -516,14 +516,22 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     }
   }
 
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${botInstalledUserGuilds.length} guilds accessible for user ${userId}`);
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${dbAccessibleUserGuilds.length} guilds accessible for user ${userId}`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL BOT GUILDS:`, botInstalledUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${botInstalledUserGuilds.length} available guilds`);
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL DB GUILDS:`, dbAccessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
 
   // Since we've already filtered by bot installation, just normalize the results
-  const results = await normalizeAccessibleGuilds(accessibleUserGuilds);
+  let results: any[] = [];
+  try {
+    const normalizedResults = await normalizeAccessibleGuilds(accessibleUserGuilds);
+    results = Array.isArray(normalizedResults) ? normalizedResults : [];
+  } catch (normalizeError) {
+    console.error('[GUILDS] Error in normalizeAccessibleGuilds:', normalizeError);
+    results = [];
+  }
+
   console.log('Final results:', {
     guildCount: results.length,
     guilds: results.map(g => ({ id: g.id, name: g.name })),

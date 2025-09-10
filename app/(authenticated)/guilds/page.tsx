@@ -48,6 +48,8 @@ function GuildsPageContent() {
         if (response.ok) {
           const data = await response.json();
           console.log('[GUILDS] Guilds fetched successfully:', data.guilds?.length || 0, 'guilds');
+          console.log('[GUILDS] Full API response:', JSON.stringify(data, null, 2));
+          console.log('[GUILDS] Guilds array:', data.guilds);
           setGuilds(data.guilds || []);
         } else if (response.status === 401) {
           console.log('[GUILDS] 401 response - redirecting to signin');
