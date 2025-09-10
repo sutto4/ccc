@@ -785,8 +785,17 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
       const id = String((g && (g as any).id) || "");
       const installed = (installedGuilds || []).find((x: any) => {
         const xId = String(x.id || x.guildId || x.guild_id || (x as any).guild_id || (x as any).guildId || "");
-        return xId === id;
+        const match = xId === id;
+        console.log(`[GUILDS-API] DEBUG: Looking for guild ${id}, checking ${xId}, match: ${match}`);
+        return match;
       }) || {};
+
+      console.log(`[GUILDS-API] DEBUG: Found installed data for ${id}:`, {
+        found: !!installed.id,
+        installedKeys: Object.keys(installed),
+        memberCount: installed.memberCount,
+        roleCount: installed.roleCount
+      });
 
       console.log(`[GUILDS-API] Guild ${g?.name || id}: installed data found = ${!!installed.guild_id}, installed =`, {
         id: installed.guild_id || installed.id,
