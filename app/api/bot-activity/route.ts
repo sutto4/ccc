@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Track the bot command
-    trackBotCommand(activity);
+    await trackBotCommand(activity);
 
     // Try to correlate with active E2E sessions
     const activeSessions = e2eTracker.getAllSessions();
@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     );
 
     // Link bot activity to related user sessions
-    relatedSessions.forEach(session => {
-      e2eTracker.trackBotInteraction(session.sessionId, activity);
-    });
+    for (const session of relatedSessions) {
+      await e2eTracker.trackBotInteraction(session.sessionId, activity);
+    }
 
     console.log(`🤖 [BOT-ACTIVITY] Recorded command: ${activity.command} by ${activity.userId} in ${activity.guildId}`);
 

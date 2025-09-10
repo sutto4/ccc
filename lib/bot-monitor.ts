@@ -226,7 +226,7 @@ class BotMonitor {
   }
 
   // Manual command tracking (for when bot sends data to web app)
-  trackBotCommand(activity: BotCommandActivity): void {
+  async trackBotCommand(activity: BotCommandActivity): Promise<void> {
     this.recentActivities.unshift(activity);
 
     // Keep only last 50 activities
@@ -357,8 +357,8 @@ export function stopBotMonitoring(): void {
   botMonitor.stopMonitoring();
 }
 
-export function trackBotCommand(activity: BotCommandActivity): void {
-  botMonitor.trackBotCommand(activity);
+export async function trackBotCommand(activity: BotCommandActivity): Promise<void> {
+  await botMonitor.trackBotCommand(activity);
 }
 
 export function getBotStatus(): BotStatus | null {

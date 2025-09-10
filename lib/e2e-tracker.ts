@@ -237,7 +237,7 @@ class E2ETracker {
     try {
       // Track the bot command dynamically
       const { trackBotCommand } = await import('./bot-monitor');
-      trackBotCommand(activity);
+      await trackBotCommand(activity);
     } catch (error) {
       console.warn('Bot command tracking not available:', error);
     }
