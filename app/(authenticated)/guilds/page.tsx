@@ -294,7 +294,7 @@ function GuildsPageContent() {
                                         {guild.name}
                                       </h4>
                                       <p className="text-xs text-muted-foreground">
-                                        {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                        {guild.memberCount !== null && guild.memberCount !== undefined ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined ? guild.roleCount.toLocaleString() : 'N/A'} roles
                                       </p>
                                     </div>
                                   </div>
@@ -367,7 +367,7 @@ function GuildsPageContent() {
                                       {guild.name}
                                     </h4>
                                     <p className="text-xs text-muted-foreground">
-                                      {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                      {guild.memberCount !== null && guild.memberCount !== undefined ? guild.memberCount.toLocaleString() : 'N/A'} members • {guild.roleCount !== null && guild.roleCount !== undefined ? guild.roleCount.toLocaleString() : 'N/A'} roles
                                     </p>
                                   </div>
                                 </div>
