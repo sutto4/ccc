@@ -33,25 +33,25 @@ function GuildsPageContent() {
 
       try {
         trackStep('guilds_fetch_start', { timestamp: startTime });
-        console.log('[GUILDS] Fetching guilds...');
+        // DEBUG: console.log('[GUILDS] Fetching guilds...');
 
         // Since we're in authenticated layout, we should have valid session
         // Just fetch the data directly
         const response = await fetch('/api/guilds');
-        console.log('[GUILDS] Guilds API response:', response.status);
+        // DEBUG: console.log('[GUILDS] Guilds API response:', response.status);
 
         if (response.ok) {
           const data = await response.json();
           const guildCount = data.guilds?.length || 0;
           const fetchDuration = Date.now() - startTime;
 
-          console.log('[GUILDS] Guilds fetched successfully:', guildCount, 'guilds');
-          console.log('[GUILDS] Raw guilds data:', data.guilds);
+          // DEBUG: console.log('[GUILDS] Guilds fetched successfully:', guildCount, 'guilds');
+          // DEBUG: console.log('[GUILDS] Raw guilds data:', data.guilds);
 
-          // Debug member/role counts
-          data.guilds?.forEach((guild: any) => {
-            console.log(`[GUILDS] Guild "${guild.name || 'Unknown Server'}" - memberCount: ${guild.memberCount} (type: ${typeof guild.memberCount}), roleCount: ${guild.roleCount} (type: ${typeof guild.roleCount})`);
-          });
+          // DEBUG: Debug member/role counts
+          // DEBUG: data.guilds?.forEach((guild: any) => {
+          // DEBUG:   console.log(`[GUILDS] Guild "${guild.name || 'Unknown Server'}" - memberCount: ${guild.memberCount} (type: ${typeof guild.memberCount}), roleCount: ${guild.roleCount} (type: ${typeof guild.roleCount})`);
+          // DEBUG: });
 
           trackStep('guilds_fetch_success', {
             guildCount,
@@ -66,7 +66,7 @@ function GuildsPageContent() {
             statusCode: response.status,
             timestamp: Date.now()
           });
-          console.log('[GUILDS] 401 response - redirecting to signin');
+          // DEBUG: console.log('[GUILDS] 401 response - redirecting to signin');
           router.replace('/signin');
           return;
         } else {
@@ -79,7 +79,7 @@ function GuildsPageContent() {
               timestamp: Date.now()
             }
           });
-          console.error('[GUILDS] Unexpected response:', response.status);
+          // DEBUG: console.error('[GUILDS] Unexpected response:', response.status);
           // For other errors, show empty state instead of redirecting
           setGuilds([]);
         }
@@ -95,7 +95,7 @@ function GuildsPageContent() {
             timestamp: Date.now()
           }
         });
-        console.error('[GUILDS] Error fetching guilds:', error);
+        // DEBUG: console.error('[GUILDS] Error fetching guilds:', error);
         // On network errors, show empty state instead of redirecting
         setGuilds([]);
       } finally {
@@ -109,7 +109,7 @@ function GuildsPageContent() {
     }
 
     fetchGuilds();
-  }, [router]); // Removed trackStep, trackError dependencies to prevent re-runs
+  }, [router]); // DEBUG: Removed trackStep, trackError dependencies to prevent re-runs
 
   if (loading) {
     return (

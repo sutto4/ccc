@@ -222,34 +222,34 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   requestCounter++;
   const requestId = `${requestCounter}-${Date.now()}`;
 
-  console.log(`=== GUILDS API CALLED #${requestCounter} [${requestId}] ===`);
-  console.log(`[SECURITY-AUDIT] REQUEST ID: ${requestId}`);
-  console.log(`[SECURITY-AUDIT] USER ID: ${discordId}`);
-  console.log(`[SECURITY-AUDIT] UNIQUE SESSION: ${discordId}-${requestId}`);
-  console.log(`[SECURITY-AUDIT] ACCESS TOKEN START: ${accessToken?.substring(0, 20)}...`);
-  console.log(`[SECURITY-AUDIT] ENVIRONMENT: ${process.env.NODE_ENV}`);
-  console.log(`[SECURITY-AUDIT] BOT API URL: ${process.env.SERVER_API_BASE_URL}`);
-  console.log(`[SECURITY-AUDIT] DATABASE: ${process.env.DB_HOST}/${process.env.DB_NAME}`);
+  // DEBUG: console.log(`=== GUILDS API CALLED #${requestCounter} [${requestId}] ===`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ID: ${requestId}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] USER ID: ${discordId}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] UNIQUE SESSION: ${discordId}-${requestId}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] ACCESS TOKEN START: ${accessToken?.substring(0, 20)}...`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] ENVIRONMENT: ${process.env.NODE_ENV}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] BOT API URL: ${process.env.SERVER_API_BASE_URL}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] DATABASE: ${process.env.DB_HOST}/${process.env.DB_NAME}`);
 
   // Authentication is handled by middleware
-  console.log('Access token available:', !!accessToken);
-  console.log('Environment:', process.env.NODE_ENV);
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Process PID:', process.pid);
+  // DEBUG: console.log('Access token available:', !!accessToken);
+  // DEBUG: console.log('Environment:', process.env.NODE_ENV);
+  // DEBUG: console.log('Timestamp:', new Date().toISOString());
+  // DEBUG: console.log('Process PID:', process.pid);
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
-  console.log('[BOT-CONFIG] SERVER_API_BASE_URL env var:', process.env.SERVER_API_BASE_URL);
-  console.log('[BOT-CONFIG] Bot base URL:', botBase);
+  // DEBUG: console.log('[BOT-CONFIG] SERVER_API_BASE_URL env var:', process.env.SERVER_API_BASE_URL);
+  // DEBUG: console.log('[BOT-CONFIG] Bot base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
   const tokenKey = `${discordId}:${accessToken.slice(0, 24)}`;
-  console.log(`[SECURITY-AUDIT] ===== CRITICAL SECURITY CHECK =====`);
-  console.log(`[SECURITY-AUDIT] Discord ID: ${discordId}`);
-  console.log(`[SECURITY-AUDIT] Access Token Hash: ${accessToken.slice(0, 24)}`);
-  console.log(`[SECURITY-AUDIT] Combined Token Key: ${tokenKey}`);
-  console.log(`[SECURITY-AUDIT] Request Timestamp: ${new Date().toISOString()}`);
-  console.log(`[SECURITY-AUDIT] ====================================`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] ===== CRITICAL SECURITY CHECK =====`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Discord ID: ${discordId}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Access Token Hash: ${accessToken.slice(0, 24)}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Combined Token Key: ${tokenKey}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Request Timestamp: ${new Date().toISOString()}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] ====================================`);
   // Note: Rate limiting removed for production scale - Discord handles this
   // const rl = limiter.check(`rl:guilds:${tokenKey}`);
   // if (!rl.allowed) { ... }
