@@ -720,10 +720,10 @@ async function fetchInstalledGuilds(botBase: string) {
     } catch (err) {
       // DEBUG: console.warn("[BOT-API] ❌ /api/guilds bot endpoint unreachable:", (err as any)?.message || err);
       // DEBUG: console.warn('[BOT-API] Error details:', {
-        message: (err as any)?.message,
-        code: (err as any)?.code,
-        stack: (err as any)?.stack?.split('\n').slice(0, 3).join('\n')
-      });
+      // DEBUG:   message: (err as any)?.message,
+      // DEBUG:   code: (err as any)?.code,
+      // DEBUG:   stack: (err as any)?.stack?.split('\n').slice(0, 3).join('\n')
+      // DEBUG: });
       // DEBUG: console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
       return [];
     }

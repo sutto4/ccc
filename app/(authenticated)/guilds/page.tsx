@@ -321,7 +321,7 @@ function GuildsPageContent() {
                 </Card>
               );
             });
-          })()}
+          })}
 
           {/* Individual Servers */}
           {individualGuilds.length > 0 && (
