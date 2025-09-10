@@ -428,21 +428,63 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
   console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
+  console.log(`[GUILDS-DEBUG] Bot installed guild IDs:`, [...installedGuildIds]);
 
-  // Filter user's guilds to only those with the bot installed
-  const botInstalledUserGuilds = userGuilds.filter(guild => installedGuildIds.has(guild.id));
+  // Debug: Compare with database access
+  const dbAccessibleArray = [...dbAccessibleGuildIds];
+  const botInstalledArray = [...installedGuildIds];
+  console.log(`[GUILDS-DEBUG] Database accessible:`, dbAccessibleArray);
+  console.log(`[GUILDS-DEBUG] Bot installed:`, botInstalledArray);
 
-  console.log(`[GUILDS] User has ${botInstalledUserGuilds.length} guilds with bot installed`);
+  const inDbNotInBot = dbAccessibleArray.filter(id => !installedGuildIds.has(id));
+  const inBotNotInDb = botInstalledArray.filter(id => !dbAccessibleGuildIds.has(id));
 
-  // Now check permissions only for bot-installed guilds (much more efficient!)
+  console.log(`[GUILDS-DEBUG] In DB but bot not installed: ${inDbNotInBot.length}:`, inDbNotInBot);
+  console.log(`[GUILDS-DEBUG] Bot installed but no DB access: ${inBotNotInDb.length}:`, inBotNotInDb);
+
+  // Get all guilds where user has database access
+  const userId = discordId!;
+
+  // Fetch database access records for this user
+  let dbAccessibleGuildIds = new Set<string>();
+  try {
+    const db = await import('@/lib/db');
+    const accessRecords = await db.query(
+      'SELECT guild_id FROM server_access_control WHERE user_id = ? AND has_access = 1',
+      [userId]
+    );
+
+    dbAccessibleGuildIds = new Set(accessRecords.map((record: any) => String(record.guild_id)));
+    console.log(`[GUILDS-DEBUG] User ${userId} has database access to ${dbAccessibleGuildIds.size} guilds:`, [...dbAccessibleGuildIds]);
+
+  // Debug: Check which database-accessible guilds are in user's Discord guilds
+  const discordGuildIds = new Set(userGuilds.map(g => g.id));
+  const missingFromDiscord = [...dbAccessibleGuildIds].filter(id => !discordGuildIds.has(id));
+  const inDiscordButNoDbAccess = [...discordGuildIds].filter(id => !dbAccessibleGuildIds.has(id));
+
+  console.log(`[GUILDS-DEBUG] User's Discord guilds: ${discordGuildIds.size} total`);
+  console.log(`[GUILDS-DEBUG] Database guilds missing from Discord: ${missingFromDiscord.length}:`, missingFromDiscord);
+  console.log(`[GUILDS-DEBUG] Discord guilds without DB access: ${inDiscordButNoDbAccess.length}:`, inDiscordButNoDbAccess);
+  } catch (error) {
+    console.error('Failed to fetch database access records:', error);
+  }
+
+  // Filter user's Discord guilds to only those with database access
+  const dbAccessibleUserGuilds = userGuilds.filter(guild => dbAccessibleGuildIds.has(guild.id));
+  console.log(`[GUILDS] User has database access to ${dbAccessibleUserGuilds.length} guilds`);
+
+  // Check which of these have the bot installed
+  const botInstalledCount = dbAccessibleUserGuilds.filter(guild => installedGuildIds.has(guild.id)).length;
+  console.log(`[GUILDS] Of these, ${botInstalledCount} have the bot installed`);
+
+  // Now check permissions for database-accessible guilds
   const accessibleUserGuilds = [];
-  const userId = discordId!; // Get user ID from auth context (guaranteed by withAuth)
 
-  console.log(`[GUILDS-DEBUG] Starting permission checks for ${botInstalledUserGuilds.length} guilds`);
+  console.log(`[GUILDS-DEBUG] Starting permission checks for ${dbAccessibleUserGuilds.length} guilds`);
   console.log(`[GUILDS-DEBUG] User ID: ${userId}`);
   console.log(`[GUILDS-DEBUG] Access token available: ${!!accessToken}`);
 
-  for (const userGuild of botInstalledUserGuilds) {
+  for (const userGuild of dbAccessibleUserGuilds) {
     try {
       console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
       // Check if user has management permissions in this guild
@@ -539,6 +581,10 @@ async function fetchInstalledGuilds(botBase: string) {
         console.log('Installed guilds from bot:', installedGuilds.length);
         if (installedGuilds.length > 0) {
           console.log('Sample bot guild data:', JSON.stringify(installedGuilds[0], null, 2));
+          console.log('All bot guild IDs and names:', installedGuilds.map((g: any) => ({
+            id: g.id || g.guildId || g.guild_id,
+            name: g.name || g.guildName || g.guild_name
+          })));
         }
         cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
       } else {
