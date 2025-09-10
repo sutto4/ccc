@@ -428,19 +428,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
   console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
-  console.log(`[GUILDS-DEBUG] Bot installed guild IDs:`, [...installedGuildIds]);
-
-  // Debug: Compare with database access
-  const dbAccessibleArray = [...dbAccessibleGuildIds];
-  const botInstalledArray = [...installedGuildIds];
-  console.log(`[GUILDS-DEBUG] Database accessible:`, dbAccessibleArray);
-  console.log(`[GUILDS-DEBUG] Bot installed:`, botInstalledArray);
-
-  const inDbNotInBot = dbAccessibleArray.filter(id => !installedGuildIds.has(id));
-  const inBotNotInDb = botInstalledArray.filter(id => !dbAccessibleGuildIds.has(id));
-
-  console.log(`[GUILDS-DEBUG] In DB but bot not installed: ${inDbNotInBot.length}:`, inDbNotInBot);
-  console.log(`[GUILDS-DEBUG] Bot installed but no DB access: ${inBotNotInDb.length}:`, inBotNotInDb);
+  console.log(`[GUILDS-DEBUG] Bot installed guild IDs:`, Array.from(installedGuildIds));
 
   // Get all guilds where user has database access
   const userId = discordId!;
@@ -455,18 +443,38 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     );
 
     dbAccessibleGuildIds = new Set(accessRecords.map((record: any) => String(record.guild_id)));
-    console.log(`[GUILDS-DEBUG] User ${userId} has database access to ${dbAccessibleGuildIds.size} guilds:`, [...dbAccessibleGuildIds]);
+    console.log(`[GUILDS-DEBUG] User ${userId} has database access to ${dbAccessibleGuildIds.size} guilds:`, Array.from(dbAccessibleGuildIds));
 
   // Debug: Check which database-accessible guilds are in user's Discord guilds
-  const discordGuildIds = new Set(userGuilds.map(g => g.id));
-  const missingFromDiscord = [...dbAccessibleGuildIds].filter(id => !discordGuildIds.has(id));
-  const inDiscordButNoDbAccess = [...discordGuildIds].filter(id => !dbAccessibleGuildIds.has(id));
+  try {
+    const discordGuildIds = new Set(userGuilds.map(g => g.id));
+    const missingFromDiscord = Array.from(dbAccessibleGuildIds).filter(id => !discordGuildIds.has(id));
+    const inDiscordButNoDbAccess = Array.from(discordGuildIds).filter(id => !dbAccessibleGuildIds.has(id));
 
-  console.log(`[GUILDS-DEBUG] User's Discord guilds: ${discordGuildIds.size} total`);
-  console.log(`[GUILDS-DEBUG] Database guilds missing from Discord: ${missingFromDiscord.length}:`, missingFromDiscord);
-  console.log(`[GUILDS-DEBUG] Discord guilds without DB access: ${inDiscordButNoDbAccess.length}:`, inDiscordButNoDbAccess);
+    console.log(`[GUILDS-DEBUG] User's Discord guilds: ${discordGuildIds.size} total`);
+    console.log(`[GUILDS-DEBUG] Database guilds missing from Discord: ${missingFromDiscord.length}:`, missingFromDiscord);
+    console.log(`[GUILDS-DEBUG] Discord guilds without DB access: ${inDiscordButNoDbAccess.length}:`, inDiscordButNoDbAccess);
+  } catch (debugError) {
+    console.error('[GUILDS-DEBUG] Error in Discord comparison:', debugError);
+  }
   } catch (error) {
     console.error('Failed to fetch database access records:', error);
+  }
+
+  // Debug: Compare with database access
+  try {
+    const dbAccessibleArray = Array.from(dbAccessibleGuildIds);
+    const botInstalledArray = Array.from(installedGuildIds);
+    console.log(`[GUILDS-DEBUG] Database accessible:`, dbAccessibleArray);
+    console.log(`[GUILDS-DEBUG] Bot installed:`, botInstalledArray);
+
+    const inDbNotInBot = dbAccessibleArray.filter(id => !installedGuildIds.has(id));
+    const inBotNotInDb = botInstalledArray.filter(id => !dbAccessibleGuildIds.has(id));
+
+    console.log(`[GUILDS-DEBUG] In DB but bot not installed: ${inDbNotInBot.length}:`, inDbNotInBot);
+    console.log(`[GUILDS-DEBUG] Bot installed but no DB access: ${inBotNotInDb.length}:`, inBotNotInDb);
+  } catch (debugError) {
+    console.error('[GUILDS-DEBUG] Error in debug comparison:', debugError);
   }
 
   // Filter user's Discord guilds to only those with database access
@@ -602,8 +610,8 @@ async function normalizeInstalledOnly(botBase: string) {
   const installedGuilds = await fetchInstalledGuilds(botBase);
   console.log(`[GUILDS-DEBUG] Raw installed guilds:`, installedGuilds?.length || 0);
   const installedSet = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
-  console.log(`[GUILDS-DEBUG] Installed guild IDs:`, [...installedSet]);
-  const installedAsUserGuilds = [...installedSet].map((id) => ({ id }));
+  console.log(`[GUILDS-DEBUG] Installed guild IDs:`, Array.from(installedSet));
+  const installedAsUserGuilds = Array.from(installedSet).map((id) => ({ id }));
   console.log(`[GUILDS-DEBUG] Installed as user guilds:`, installedAsUserGuilds.length);
   const result = await intersectAndNormalize(installedAsUserGuilds as any[], botBase);
   console.log(`[GUILDS-DEBUG] Final intersectAndNormalize result:`, result.length);
@@ -698,7 +706,7 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
 
   console.log(`[GUILDS-DEBUG] intersectAndNormalize - userGuilds:`, userGuilds.length);
   console.log(`[GUILDS-DEBUG] intersectAndNormalize - installedSet size:`, installedSet.size);
-  console.log(`[GUILDS-DEBUG] intersectAndNormalize - installedSet:`, [...installedSet]);
+  console.log(`[GUILDS-DEBUG] intersectAndNormalize - installedSet:`, Array.from(installedSet));
 
   const filtered = userGuilds
     .filter((g: any) => {
