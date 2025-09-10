@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Folder, Users, Shield, Bot, Zap, Star } from "lucide-react";
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
+import { useE2ETrackingContext } from '@/components/e2e-tracking-provider';
 
 interface Guild {
   id: string;
@@ -32,12 +33,16 @@ export default function GuildsPage() {
 
 function GuildsPageContent() {
   const router = useRouter();
+  const { trackStep, trackError } = useE2ETrackingContext();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchGuilds() {
+      const startTime = Date.now();
+
       try {
+        trackStep('guilds_fetch_start', { timestamp: startTime });
         console.log('[GUILDS] Fetching guilds...');
 
         // Since we're in authenticated layout, we should have valid session
@@ -47,30 +52,70 @@ function GuildsPageContent() {
 
         if (response.ok) {
           const data = await response.json();
-          console.log('[GUILDS] Guilds fetched successfully:', data.guilds?.length || 0, 'guilds');
+          const guildCount = data.guilds?.length || 0;
+          const fetchDuration = Date.now() - startTime;
+
+          console.log('[GUILDS] Guilds fetched successfully:', guildCount, 'guilds');
           console.log('[GUILDS] Full API response:', JSON.stringify(data, null, 2));
           console.log('[GUILDS] Guilds array:', data.guilds);
+
+          trackStep('guilds_fetch_success', {
+            guildCount,
+            fetchDuration,
+            hasGuilds: guildCount > 0,
+            timestamp: Date.now()
+          });
+
           setGuilds(data.guilds || []);
         } else if (response.status === 401) {
+          trackStep('guilds_fetch_unauthorized', {
+            statusCode: response.status,
+            timestamp: Date.now()
+          });
           console.log('[GUILDS] 401 response - redirecting to signin');
           router.replace('/signin');
           return;
         } else {
+          trackError({
+            type: 'api',
+            message: `Guilds API error: ${response.status}`,
+            context: {
+              statusCode: response.status,
+              endpoint: '/api/guilds',
+              timestamp: Date.now()
+            }
+          });
           console.error('[GUILDS] Unexpected response:', response.status);
           // For other errors, show empty state instead of redirecting
           setGuilds([]);
         }
       } catch (error) {
+        const fetchDuration = Date.now() - startTime;
+        trackError({
+          type: 'network',
+          message: 'Failed to fetch guilds',
+          stack: (error as Error).stack,
+          context: {
+            error: (error as Error).message,
+            fetchDuration,
+            timestamp: Date.now()
+          }
+        });
         console.error('[GUILDS] Error fetching guilds:', error);
         // On network errors, show empty state instead of redirecting
         setGuilds([]);
       } finally {
         setLoading(false);
+        trackStep('guilds_page_loaded', {
+          loadingDuration: Date.now() - startTime,
+          guildCount: guilds.length,
+          timestamp: Date.now()
+        });
       }
     }
 
     fetchGuilds();
-  }, [router]);
+  }, [router, trackStep, trackError]);
 
   if (loading) {
     return (
@@ -211,43 +256,55 @@ function GuildsPageContent() {
                       {groupServers.length} server{groupServers.length !== 1 ? 's' : ''}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {groupServers.map((guild) => (
-                        <Link key={guild.id} href={`/guilds/${guild.id}`} className="block group">
-                          <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
-                                {guild.iconUrl ? (
-                                  <Image
-                                    src={guild.iconUrl}
-                                    alt={guild.name}
-                                    width={40}
-                                    height={40}
-                                    className="rounded-lg"
-                                    unoptimized={true}
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                                    <span className="text-sm font-bold text-white">
-                                      {guild.name && guild.name.length > 0 ? guild.name.charAt(0).toUpperCase() : '?'}
-                                    </span>
+                          {groupServers.map((guild) => (
+                            <Link
+                              key={guild.id}
+                              href={`/guilds/${guild.id}`}
+                              className="block group"
+                              onClick={() => trackStep('guild_select', {
+                                guildId: guild.id,
+                                guildName: guild.name,
+                                memberCount: guild.memberCount,
+                                roleCount: guild.roleCount,
+                                groupName: group.name,
+                                timestamp: Date.now()
+                              })}
+                            >
+                              <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-3">
+                                    {guild.iconUrl ? (
+                                      <Image
+                                        src={guild.iconUrl}
+                                        alt={guild.name}
+                                        width={40}
+                                        height={40}
+                                        className="rounded-lg"
+                                        unoptimized={true}
+                                      />
+                                    ) : (
+                                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                                        <span className="text-sm font-bold text-white">
+                                          {guild.name && guild.name.length > 0 ? guild.name.charAt(0).toUpperCase() : '?'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-medium group-hover:text-primary transition-colors">
+                                        {guild.name}
+                                      </h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                      </p>
+                                    </div>
                                   </div>
-                                )}
-                                <div>
-                                  <h4 className="font-medium group-hover:text-primary transition-colors">
-                                    {guild.name}
-                                  </h4>
-                                  <p className="text-xs text-muted-foreground">
-                                    {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    {guild.premium && <GuildPremiumBadge />}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {guild.premium && <GuildPremiumBadge />}
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
+                            </Link>
+                          ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -273,42 +330,54 @@ function GuildsPageContent() {
                 />
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {individualGuilds.map((guild) => (
-                      <Link key={guild.id} href={`/guilds/${guild.id}`} className="block group">
-                        <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              {guild.iconUrl ? (
-                                <Image
-                                  src={guild.iconUrl}
-                                  alt={guild.name}
-                                  width={40}
-                                  height={40}
-                                  className="rounded-lg"
-                                />
-                              ) : (
-                                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                                  <span className="text-sm font-semibold text-muted-foreground">
-                                    {guild.name.charAt(0).toUpperCase()}
-                                  </span>
+                        {individualGuilds.map((guild) => (
+                          <Link
+                            key={guild.id}
+                            href={`/guilds/${guild.id}`}
+                            className="block group"
+                            onClick={() => trackStep('guild_select', {
+                              guildId: guild.id,
+                              guildName: guild.name,
+                              memberCount: guild.memberCount,
+                              roleCount: guild.roleCount,
+                              isIndividual: true,
+                              timestamp: Date.now()
+                            })}
+                          >
+                            <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-3">
+                                  {guild.iconUrl ? (
+                                    <Image
+                                      src={guild.iconUrl}
+                                      alt={guild.name}
+                                      width={40}
+                                      height={40}
+                                      className="rounded-lg"
+                                    />
+                                  ) : (
+                                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                                      <span className="text-sm font-semibold text-muted-foreground">
+                                        {guild.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="font-medium group-hover:text-primary transition-colors">
+                                      {guild.name}
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground">
+                                      {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
+                                    </p>
+                                  </div>
                                 </div>
-                              )}
-                              <div>
-                                <h4 className="font-medium group-hover:text-primary transition-colors">
-                                  {guild.name}
-                                </h4>
-                                <p className="text-xs text-muted-foreground">
-                                  {guild.memberCount?.toLocaleString() || 'N/A'} members • {guild.roleCount?.toLocaleString() || 'N/A'} roles
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  {guild.premium && <GuildPremiumBadge />}
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {guild.premium && <GuildPremiumBadge />}
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
+                          </Link>
+                        ))}
                   </div>
                 </CardContent>
               </Card>

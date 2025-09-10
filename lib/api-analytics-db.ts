@@ -30,6 +30,49 @@ export interface APIRequest {
   targetUserName?: string;
   targetChannelId?: string;
   targetChannelName?: string;
+  // Enhanced E2E tracking
+  sessionId?: string;
+  userJourneyStep?: string;
+  frontendVersion?: string;
+  browserInfo?: string;
+  performanceMetrics?: {
+    domContentLoaded?: number;
+    firstContentfulPaint?: number;
+    largestContentfulPaint?: number;
+    firstInputDelay?: number;
+    cumulativeLayoutShift?: number;
+  };
+  networkTiming?: {
+    dnsLookup?: number;
+    tcpConnect?: number;
+    tlsHandshake?: number;
+    serverResponse?: number;
+    contentTransfer?: number;
+  };
+  clientErrors?: string[];
+  jsErrors?: Array<{
+    message: string;
+    stack?: string;
+    filename?: string;
+    lineno?: number;
+    colno?: number;
+    timestamp: string;
+  }>;
+  // Bot Activity Tracking
+  botActivity?: {
+    commandUsed?: string;
+    guildId?: string;
+    channelId?: string;
+    userId?: string;
+    responseTime?: number;
+    success?: boolean;
+    errorMessage?: string;
+    botUptime?: number;
+    activeGuilds?: number;
+    totalCommandsProcessed?: number;
+    memoryUsage?: number;
+    cpuUsage?: number;
+  };
 }
 
 export interface APIStats {
