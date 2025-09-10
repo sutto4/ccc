@@ -528,13 +528,58 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
 
-  // Since we've already filtered by bot installation, just normalize the results
+  // Map Discord guilds with bot data
+  console.log(`[GUILDS-API] DEBUG: About to start mapping ${accessibleUserGuilds.length} guilds`);
+  console.log(`[GUILDS-API] DEBUG: First guild in accessibleUserGuilds:`, accessibleUserGuilds[0]);
+  console.log(`[GUILDS-API] DEBUG: Installed guilds count:`, (installedGuilds || []).length);
+  console.log(`[GUILDS-API] DEBUG: First installed guild:`, (installedGuilds || [])[0]);
+
   let results: any[] = [];
   try {
-    const normalizedResults = await normalizeAccessibleGuilds(accessibleUserGuilds);
-    results = Array.isArray(normalizedResults) ? normalizedResults : [];
-  } catch (normalizeError) {
-    console.error('[GUILDS] Error in normalizeAccessibleGuilds:', normalizeError);
+    console.log(`[GUILDS-API] MAPPING: Starting map operation for ${accessibleUserGuilds.length} guilds`);
+    results = accessibleUserGuilds
+      .map((g: any) => {
+      console.log(`[GUILDS-API] MAPPING: Processing guild ${g?.id} - ${g?.name}`);
+      console.log(`[GUILDS-API] MAPPING: Guild object:`, g);
+      const id = String((g && (g as any).id) || "");
+
+      // Create a simple lookup map for faster matching
+      const botGuildMap = new Map();
+      (installedGuilds || []).forEach((botGuild: any) => {
+        const botId = String(botGuild.id || botGuild.guild_id || botGuild.guildId || "");
+        botGuildMap.set(botId, botGuild);
+      });
+
+      let installed = botGuildMap.get(id) || {};
+
+      console.log(`[GUILDS-API] DEBUG: Match result for ${id}:`, {
+        found: !!installed.id,
+        hasMemberCount: !!installed.memberCount,
+        hasRoleCount: !!installed.roleCount,
+        installedKeys: Object.keys(installed)
+      });
+
+      const memberCount = Number(installed.memberCount) || 0;
+      const roleCount = Number(installed.roleCount) || 0;
+
+      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${memberCount}, roleCount=${roleCount}`);
+
+      const result = {
+        id,
+        name: String((g && (g as any).name) || (installed as any).guild_name || installed.name || ""),
+        memberCount,
+        roleCount,
+        iconUrl: installed.iconUrl ||
+                 ((g && (g as any).icon && id) ? `https://cdn.discordapp.com/icons/${id}/${(g as any).icon}.png` : null),
+        premium: Boolean(installed.premium || false),
+        createdAt: null as string | null,
+        group: null
+      };
+
+      return result;
+    });
+  } catch (mappingError) {
+    console.error('[GUILDS] Error in guild mapping:', mappingError);
     results = [];
   }
 
@@ -779,13 +824,12 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
     });
 
   console.log(`[GUILDS-DEBUG] After filtering: ${filtered.length} guilds`);
-
-  console.log(`[GUILDS-API] DEBUG: About to start mapping ${filtered.length} guilds`);
-
-  try {
-    const results = filtered
-      .map((g: any) => {
-      console.log(`[GUILDS-API] DEBUG: Processing Discord guild:`, { id: g?.id, name: g?.name });
+    // DUPLICATE CODE - COMMENTED OUT
+    // console.log(`[GUILDS-API] MAPPING: Starting map operation for ${filtered.length} guilds`);
+    // const results = filtered
+    //   .map((g: any) => {
+      console.log(`[GUILDS-API] MAPPING: Processing guild ${g?.id} - ${g?.name}`);
+      console.log(`[GUILDS-API] MAPPING: Guild object:`, g);
       const id = String((g && (g as any).id) || "");
 
       // Create a simple lookup map for faster matching
@@ -857,34 +901,34 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         } : null,
       };
 
-      console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${result.memberCount}, roleCount=${result.roleCount}`);
+      // console.log(`[GUILDS-API] RESULT: ${g?.name || id} - memberCount=${result.memberCount}, roleCount=${result.roleCount}`);
 
-      return result;
-    });
+      // return result;
+    // });
 
-    console.log(`[GUILDS-API] DEBUG: Mapping completed successfully, ${results.length} results`);
-    return results;
+    // console.log(`[GUILDS-API] DEBUG: Mapping completed successfully, ${results.length} results`);
+    // return results;
 
-  } catch (error) {
-    console.error(`[GUILDS-API] ERROR: Failed during guild mapping:`, error);
-    console.error(`[GUILDS-API] ERROR: filtered guilds:`, filtered);
-    console.error(`[GUILDS-API] ERROR: installed guilds:`, installedGuilds);
-    return filtered.map((g: any) => ({
-      id: String((g && (g as any).id) || ""),
-      name: String((g && (g as any).name) || ""),
-      memberCount: 0,
-      roleCount: 0,
-      iconUrl: null,
-      premium: false,
-      createdAt: null,
-      group: null
-    }));
-  }
+  // } catch (error) {
+  //   console.error(`[GUILDS-API] ERROR: Failed during guild mapping:`, error);
+  //   console.error(`[GUILDS-API] ERROR: filtered guilds:`, filtered);
+  //   console.error(`[GUILDS-API] ERROR: installed guilds:`, installedGuilds);
+  //   return filtered.map((g: any) => ({
+  //     id: String((g && (g as any).id) || ""),
+  //     name: String((g && (g as any).name) || ""),
+  //     memberCount: 0,
+  //     roleCount: 0,
+  //     iconUrl: null,
+  //     premium: false,
+  //     createdAt: null,
+  //     group: null
+  //   }));
+  // }
 
-  console.log(`[GUILDS-API] FINAL RESPONSE: ${results.length} guilds`);
-  results.forEach((guild, index) => {
-    console.log(`[GUILDS-API] Guild ${index + 1}: ${guild.name} - ${guild.memberCount} members, ${guild.roleCount} roles`);
-  });
+  // console.log(`[GUILDS-API] FINAL RESPONSE: ${results.length} guilds`);
+  // results.forEach((guild, index) => {
+  //   console.log(`[GUILDS-API] Guild ${index + 1}: ${guild.name} - ${guild.memberCount} members, ${guild.roleCount} roles`);
+  // });
 
-  return NextResponse.json({ guilds: results });
+  // return NextResponse.json({ guilds: results });
 };
