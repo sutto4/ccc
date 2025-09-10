@@ -92,9 +92,15 @@ export default function E2EMonitoringPage() {
       }
       const data = await response.json();
 
+      console.log('[E2E-MONITORING-FRONTEND] Received data:', {
+        sessionSummariesCount: data.sessionSummaries?.length || 0,
+        hasSystemStats: !!data.systemStats,
+        botStats: data.systemStats?.botStats
+      });
+
       // Use the data from API response
-      setSessions(data.sessionSummaries);
-      setSystemStats(data.systemStats);
+      setSessions(data.sessionSummaries || []);
+      setSystemStats(data.systemStats || null);
 
     } catch (error) {
       console.error('Failed to refresh E2E monitoring data:', error);
@@ -112,7 +118,7 @@ export default function E2EMonitoringPage() {
       }
       const data = await response.json();
 
-      setSessionDetails(data.sessionDetails);
+      setSessionDetails(data.sessionDetails || null);
       setSelectedSession(sessionId);
     } catch (error) {
       console.error('Failed to load session details:', error);
