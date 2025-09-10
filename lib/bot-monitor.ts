@@ -181,28 +181,34 @@ class BotMonitor {
         this.recentActivities = activitiesData.activities || activitiesData || [];
 
         // Log recent command activities
-        this.recentActivities.forEach(activity => {
-          apiAnalytics.logRequest({
-            id: `bot_command_${activity.timestamp}_${activity.command}`,
-            endpoint: `/bot/command/${activity.command}`,
-            method: 'COMMAND',
-            userId: activity.userId,
-            statusCode: activity.success ? 200 : 500,
-            responseTime: activity.responseTime,
-            environment: (process.env.NODE_ENV as any) || 'production',
-            timestamp: new Date(activity.timestamp).toISOString(),
-            error: activity.errorMessage,
-            botActivity: {
-              commandUsed: activity.command,
-              guildId: activity.guildId,
-              channelId: activity.channelId,
+        try {
+          const { apiAnalytics } = await import('./api-analytics-db');
+          this.recentActivities.forEach(activity => {
+            apiAnalytics.logRequest({
+              id: `bot_command_${activity.timestamp}_${activity.command}`,
+              endpoint: `/bot/command/${activity.command}`,
+              method: 'COMMAND',
               userId: activity.userId,
+              statusCode: activity.success ? 200 : 500,
               responseTime: activity.responseTime,
-              success: activity.success,
-              errorMessage: activity.errorMessage
-            }
-          }).catch(err => console.error('Failed to log bot command:', err));
-        });
+              environment: (process.env.NODE_ENV as any) || 'production',
+              timestamp: new Date(activity.timestamp).toISOString(),
+              error: activity.errorMessage,
+              botActivity: {
+                commandUsed: activity.command,
+                guildId: activity.guildId,
+                channelId: activity.channelId,
+                userId: activity.userId,
+                responseTime: activity.responseTime,
+                success: activity.success,
+                errorMessage: activity.errorMessage
+              }
+            }).catch(err => console.error('Failed to log bot command:', err));
+          });
+        } catch (error) {
+          // Analytics not available in client context, skip logging
+          console.warn('🤖 [BOT-MONITOR] Bot activity logging skipped - analytics not available');
+        }
       }
     } catch (error) {
       console.warn('🤖 [BOT-MONITOR] Failed to poll bot activities:', error);
