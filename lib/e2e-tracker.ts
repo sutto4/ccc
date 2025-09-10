@@ -1,5 +1,5 @@
 // Enhanced End-to-End User Journey Tracking
-import { apiAnalytics } from './api-analytics-db';
+// Note: We avoid importing apiAnalytics directly to prevent mysql2 bundling issues in client components
 
 export interface UserJourneyStep {
   step: string;
@@ -94,7 +94,7 @@ class E2ETracker {
     return id;
   }
 
-  trackStep(sessionId: string, step: string, metadata?: Record<string, any>): void {
+  async trackStep(sessionId: string, step: string, metadata?: Record<string, any>): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       console.warn(`⚠️ [E2E-TRACKER] Session not found: ${sessionId}`);
@@ -119,22 +119,27 @@ class E2ETracker {
 
     console.log(`📍 [E2E-TRACKER] ${sessionId}: ${step}${journeyStep.duration ? ` (+${journeyStep.duration}ms)` : ''}`, metadata || '');
 
-    // Log to analytics if it's an API call
+    // Log to analytics if it's an API call (only if available)
     if (step.includes('api') || step.includes('fetch')) {
-      apiAnalytics.logRequest({
-        id: `e2e_${sessionId}_${step}_${Date.now()}`,
-        endpoint: step,
-        method: 'TRACK',
-        userId: session.userId,
-        discordId: session.discordId,
-        userJourneyStep: step,
-        sessionId,
-        environment: (process.env.NODE_ENV as any) || 'production',
-        timestamp: new Date().toISOString(),
-        statusCode: 200,
-        responseTime: journeyStep.duration || 0,
-        ...metadata
-      }).catch(err => console.error('Failed to log E2E analytics:', err));
+      try {
+        const { apiAnalytics } = await import('./api-analytics-db');
+        apiAnalytics.logRequest({
+          id: `e2e_${sessionId}_${step}_${Date.now()}`,
+          endpoint: step,
+          method: 'TRACK',
+          userId: session.userId,
+          discordId: session.discordId,
+          userJourneyStep: step,
+          sessionId,
+          environment: (process.env.NODE_ENV as any) || 'production',
+          timestamp: new Date().toISOString(),
+          statusCode: 200,
+          responseTime: journeyStep.duration || 0,
+          ...metadata
+        }).catch(err => console.error('Failed to log E2E analytics:', err));
+      } catch (error) {
+        // Analytics not available in client context, skip logging
+      }
     }
   }
 
@@ -190,7 +195,7 @@ class E2ETracker {
     }
 
     // Add session end step
-    this.trackStep(sessionId, 'session_end', {
+    await this.trackStep(sessionId, 'session_end', {
       totalDuration: Date.now() - session.startTime,
       totalSteps: session.journey.length,
       totalErrors: session.errors.length
@@ -217,14 +222,14 @@ class E2ETracker {
   }
 
   // Utility method to track common user flows
-  trackUserFlow(sessionId: string, flow: 'login' | 'guild_selection' | 'admin_access' | 'user_management' | 'role_management', step: string, metadata?: any): void {
-    this.trackStep(sessionId, `${flow}_${step}`, metadata);
+  async trackUserFlow(sessionId: string, flow: 'login' | 'guild_selection' | 'admin_access' | 'user_management' | 'role_management', step: string, metadata?: any): Promise<void> {
+    await this.trackStep(sessionId, `${flow}_${step}`, metadata);
   }
 
   // Performance monitoring
-  trackApiCall(sessionId: string, endpoint: string, method: string, startTime: number, statusCode: number, error?: string): void {
+  async trackApiCall(sessionId: string, endpoint: string, method: string, startTime: number, statusCode: number, error?: string): Promise<void> {
     const duration = Date.now() - startTime;
-    this.trackStep(sessionId, `api_${endpoint.replace('/', '_')}`, {
+    await this.trackStep(sessionId, `api_${endpoint.replace('/', '_')}`, {
       method,
       statusCode,
       duration,
@@ -243,7 +248,7 @@ class E2ETracker {
     }
 
     // If this session involves the same user, link the bot activity to the user journey
-    this.trackStep(sessionId, `bot_command_${activity.command}`, {
+    await this.trackStep(sessionId, `bot_command_${activity.command}`, {
       command: activity.command,
       guildId: activity.guildId,
       channelId: activity.channelId,
@@ -256,8 +261,8 @@ class E2ETracker {
   }
 
   // Track user-bot interaction correlation
-  trackUserBotCorrelation(sessionId: string, webUserId: string, discordUserId: string, guildId: string): void {
-    this.trackStep(sessionId, 'user_bot_correlation', {
+  async trackUserBotCorrelation(sessionId: string, webUserId: string, discordUserId: string, guildId: string): Promise<void> {
+    await this.trackStep(sessionId, 'user_bot_correlation', {
       webUserId,
       discordUserId,
       guildId,
@@ -300,8 +305,8 @@ export function startUserSession(userId: string, discordId: string, sessionId?: 
   return e2eTracker.startSession(userId, discordId, sessionId);
 }
 
-export function trackUserStep(sessionId: string, step: string, metadata?: any): void {
-  e2eTracker.trackStep(sessionId, step, metadata);
+export async function trackUserStep(sessionId: string, step: string, metadata?: any): Promise<void> {
+  await e2eTracker.trackStep(sessionId, step, metadata);
 }
 
 export function trackUserError(sessionId: string, error: Parameters<E2ETracker['trackError']>[1]): void {
@@ -315,7 +320,7 @@ export function endUserSession(sessionId: string): UserSession | null {
 // React hook for frontend integration
 export function useE2ETracking(sessionId: string) {
   return {
-    trackStep: (step: string, metadata?: any) => e2eTracker.trackStep(sessionId, step, metadata),
+    trackStep: async (step: string, metadata?: any) => await e2eTracker.trackStep(sessionId, step, metadata),
     trackError: (error: Parameters<E2ETracker['trackError']>[1]) => e2eTracker.trackError(sessionId, error),
     updateBrowserInfo: (browserInfo: UserSession['browserInfo']) => e2eTracker.updateBrowserInfo(sessionId, browserInfo),
     updatePerformanceData: (performanceData: UserSession['performanceData']) => e2eTracker.updatePerformanceData(sessionId, performanceData)

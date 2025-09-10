@@ -5,7 +5,7 @@ import { useE2ETracking, startUserSession, endUserSession } from '@/lib/e2e-trac
 
 interface E2ETrackingContextType {
   sessionId: string | null;
-  trackStep: (step: string, metadata?: any) => void;
+  trackStep: (step: string, metadata?: any) => Promise<void>;
   trackError: (error: any) => void;
   isTracking: boolean;
 }
@@ -176,9 +176,9 @@ export function E2ETrackingProvider({
 
   const value: E2ETrackingContextType = {
     sessionId,
-    trackStep: (step: string, metadata?: any) => {
+    trackStep: async (step: string, metadata?: any) => {
       if (sessionId) {
-        useE2ETracking(sessionId).trackStep(step, metadata);
+        await useE2ETracking(sessionId).trackStep(step, metadata);
       }
     },
     trackError: (error: any) => {

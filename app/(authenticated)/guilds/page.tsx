@@ -42,7 +42,7 @@ function GuildsPageContent() {
       const startTime = Date.now();
 
       try {
-        trackStep('guilds_fetch_start', { timestamp: startTime });
+        await trackStep('guilds_fetch_start', { timestamp: startTime });
         console.log('[GUILDS] Fetching guilds...');
 
         // Since we're in authenticated layout, we should have valid session
@@ -59,7 +59,7 @@ function GuildsPageContent() {
           console.log('[GUILDS] Full API response:', JSON.stringify(data, null, 2));
           console.log('[GUILDS] Guilds array:', data.guilds);
 
-          trackStep('guilds_fetch_success', {
+          await trackStep('guilds_fetch_success', {
             guildCount,
             fetchDuration,
             hasGuilds: guildCount > 0,
@@ -68,7 +68,7 @@ function GuildsPageContent() {
 
           setGuilds(data.guilds || []);
         } else if (response.status === 401) {
-          trackStep('guilds_fetch_unauthorized', {
+          await trackStep('guilds_fetch_unauthorized', {
             statusCode: response.status,
             timestamp: Date.now()
           });
@@ -106,7 +106,7 @@ function GuildsPageContent() {
         setGuilds([]);
       } finally {
         setLoading(false);
-        trackStep('guilds_page_loaded', {
+        await trackStep('guilds_page_loaded', {
           loadingDuration: Date.now() - startTime,
           guildCount: guilds.length,
           timestamp: Date.now()
@@ -268,7 +268,7 @@ function GuildsPageContent() {
                                 roleCount: guild.roleCount,
                                 groupName: group.name,
                                 timestamp: Date.now()
-                              })}
+                              }).catch(err => console.error('Failed to track guild select:', err))}
                             >
                               <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
                                 <div className="flex items-start justify-between">
@@ -342,7 +342,7 @@ function GuildsPageContent() {
                               roleCount: guild.roleCount,
                               isIndividual: true,
                               timestamp: Date.now()
-                            })}
+                            }).catch(err => console.error('Failed to track guild select:', err))}
                           >
                             <div className="relative rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
                               <div className="flex items-start justify-between">
