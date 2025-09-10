@@ -115,6 +115,16 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
 
       // Fetch moderation stats
       await fetchStats(id);
+
+      // Check for case parameter in URL to auto-open case details
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const caseParam = urlParams.get('case');
+        if (caseParam) {
+          setSelectedCaseId(caseParam);
+          setActiveTab("case-detail");
+        }
+      }
     };
     getGuildId();
   }, [params]);
