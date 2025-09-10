@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -26,6 +26,38 @@ function GuildsPageContent() {
   const { trackStep, trackError } = useE2ETrackingContext();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupedGuilds, setGroupedGuilds] = useState<any[]>([]);
+  const [individualGuilds, setIndividualGuilds] = useState<Guild[]>([]);
+
+  // Process guilds into groups and individuals (memoized for performance)
+  const processGuilds = useCallback((guildList: Guild[]) => {
+    const grouped = guildList.filter(g => g.group);
+    const individual = guildList.filter(g => !g.group);
+
+    // Build groups with servers and sort
+    const processedGroups = Array.from(
+      grouped.reduce<Map<number, { id: number; name: string; description: string | null; servers: Guild[] }>>(
+        (acc, g) => {
+          const gr = g.group!;
+          const cur = acc.get(gr.id) || { id: gr.id, name: gr.name || 'Unnamed Group', description: gr.description, servers: [] };
+          cur.servers.push(g);
+          acc.set(gr.id, cur);
+          return acc;
+        },
+        new Map()
+      ).values()
+    )
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+      .map(group => ({
+        ...group,
+        servers: [...group.servers].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+      }));
+
+    const sortedIndividuals = [...individual].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
+    setGroupedGuilds(processedGroups);
+    setIndividualGuilds(sortedIndividuals);
+  }, []);
 
   useEffect(() => {
     async function fetchGuilds() {
@@ -61,6 +93,7 @@ function GuildsPageContent() {
           });
 
           setGuilds(data.guilds || []);
+          processGuilds(data.guilds || []);
         } else if (response.status === 401) {
           trackStep('guilds_fetch_unauthorized', {
             statusCode: response.status,
@@ -82,6 +115,8 @@ function GuildsPageContent() {
           // DEBUG: console.error('[GUILDS] Unexpected response:', response.status);
           // For other errors, show empty state instead of redirecting
           setGuilds([]);
+          setGroupedGuilds([]);
+          setIndividualGuilds([]);
         }
       } catch (error) {
         const fetchDuration = Date.now() - startTime;
@@ -98,6 +133,8 @@ function GuildsPageContent() {
         // DEBUG: console.error('[GUILDS] Error fetching guilds:', error);
         // On network errors, show empty state instead of redirecting
         setGuilds([]);
+        setGroupedGuilds([]);
+        setIndividualGuilds([]);
       } finally {
         setLoading(false);
         trackStep('guilds_page_loaded', {
@@ -211,27 +248,7 @@ function GuildsPageContent() {
       <Section title="My Servers">
         <div className="space-y-6">
           {/* Grouped Servers */}
-          {(() => {
-            const groupedGuilds = guilds.filter(g => g.group);
-            if (groupedGuilds.length === 0) return null;
-
-            // Build groups with servers and sort
-            const groups = Array.from(
-              groupedGuilds.reduce<Map<number, { id: number; name: string; description: string | null; servers: Guild[] }>>(
-                (acc, g) => {
-                  const gr = g.group!;
-                  const cur = acc.get(gr.id) || { id: gr.id, name: gr.name || 'Unnamed Group', description: gr.description, servers: [] };
-                  cur.servers.push(g);
-                  acc.set(gr.id, cur);
-                  return acc;
-                },
-                new Map()
-              ).values()
-            )
-              .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-
-            return groups.map(group => {
-              const groupServers = [...group.servers].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+          {groupedGuilds.length > 0 && groupedGuilds.map(group => {
 
               return (
                 <Card key={group.id} className="border-2 border-blue-100 bg-blue-50/30">
@@ -247,10 +264,10 @@ function GuildsPageContent() {
                   <CardContent>
                     <div className="mb-2 text-xs text-blue-700">
                       <Users className="inline h-3 w-3 mr-1 align-text-bottom" />
-                      {groupServers.length} server{groupServers.length !== 1 ? 's' : ''}
+                      {group.servers.length} server{group.servers.length !== 1 ? 's' : ''}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {groupServers.map((guild) => (
+                          {group.servers.map((guild) => (
                             <Link
                               key={guild.id}
                               href={`/guilds/${guild.id}`}
@@ -307,11 +324,7 @@ function GuildsPageContent() {
           })()}
 
           {/* Individual Servers */}
-          {(() => {
-            const individualGuilds = guilds.filter(g => !g.group);
-            if (individualGuilds.length === 0) return null;
-            
-            return (
+          {individualGuilds.length > 0 && (
               <Card className="border-2 border-gray-200 bg-gray-50/30">
                 <CardHeader
                   title={

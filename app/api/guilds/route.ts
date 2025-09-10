@@ -256,27 +256,27 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
-  console.log(`[SECURITY-AUDIT] Cache key: ${ugCacheKey}, cached guilds: ${userGuilds.length}`);
-  console.log(`[SECURITY-AUDIT] Cache should be user-specific: ${ugCacheKey.startsWith(`userGuilds:${discordId}:`)}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Cache key: ${ugCacheKey}, cached guilds: ${userGuilds.length}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Cache should be user-specific: ${ugCacheKey.startsWith(`userGuilds:${discordId}:`)}`);
 
   // SECURITY: Verify cached data belongs to this user
   if (userGuilds.length > 0) {
-    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
-    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
-    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE KEY: ${ugCacheKey}`);
+    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
+    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
+    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE KEY: ${ugCacheKey}`);
 
     // EMERGENCY SECURITY: Clear cache if it doesn't belong to this user
     if (discordId && !ugCacheKey.includes(discordId)) {
-      console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - CACHE POLLUTION DETECTED! User ${discordId} got cache for different user`);
-      console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - FORCED FRESH FETCH for user ${discordId}`);
+      // DEBUG: console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - CACHE POLLUTION DETECTED! User ${discordId} got cache for different user`);
+      // DEBUG: console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - FORCED FRESH FETCH for user ${discordId}`);
       userGuilds = []; // Force fresh fetch
     }
   }
 
-  console.log('🔍 Guilds API Debug:');
-  console.log('- Cache key:', ugCacheKey);
-  console.log('- Cached guilds count:', userGuilds.length);
-  console.log('- Cache hit:', userGuilds.length > 0);
+  // DEBUG: console.log('🔍 Guilds API Debug:');
+  // DEBUG: console.log('- Cache key:', ugCacheKey);
+  // DEBUG: console.log('- Cached guilds count:', userGuilds.length);
+  // DEBUG: console.log('- Cache hit:', userGuilds.length > 0);
 
   if (userGuilds.length === 0) {
     // In-flight de-duplication to avoid concurrent double fetches
@@ -293,7 +293,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   if (userGuilds.length === 0) {
     const promise = (async () => {
       let userGuildsRes: Response;
-      console.log(`[GUILDS-DEBUG] Fetching user guilds from Discord API`);
+      // DEBUG: console.log(`[GUILDS-DEBUG] Fetching user guilds from Discord API`);
       try {
         // Validate token before making the call
         if (!accessToken || accessToken.length < 10) {
@@ -306,7 +306,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
             'User-Agent': 'ServerMate/1.0'
           }
         });
-        console.log(`[GUILDS-DEBUG] Discord API response status: ${userGuildsRes.status}`);
+        // DEBUG: console.log(`[GUILDS-DEBUG] Discord API response status: ${userGuildsRes.status}`);
       } catch (err: any) {
         console.error(`[GUILDS-DEBUG] Discord API fetch exception:`, err?.message);
         console.error(`[GUILDS-DEBUG] Error details:`, {
@@ -370,7 +370,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       // Handle successful response
       userGuilds = Array.isArray(result) ? result : [];
 
-      console.log(`[GUILDS-DEBUG] Successfully fetched ${userGuilds.length} user guilds from Discord`);
+      // DEBUG: console.log(`[GUILDS-DEBUG] Successfully fetched ${userGuilds.length} user guilds from Discord`);
       cache.set(ugCacheKey, userGuilds, 5 * 60_000); // cache 5 minutes
       cache.set(`${ugCacheKey}:shield`, userGuilds, 2_000);
     } catch (e: any) {
@@ -394,7 +394,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
       // For other errors, use empty array
       userGuilds = [];
-      console.log(`[GUILDS-DEBUG] Using empty guilds array due to API error`);
+      // DEBUG: console.log(`[GUILDS-DEBUG] Using empty guilds array due to API error`);
     } finally {
       inFlightUserGuilds.delete(tokenKey);
     }
@@ -423,20 +423,20 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     }
 
     // Continue with normal processing after successful fetch or error handling
-    console.log(`[SECURITY-AUDIT] User ${discordId} has ${userGuilds.length} total Discord guilds`);
-    console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
+    // DEBUG: console.log(`[SECURITY-AUDIT] User ${discordId} has ${userGuilds.length} total Discord guilds`);
+    // DEBUG: console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
 
     // Get bot-installed guilds first
     const installedGuilds = await fetchInstalledGuilds(botBase);
     const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
-    console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
-    console.log(`[GUILDS] Installed guilds data:`, installedGuilds?.map(g => ({
-      id: g.guild_id || g.id,
-      name: g.guild_name || g.name,
-      memberCount: g.memberCount,
-      roleCount: g.roleCount
-    })));
+    // DEBUG: console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
+    // DEBUG: console.log(`[GUILDS] Installed guilds data:`, installedGuilds?.map(g => ({
+    // DEBUG:   id: g.guild_id || g.id,
+    // DEBUG:   name: g.guild_name || g.name,
+    // DEBUG:   memberCount: g.memberCount,
+    // DEBUG:   roleCount: g.roleCount
+    // DEBUG: })));
 
   // Get all guilds where user has database access
   const userId = discordId!;
@@ -540,16 +540,19 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   let groupInfo: any = {};
   try {
     const db = await import('@/lib/db');
-    const groups = await db.query(`
-      SELECT
-        g.guild_id,
-        sg.id as group_id,
-        sg.name as group_name,
-        sg.description as group_description
-      FROM guilds g
-      LEFT JOIN server_groups sg ON g.group_id = sg.id
-      WHERE g.guild_id IN (${accessibleGuildIds.size > 0 ? Array.from(accessibleGuildIds).map(() => '?').join(',') : 'NULL'})
-    `, Array.from(accessibleGuildIds));
+    let groups: any[] = [];
+    if (accessibleGuildIds.size > 0) {
+      groups = await db.query(`
+        SELECT
+          g.guild_id,
+          sg.id as group_id,
+          sg.name as group_name,
+          sg.description as group_description
+        FROM guilds g
+        LEFT JOIN server_groups sg ON g.group_id = sg.id
+        WHERE g.guild_id IN (${Array.from(accessibleGuildIds).map(() => '?').join(',')})
+      `, Array.from(accessibleGuildIds));
+    }
 
     groups.forEach((g: any) => {
       groupInfo[g.guild_id] = {
@@ -664,64 +667,64 @@ async function fetchInstalledGuilds(botBase: string) {
   // Clear cache to force fresh fetch
   cache.delete(igCacheKey);
   let installedGuilds = cache.get<any[]>(igCacheKey) || [];
-  console.log('[BOT-API] Installed guilds from cache (after clear):', installedGuilds.length);
+  // DEBUG: console.log('[BOT-API] Installed guilds from cache (after clear):', installedGuilds.length);
 
   if (installedGuilds.length === 0 && botBase) {
-    console.log('[BOT-API] Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
+    // DEBUG: console.log('[BOT-API] Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
     try {
       const botRes = await fetch(`${botBase}/api/guilds`);
-      console.log('[BOT-API] 🔗 Attempting to connect to:', `${botBase}/api/guilds`);
-      console.log('[BOT-API] 📊 Response status:', botRes.status);
+      // DEBUG: console.log('[BOT-API] 🔗 Attempting to connect to:', `${botBase}/api/guilds`);
+      // DEBUG: console.log('[BOT-API] 📊 Response status:', botRes.status);
 
       if (botRes.ok) {
         const rawResponse = await botRes.text();
-        console.log('[BOT-API] Raw response:', rawResponse.substring(0, 500));
+        // DEBUG: console.log('[BOT-API] Raw response:', rawResponse.substring(0, 500));
 
         try {
           installedGuilds = JSON.parse(rawResponse) as any[];
-          console.log('[BOT-API] ✅ Bot API returned', installedGuilds.length, 'guilds');
+          // DEBUG: console.log('[BOT-API] ✅ Bot API returned', installedGuilds.length, 'guilds');
 
           if (installedGuilds.length > 0) {
-            console.log('[BOT-API] First guild sample:', {
-              keys: Object.keys(installedGuilds[0]),
-              data: installedGuilds[0]
-            });
+            // DEBUG: console.log('[BOT-API] First guild sample:', {
+            // DEBUG:   keys: Object.keys(installedGuilds[0]),
+            // DEBUG:   data: installedGuilds[0]
+            // DEBUG: });
 
             // Check if the data has the expected fields
-            console.log('[BOT-API] DEBUG: memberCount in first guild:', installedGuilds[0].memberCount, 'type:', typeof installedGuilds[0].memberCount);
-            console.log('[BOT-API] DEBUG: roleCount in first guild:', installedGuilds[0].roleCount, 'type:', typeof installedGuilds[0].roleCount);
+            // DEBUG: console.log('[BOT-API] DEBUG: memberCount in first guild:', installedGuilds[0].memberCount, 'type:', typeof installedGuilds[0].memberCount);
+            // DEBUG: console.log('[BOT-API] DEBUG: roleCount in first guild:', installedGuilds[0].roleCount, 'type:', typeof installedGuilds[0].roleCount);
           }
 
           cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
         } catch (parseError) {
-          console.error('[BOT-API] ❌ Failed to parse JSON:', parseError);
-          console.error('[BOT-API] Raw response was:', rawResponse);
+          // DEBUG: console.error('[BOT-API] ❌ Failed to parse JSON:', parseError);
+          // DEBUG: console.error('[BOT-API] Raw response was:', rawResponse);
           installedGuilds = [];
         }
       } else {
-        console.warn("[BOT-API] ❌ /api/guilds bot endpoint failed:", botRes.status);
+        // DEBUG: console.warn("[BOT-API] ❌ /api/guilds bot endpoint failed:", botRes.status);
         const errorText = await botRes.text();
-        console.warn('[BOT-API] ❌ Error response:', errorText);
+        // DEBUG: console.warn('[BOT-API] ❌ Error response:', errorText);
 
         // Try to provide more debugging info
-        console.warn('[BOT-API] 🔍 Connection Diagnostics:');
-        console.warn('[BOT-API] - Target URL:', `${botBase}/api/guilds`);
-        console.warn('[BOT-API] - Status:', botRes.status);
-        console.warn('[BOT-API] - Status Text:', botRes.statusText);
-        console.warn('[BOT-API] - Headers:', Object.fromEntries(botRes.headers.entries()));
+        // DEBUG: console.warn('[BOT-API] 🔍 Connection Diagnostics:');
+        // DEBUG: console.warn('[BOT-API] - Target URL:', `${botBase}/api/guilds`);
+        // DEBUG: console.warn('[BOT-API] - Status:', botRes.status);
+        // DEBUG: console.warn('[BOT-API] - Status Text:', botRes.statusText);
+        // DEBUG: console.warn('[BOT-API] - Headers:', Object.fromEntries(botRes.headers.entries()));
 
         // Return empty array so web app continues to work without bot data
-        console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
+        // DEBUG: console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
         return [];
       }
     } catch (err) {
-      console.warn("[BOT-API] ❌ /api/guilds bot endpoint unreachable:", (err as any)?.message || err);
-      console.warn('[BOT-API] Error details:', {
+      // DEBUG: console.warn("[BOT-API] ❌ /api/guilds bot endpoint unreachable:", (err as any)?.message || err);
+      // DEBUG: console.warn('[BOT-API] Error details:', {
         message: (err as any)?.message,
         code: (err as any)?.code,
         stack: (err as any)?.stack?.split('\n').slice(0, 3).join('\n')
       });
-      console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
+      // DEBUG: console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
       return [];
     }
   }
