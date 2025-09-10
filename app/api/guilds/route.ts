@@ -237,7 +237,8 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   const botBaseRaw = process.env.SERVER_API_BASE_URL || "";
   const botBase = botBaseRaw.replace(/\/+$/, "");
-  console.log('Bot base URL:', botBase);
+  console.log('[BOT-CONFIG] SERVER_API_BASE_URL env var:', process.env.SERVER_API_BASE_URL);
+  console.log('[BOT-CONFIG] Bot base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
   const tokenKey = `${discordId}:${accessToken.slice(0, 24)}`;
@@ -428,13 +429,6 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
   console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
-  console.log(`[GUILDS-DEBUG] Bot installed guild IDs:`, Array.from(installedGuildIds));
-  console.log(`[GUILDS-DEBUG] Bot installed guilds data:`, installedGuilds.map(g => ({
-    id: g.id || g.guildId || g.guild_id,
-    name: g.name || g.guildName || g.guild_name,
-    memberCount: g.memberCount,
-    roleCount: g.roleCount
-  })));
 
   // Get all guilds where user has database access
   const userId = discordId!;
@@ -591,29 +585,44 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;
   let installedGuilds = cache.get<any[]>(igCacheKey) || [];
-  console.log('Installed guilds from cache:', installedGuilds.length);
+  console.log('[BOT-API] Installed guilds from cache:', installedGuilds.length);
 
   if (installedGuilds.length === 0 && botBase) {
-    console.log('Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
+    console.log('[BOT-API] Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
     try {
       const botRes = await fetch(`${botBase}/api/guilds`);
-      console.log('Bot API response status:', botRes.status);
+      console.log('[BOT-API] Bot API response status:', botRes.status);
+
       if (botRes.ok) {
         installedGuilds = (await botRes.json()) as any[];
-        console.log('Installed guilds from bot:', installedGuilds.length);
-        if (installedGuilds.length > 0) {
-          console.log('Sample bot guild data:', JSON.stringify(installedGuilds[0], null, 2));
-          console.log('All bot guild IDs and names:', installedGuilds.map((g: any) => ({
-            id: g.id || g.guildId || g.guild_id,
-            name: g.name || g.guildName || g.guild_name
-          })));
-        }
+        console.log('[BOT-API] ✅ Bot API returned', installedGuilds.length, 'guilds with member/role data');
         cache.set(igCacheKey, installedGuilds, 60_000); // cache 60s
+      }
       } else {
-        console.warn("/api/guilds bot endpoint failed:", botRes.status);
+        console.warn("[BOT-API] ❌ /api/guilds bot endpoint failed:", botRes.status);
+        const errorText = await botRes.text();
+        console.warn('[BOT-API] ❌ Error response:', errorText);
+
+        // Try to provide more debugging info
+        console.warn('[BOT-API] 🔍 Connection Diagnostics:');
+        console.warn('[BOT-API] - Target URL:', `${botBase}/api/guilds`);
+        console.warn('[BOT-API] - Status:', botRes.status);
+        console.warn('[BOT-API] - Status Text:', botRes.statusText);
+        console.warn('[BOT-API] - Headers:', Object.fromEntries(botRes.headers.entries()));
+
+        // Return empty array so web app continues to work without bot data
+        console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
+        return [];
       }
     } catch (err) {
-      console.warn("/api/guilds bot endpoint unreachable:", (err as any)?.message || err);
+      console.warn("[BOT-API] ❌ /api/guilds bot endpoint unreachable:", (err as any)?.message || err);
+      console.warn('[BOT-API] Error details:', {
+        message: (err as any)?.message,
+        code: (err as any)?.code,
+        stack: (err as any)?.stack?.split('\n').slice(0, 3).join('\n')
+      });
+      console.warn('[BOT-API] ⚠️ Returning empty array - member/role counts will be N/A');
+      return [];
     }
   }
   return installedGuilds || [];
@@ -740,9 +749,6 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
         return xId === id;
       }) || {};
 
-      console.log(`[GUILDS-API] Guild ${id}: found installed data = ${!!installed.iconUrl}, iconUrl = ${installed.iconUrl}`);
-      console.log(`[GUILDS-API] Guild ${id}: installed object =`, JSON.stringify(installed, null, 2));
-
       const memberCount =
         typeof installed.memberCount === "number"
           ? installed.memberCount
@@ -755,8 +761,6 @@ async function intersectAndNormalize(userGuildsParam: any[] | null | undefined, 
           : typeof installed.roles === "number"
           ? installed.roles
           : null;
-
-      console.log(`[GUILDS-API] Guild ${id}: extracted memberCount = ${memberCount}, roleCount = ${roleCount}`);
 
       // Use iconUrl from bot data if available, otherwise construct from Discord icon
       const iconUrl = installed.iconUrl ||

@@ -56,14 +56,6 @@ function GuildsPageContent() {
           const fetchDuration = Date.now() - startTime;
 
           console.log('[GUILDS] Guilds fetched successfully:', guildCount, 'guilds');
-          console.log('[GUILDS] Full API response:', JSON.stringify(data, null, 2));
-          console.log('[GUILDS] Guilds array:', data.guilds);
-
-          // Debug member/role counts
-          data.guilds?.forEach((guild: any, index: number) => {
-            console.log(`[GUILDS] Guild ${index}: ${guild.name} - memberCount: ${guild.memberCount} (${typeof guild.memberCount}), roleCount: ${guild.roleCount} (${typeof guild.roleCount})`);
-            console.log(`[GUILDS] Guild ${index} full object:`, JSON.stringify(guild, null, 2));
-          });
 
           trackStep('guilds_fetch_success', {
             guildCount,
