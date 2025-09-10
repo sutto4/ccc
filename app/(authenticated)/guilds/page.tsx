@@ -196,7 +196,7 @@ function GuildsPageContent() {
                 </p>
                 <div className="flex justify-center">
                   <Link
-                    href="https://discord.com/api/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=8&scope=bot"
+                    href="https://discord.com/api/oauth2/authorize?client_id=1402536668417888309&permissions=8&scope=bot"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
                   >
                     <Bot className="h-5 w-5" />

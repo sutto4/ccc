@@ -6,6 +6,7 @@ import InviteBotButton from "@/components/invite-bot-button";
 import { Bot } from "lucide-react";
 import UserMenu from "@/components/ui/user-menu";
 import { useState } from "react";
+import Image from "next/image";
 // import { useTheme } from "next-themes";
 
 export default function Topbar() {
@@ -15,12 +16,24 @@ export default function Topbar() {
     <div className="flex h-18 items-center justify-between gap-3 px-3 md:px-4">
       {/* Branding */}
       <div className="flex items-center gap-2 md:gap-3">
-        <img
-          src={broken ? "/placeholder-logo.svg" : "/brand/sm-light.png"}
-          alt="ServerMate"
-          className="h-12 md:h-18 w-auto object-contain"
-          onError={() => setBroken(true)}
-        />
+        {broken ? (
+          <div className="h-12 md:h-18 flex items-center">
+            <span className="text-xl font-bold text-foreground">ServerMate</span>
+          </div>
+        ) : (
+          <Image
+            src="/brand/sm-light.png"
+            alt="ServerMate"
+            width={48}
+            height={48}
+            className="h-12 md:h-18 w-auto object-contain"
+            onError={() => {
+              console.log('ServerMate logo failed to load with Next.js Image, falling back to placeholder');
+              setBroken(true);
+            }}
+            priority
+          />
+        )}
       </div>
       {/* Actions */}
       <div className="flex items-center gap-2">

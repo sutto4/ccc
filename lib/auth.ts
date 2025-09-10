@@ -59,7 +59,7 @@ if (!env.DISCORD_CLIENT_ID || !env.DISCORD_CLIENT_SECRET) {
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    DiscordProvider({
+    Discomight nee rdProvider({
       clientId: env.DISCORD_CLIENT_ID || "",
       clientSecret: env.DISCORD_CLIENT_SECRET || "",
       authorization: {
