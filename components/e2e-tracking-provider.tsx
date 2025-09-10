@@ -39,9 +39,9 @@ export function E2ETrackingProvider({
     setSessionId(newSessionId);
     setIsTracking(true);
 
-    console.log(`🚀 [CLIENT-E2E] Session started: ${newSessionId} for user ${userId}`);
+    console.log(`🚀 [CLIENT-E2E] Session started: ${newSessionId}`);
 
-    // Track initial page load
+    // Track initial page load (only once per session)
     trackStep('page_load', {
       url: typeof window !== 'undefined' ? window.location.href : '',
       referrer: typeof document !== 'undefined' ? document.referrer : '',
@@ -74,36 +74,52 @@ export function E2ETrackingProvider({
       });
     };
 
-    // User interaction tracking
+    // Throttled click tracking - only track important clicks
+    let lastClickTime = 0;
     const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (target) {
-        const elementInfo = {
-          tagName: target.tagName,
-          id: target.id,
-          className: target.className,
-          textContent: target.textContent?.slice(0, 50),
-          dataAttributes: Object.fromEntries(
-            Object.entries(target.dataset).filter(([key]) => key.startsWith('e2e'))
-          )
-        };
+      const now = Date.now();
+      if (now - lastClickTime < 500) return; // Throttle to 500ms
+      lastClickTime = now;
 
-        trackStep('user_click', elementInfo);
-      }
+      const target = event.target as HTMLElement;
+      if (!target) return;
+
+      // Only track clicks on important elements
+      const isImportant = target.matches('button, a, [role="button"], .click-track');
+      if (!isImportant) return;
+
+      const elementInfo = {
+        tagName: target.tagName,
+        id: target.id,
+        className: target.className,
+        textContent: target.textContent?.slice(0, 50),
+        dataAttributes: Object.fromEntries(
+          Object.entries(target.dataset).filter(([key]) => key.startsWith('e2e'))
+        )
+      };
+
+      trackStep('user_click', elementInfo);
     };
 
+    // Navigation tracking (only on page changes, not every route change)
+    let lastUrl = typeof window !== 'undefined' ? window.location.href : '';
     const handleNavigation = () => {
-      trackStep('navigation', {
-        from: typeof window !== 'undefined' ? window.location.href : '',
-        timestamp: Date.now()
-      });
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+      if (currentUrl !== lastUrl) {
+        trackStep('navigation', {
+          from: lastUrl,
+          to: currentUrl,
+          timestamp: Date.now()
+        });
+        lastUrl = currentUrl;
+      }
     };
 
     // Event listeners
     if (typeof window !== 'undefined') {
       window.addEventListener('error', handleError);
       window.addEventListener('unhandledrejection', handleUnhandledRejection);
-      window.addEventListener('click', handleClick);
+      window.addEventListener('click', handleClick, true); // Use capture phase
       window.addEventListener('beforeunload', handleNavigation);
     }
 
@@ -112,14 +128,14 @@ export function E2ETrackingProvider({
       if (typeof window !== 'undefined') {
         window.removeEventListener('error', handleError);
         window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-        window.removeEventListener('click', handleClick);
+        window.removeEventListener('click', handleClick, true);
         window.removeEventListener('beforeunload', handleNavigation);
       }
 
       // End session on unmount
       endClientSession().catch(err => console.error('Failed to end client session:', err));
     };
-  }, [userId, discordId, enableTracking, trackStep, trackError]);
+  }, [userId, discordId, enableTracking]); // Removed trackStep, trackError from dependencies
 
   const value: E2ETrackingContextType = {
     sessionId,
@@ -141,15 +157,6 @@ export function E2ETrackingProvider({
     isTracking
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Run cleanup if available
-      if ((window as any)._e2eCleanup) {
-        (window as any)._e2eCleanup();
-      }
-    };
-  }, []);
 
   return (
     <E2ETrackingContext.Provider value={value}>

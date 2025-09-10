@@ -71,7 +71,10 @@ class ClientE2ETracker {
     this.session.journey.push(journeyStep);
     this.session.currentStep = step;
 
-    console.log(`📍 [CLIENT-E2E] ${this.session.sessionId}: ${step}${journeyStep.duration ? ` (+${journeyStep.duration}ms)` : ''}`);
+    // Reduced logging to prevent console spam
+    if (step === 'page_load' || step === 'guilds_fetch_start' || step === 'guilds_fetch_success') {
+      console.log(`📍 [CLIENT-E2E] ${this.session.sessionId}: ${step}`);
+    }
 
     // Send to server API (fire and forget)
     fetch(`${this.apiBaseUrl}/admin/e2e-monitoring-data`, {

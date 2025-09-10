@@ -115,7 +115,7 @@ function GuildsPageContent() {
     }
 
     fetchGuilds();
-  }, [router, trackStep, trackError]);
+  }, [router]); // Removed trackStep, trackError dependencies to prevent re-runs
 
   if (loading) {
     return (
