@@ -1,6 +1,5 @@
 // Enhanced End-to-End User Journey Tracking
 import { apiAnalytics } from './api-analytics-db';
-import { botMonitor, trackBotCommand, type BotCommandActivity } from './bot-monitor';
 
 export interface UserJourneyStep {
   step: string;
@@ -234,9 +233,14 @@ class E2ETracker {
   }
 
   // Bot activity tracking
-  trackBotInteraction(sessionId: string, activity: BotCommandActivity): void {
-    // Track the bot command
-    trackBotCommand(activity);
+  async trackBotInteraction(sessionId: string, activity: any): Promise<void> {
+    try {
+      // Track the bot command dynamically
+      const { trackBotCommand } = await import('./bot-monitor');
+      trackBotCommand(activity);
+    } catch (error) {
+      console.warn('Bot command tracking not available:', error);
+    }
 
     // If this session involves the same user, link the bot activity to the user journey
     this.trackStep(sessionId, `bot_command_${activity.command}`, {
@@ -264,21 +268,27 @@ class E2ETracker {
   }
 
   // Get bot activities related to a session
-  getBotActivitiesForSession(sessionId: string): BotCommandActivity[] {
+  async getBotActivitiesForSession(sessionId: string): Promise<any[]> {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
 
-    // Get recent bot activities that might be related to this user
-    const allBotActivities = botMonitor.getRecentActivities(100);
-    const userDiscordId = session.discordId;
+    try {
+      // Get recent bot activities that might be related to this user
+      const { botMonitor } = await import('./bot-monitor');
+      const allBotActivities = botMonitor.getRecentActivities(100);
+      const userDiscordId = session.discordId;
 
-    // Filter activities by the user's Discord ID
-    return allBotActivities.filter(activity =>
-      activity.userId === userDiscordId ||
-      activity.guildId === session.journey.find(step =>
-        step.step.includes('guild_select') && step.metadata?.guildId
-      )?.metadata?.guildId
-    );
+      // Filter activities by the user's Discord ID
+      return allBotActivities.filter(activity =>
+        activity.userId === userDiscordId ||
+        activity.guildId === session.journey.find(step =>
+          step.step.includes('guild_select') && step.metadata?.guildId
+        )?.metadata?.guildId
+      );
+    } catch (error) {
+      console.warn('Bot activities not available:', error);
+      return [];
+    }
   }
 }
 

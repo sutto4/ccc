@@ -1,5 +1,5 @@
 // Bot Activity Monitoring Service
-import { apiAnalytics } from './api-analytics-db';
+// Note: We avoid importing apiAnalytics directly to prevent mysql2 bundling issues in client components
 
 export interface BotStatus {
   online: boolean;
@@ -111,23 +111,28 @@ class BotMonitor {
           nodeVersion: statusData.nodeVersion || 'unknown'
         };
 
-        // Log to analytics
-        apiAnalytics.logRequest({
-          id: `bot_status_${Date.now()}`,
-          endpoint: '/api/bot/status',
-          method: 'MONITOR',
-          statusCode: 200,
-          responseTime,
-          environment: (process.env.NODE_ENV as any) || 'production',
-          timestamp: new Date().toISOString(),
-          botActivity: {
-            botUptime: this.lastStatus.uptime,
-            activeGuilds: this.lastStatus.activeGuilds,
-            totalCommandsProcessed: this.lastStatus.commandsProcessed,
-            memoryUsage: this.lastStatus.memoryUsage,
-            cpuUsage: this.lastStatus.cpuUsage
-          }
-        }).catch(err => console.error('Failed to log bot status:', err));
+        // Log to analytics (only if available, to avoid import issues)
+        try {
+          const { apiAnalytics } = await import('./api-analytics-db');
+          apiAnalytics.logRequest({
+            id: `bot_status_${Date.now()}`,
+            endpoint: '/api/bot/status',
+            method: 'MONITOR',
+            statusCode: 200,
+            responseTime,
+            environment: (process.env.NODE_ENV as any) || 'production',
+            timestamp: new Date().toISOString(),
+            botActivity: {
+              botUptime: this.lastStatus.uptime,
+              activeGuilds: this.lastStatus.activeGuilds,
+              totalCommandsProcessed: this.lastStatus.commandsProcessed,
+              memoryUsage: this.lastStatus.memoryUsage,
+              cpuUsage: this.lastStatus.cpuUsage
+            }
+          }).catch(err => console.error('Failed to log bot status:', err));
+        } catch (error) {
+          // Analytics not available in client context, skip logging
+        }
 
         console.log(`🤖 [BOT-MONITOR] Bot status updated: ${this.lastStatus.activeGuilds} guilds, ${this.lastStatus.commandsProcessed} commands`);
 
@@ -231,27 +236,32 @@ class BotMonitor {
 
     console.log(`🤖 [BOT-MONITOR] Tracked command: ${activity.command} by ${activity.userId}`);
 
-    // Log to analytics
-    apiAnalytics.logRequest({
-      id: `bot_command_manual_${activity.timestamp}_${activity.command}`,
-      endpoint: `/bot/command/${activity.command}`,
-      method: 'COMMAND',
-      userId: activity.userId,
-      statusCode: activity.success ? 200 : 500,
-      responseTime: activity.responseTime,
-      environment: (process.env.NODE_ENV as any) || 'production',
-      timestamp: new Date(activity.timestamp).toISOString(),
-      error: activity.errorMessage,
-      botActivity: {
-        commandUsed: activity.command,
-        guildId: activity.guildId,
-        channelId: activity.channelId,
+    // Log to analytics (only if available)
+    try {
+      const { apiAnalytics } = await import('./api-analytics-db');
+      apiAnalytics.logRequest({
+        id: `bot_command_manual_${activity.timestamp}_${activity.command}`,
+        endpoint: `/bot/command/${activity.command}`,
+        method: 'COMMAND',
         userId: activity.userId,
+        statusCode: activity.success ? 200 : 500,
         responseTime: activity.responseTime,
-        success: activity.success,
-        errorMessage: activity.errorMessage
-      }
-    }).catch(err => console.error('Failed to log manual bot command:', err));
+        environment: (process.env.NODE_ENV as any) || 'production',
+        timestamp: new Date(activity.timestamp).toISOString(),
+        error: activity.errorMessage,
+        botActivity: {
+          commandUsed: activity.command,
+          guildId: activity.guildId,
+          channelId: activity.channelId,
+          userId: activity.userId,
+          responseTime: activity.responseTime,
+          success: activity.success,
+          errorMessage: activity.errorMessage
+        }
+      }).catch(err => console.error('Failed to log manual bot command:', err));
+    } catch (error) {
+      // Analytics not available in client context, skip logging
+    }
   }
 
   // Get current bot status

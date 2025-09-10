@@ -20,7 +20,6 @@ import {
   MessageSquare
 } from "lucide-react";
 import { e2eTracker } from '@/lib/e2e-tracker';
-import { botMonitor } from '@/lib/bot-monitor';
 
 interface SessionSummary {
   sessionId: string;
@@ -104,10 +103,19 @@ export default function E2EMonitoringPage() {
 
       setSessions(sessionSummaries);
 
-      // Get bot data
-      const botSummary = botMonitor.getBotSummary();
-      const recentBotActivities = botMonitor.getRecentActivities(20);
-      const botHealthMetrics = botMonitor.getHealthMetrics();
+      // Get bot data dynamically to avoid build issues
+      let botSummary = { status: 'offline', uptime: 'Unknown', activeGuilds: 0, recentCommands: 0, healthScore: 0, lastActivity: 0 };
+      let recentBotActivities = [];
+      let botHealthMetrics = null;
+
+      try {
+        const { botMonitor: dynamicBotMonitor } = await import('@/lib/bot-monitor');
+        botSummary = dynamicBotMonitor.getBotSummary();
+        recentBotActivities = dynamicBotMonitor.getRecentActivities(20);
+        botHealthMetrics = dynamicBotMonitor.getHealthMetrics();
+      } catch (error) {
+        console.warn('Bot monitoring not available:', error);
+      }
 
       // Calculate system stats
       const activeSessions = e2eTracker.getActiveSessionCount();
@@ -166,7 +174,24 @@ export default function E2EMonitoringPage() {
   const loadSessionDetails = async (sessionId: string) => {
     try {
       const session = e2eTracker.getSession(sessionId);
-      const botActivities = e2eTracker.getBotActivitiesForSession(sessionId);
+
+      // Get bot activities dynamically
+      let botActivities = [];
+      try {
+        const { botMonitor: dynamicBotMonitor } = await import('@/lib/bot-monitor');
+        const allBotActivities = dynamicBotMonitor.getRecentActivities(100);
+        const userDiscordId = session.discordId;
+
+        // Filter activities by the user's Discord ID
+        botActivities = allBotActivities.filter(activity =>
+          activity.userId === userDiscordId ||
+          activity.guildId === session.journey.find(step =>
+            step.step.includes('guild_select') && step.metadata?.guildId
+          )?.metadata?.guildId
+        );
+      } catch (error) {
+        console.warn('Bot activities not available:', error);
+      }
 
       setSessionDetails({
         ...session,
@@ -202,10 +227,17 @@ export default function E2EMonitoringPage() {
   };
 
   useEffect(() => {
-    // Start bot monitoring
-    const { startBotMonitoring } = require('@/lib/bot-monitor');
-    startBotMonitoring(30000); // Poll every 30 seconds
+    // Start bot monitoring dynamically
+    const startMonitoring = async () => {
+      try {
+        const { startBotMonitoring } = await import('@/lib/bot-monitor');
+        startBotMonitoring(30000); // Poll every 30 seconds
+      } catch (error) {
+        console.warn('Bot monitoring initialization failed:', error);
+      }
+    };
 
+    startMonitoring();
     refreshData();
 
     // Refresh every 30 seconds
