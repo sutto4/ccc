@@ -248,7 +248,7 @@ function GuildsPageContent() {
       <Section title="My Servers">
         <div className="space-y-6">
           {/* Grouped Servers */}
-          {groupedGuilds.length > 0 && groupedGuilds.map(group => {
+          {groupedGuilds.length > 0 && (groupedGuilds.map(group => {
 
               return (
                 <Card key={group.id} className="border-2 border-blue-100 bg-blue-50/30">
@@ -321,7 +321,7 @@ function GuildsPageContent() {
                 </Card>
               );
             });
-          })}
+          }))}
 
           {/* Individual Servers */}
           {individualGuilds.length > 0 && (
