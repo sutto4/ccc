@@ -103,6 +103,9 @@ function AdminDashboardContent() {
   const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
   const [error, setError] = useState<string | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
+  const [sortField, setSortField] = useState<"name" | "member_count" | "status" | "created_at">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'warning' | 'info'} | null>(null);
 
   // User activity state
   const [userActivityStats, setUserActivityStats] = useState({
@@ -240,20 +243,53 @@ function AdminDashboardContent() {
     const now = new Date();
     const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000); // Use 48 hours consistently
     
+    let filteredGuilds;
     switch (filter) {
       case "new":
-        return guilds.filter(g => {
+        filteredGuilds = guilds.filter(g => {
           const createdAt = new Date(g.created_at);
           return createdAt.getTime() > cutoff48h;
         });
+        break;
       case "existing":
-        return guilds.filter(g => {
+        filteredGuilds = guilds.filter(g => {
           const createdAt = new Date(g.created_at);
           return createdAt.getTime() <= cutoff48h;
         });
+        break;
       default:
-        return guilds;
+        filteredGuilds = guilds;
     }
+
+    // Apply sorting
+    return filteredGuilds.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortField) {
+        case "name":
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case "member_count":
+          aValue = a.member_count || 0;
+          bValue = b.member_count || 0;
+          break;
+        case "status":
+          aValue = a.status.toLowerCase();
+          bValue = b.status.toLowerCase();
+          break;
+        case "created_at":
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
   };
 
   // Calculate actual counts for the filter buttons
@@ -303,6 +339,12 @@ function AdminDashboardContent() {
   };
 
   const { newCount, existingCount } = getActualFilterCounts();
+
+  // Notification system
+  const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000); // Auto-hide after 5 seconds
+  };
 
   const getHealthIcon = (status: string) => {
     switch (status) {
@@ -368,6 +410,35 @@ function AdminDashboardContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border-l-4 ${
+          notification.type === 'success' ? 'bg-green-50 border-green-400 text-green-800' :
+          notification.type === 'error' ? 'bg-red-50 border-red-400 text-red-800' :
+          notification.type === 'warning' ? 'bg-yellow-50 border-yellow-400 text-yellow-800' :
+          'bg-blue-50 border-blue-400 text-blue-800'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {notification.type === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
+              {notification.type === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
+              {notification.type === 'warning' && <AlertTriangle className="w-5 h-5 mr-2" />}
+              {notification.type === 'info' && <Info className="w-5 h-5 mr-2" />}
+              <span className="font-medium">{notification.message}</span>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-4 text-gray-400 hover:text-gray-600"
+            >
+              <span className="sr-only">Close</span>
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header with Health Status */}
         <div className="flex items-center justify-between">
@@ -428,36 +499,82 @@ function AdminDashboardContent() {
 
             <button
               onClick={async () => {
+                // Use NEXT_PUBLIC_BOT_API_URL environment variable or default to localhost
+                const botUrl = process.env.NEXT_PUBLIC_BOT_API_URL || 'http://127.0.0.1:3001';
+                console.log('🔄 Triggering manual sync with bot at:', botUrl);
+                
                 try {
-                  // Use same logic as health check
-                  const botUrl = process.env.SERVER_API_BASE_URL || process.env.BOT_API_URL || 'http://127.0.0.1:3001';
-                  console.log('🔄 Triggering manual sync with bot at:', botUrl);
 
                   // First test basic connectivity
                   console.log('🔍 Testing basic health endpoint...');
-                  const healthResponse = await fetch(`${botUrl}/api/health`);
+                  const healthResponse = await fetch(`${botUrl}/api/health`, {
+                    method: 'GET',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    // Add timeout for better error handling
+                    signal: AbortSignal.timeout(10000) // 10 second timeout
+                  });
                   console.log('🏥 Health check response:', healthResponse.status);
 
                   if (!healthResponse.ok) {
-                    throw new Error(`Health check failed: ${healthResponse.status}`);
+                    throw new Error(`Health check failed: ${healthResponse.status} - Bot may not be running or accessible`);
                   }
 
                   // Now try the sync endpoint
                   console.log('🔄 Calling sync endpoint...');
                   const response = await fetch(`${botUrl}/api/sync-member-counts`, {
                     method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    // Add timeout for better error handling
+                    signal: AbortSignal.timeout(30000) // 30 second timeout for sync operation
                   });
 
                   if (response.ok) {
                     console.log('✅ Manual sync completed');
-                    alert('✅ Guild status sync completed! Check the guild status now.');
+                    
+                    // Now run cleanup to mark left guilds as removed
+                    console.log('🧹 Running cleanup for left guilds...');
+                    const cleanupResponse = await fetch(`${botUrl}/api/cleanup-removed-guilds`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      signal: AbortSignal.timeout(30000)
+                    });
+                    
+                    if (cleanupResponse.ok) {
+                      console.log('✅ Cleanup completed');
+                      // Refresh the dashboard data
+                      await fetchDashboardData();
+                      // Show success notification
+                      showNotification('✅ Guild sync and cleanup completed! Server list has been refreshed.', 'success');
+                    } else {
+                      console.warn('⚠️ Sync completed but cleanup failed:', cleanupResponse.status);
+                      await fetchDashboardData();
+                      showNotification('✅ Guild sync completed, but cleanup failed. Some guilds may still show incorrect status.', 'warning');
+                    }
                   } else {
                     console.error('❌ Manual sync failed:', response.status);
-                    alert(`❌ Manual sync failed: ${response.status}`);
+                    showNotification(`❌ Manual sync failed: ${response.status}`, 'error');
                   }
                 } catch (error) {
                   console.error('❌ Manual sync error:', error);
-                  alert(`❌ Manual sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  
+                  let errorMessage = 'Unknown error';
+                  if (error instanceof Error) {
+                    if (error.name === 'TimeoutError') {
+                      errorMessage = 'Request timed out - Bot may be slow to respond or unreachable';
+                    } else if (error.message.includes('Failed to fetch')) {
+                      errorMessage = 'Cannot connect to bot - Check if bot is running and accessible';
+                    } else {
+                      errorMessage = error.message;
+                    }
+                  }
+                  
+                  showNotification(`❌ Manual sync error: ${errorMessage}`, 'error');
                 }
               }}
               className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors font-semibold"
@@ -640,48 +757,125 @@ function AdminDashboardContent() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Server Management</h2>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setFilter("all")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    filter === "all" 
-                      ? "bg-blue-100 text-blue-700" 
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  All ({guilds.length})
-                </button>
-                <button
-                  onClick={() => setFilter("new")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    filter === "new" 
-                      ? "bg-green-100 text-green-700" 
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  New ({newCount})
-                </button>
-                <button
-                  onClick={() => setFilter("existing")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    filter === "existing" 
-                      ? "bg-blue-100 text-blue-700" 
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  Existing ({existingCount})
-                </button>
+                  <button
+                    onClick={() => setFilter("all")}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      filter === "all" 
+                        ? "bg-blue-100 text-blue-700" 
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    All ({guilds.length})
+                  </button>
+                  <button
+                    onClick={() => setFilter("new")}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      filter === "new" 
+                        ? "bg-green-100 text-green-700" 
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    New ({newCount})
+                  </button>
+                  <button
+                    onClick={() => setFilter("existing")}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      filter === "existing" 
+                        ? "bg-blue-100 text-blue-700" 
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    Existing ({existingCount})
+                  </button>
+                </div>
               </div>
-              </div>
-        </div>
+            </div>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => {
+                      if (sortField === "name") {
+                        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortField("name");
+                        setSortDirection("asc");
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Server
+                      {sortField === "name" && (
+                        <span className="text-blue-600">
+                          {sortDirection === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => {
+                      if (sortField === "member_count") {
+                        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortField("member_count");
+                        setSortDirection("desc");
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Members
+                      {sortField === "member_count" && (
+                        <span className="text-blue-600">
+                          {sortDirection === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => {
+                      if (sortField === "status") {
+                        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortField("status");
+                        setSortDirection("asc");
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status
+                      {sortField === "status" && (
+                        <span className="text-blue-600">
+                          {sortDirection === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => {
+                      if (sortField === "created_at") {
+                        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortField("created_at");
+                        setSortDirection("desc");
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Created
+                      {sortField === "created_at" && (
+                        <span className="text-blue-600">
+                          {sortDirection === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Features</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -726,6 +920,8 @@ function AdminDashboardContent() {
                           ? 'bg-green-100 text-green-800'
                           : guild.status === 'inactive'
                           ? 'bg-red-100 text-red-800'
+                          : guild.status === 'left'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {guild.status}
@@ -844,7 +1040,6 @@ function AdminDashboardContent() {
               ))}
             </tbody>
           </table>
-        </div>
         </div>
 
         {/* Quick Actions */}
