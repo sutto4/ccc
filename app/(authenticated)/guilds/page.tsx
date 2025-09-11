@@ -247,6 +247,7 @@ function GuildsPageContent() {
     <div className="pl-4 pr-4 md:pr-6 md:pl-4 py-8">
       <Section title="My Servers">
         <div className="space-y-6">
+          <div>Loading guilds...</div>
           {/* Grouped Servers */}
           {groupedGuilds.length > 0 && (
             <div>
