@@ -182,7 +182,16 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     secret: process.env.NEXTAUTH_SECRET
   });
 
-  if (!token || !(token as any).discordId) {
+  console.log('[AUTH-DEBUG] Token validation:', {
+    hasToken: !!token,
+    tokenKeys: token ? Object.keys(token) : 'NO_TOKEN',
+    discordId: token ? (token as any).discordId : 'NO_DISCORD_ID',
+    sub: token ? token.sub : 'NO_SUB',
+    email: token ? token.email : 'NO_EMAIL'
+  });
+
+  if (!token) {
+    console.log('[AUTH-DEBUG] No token found - returning 401');
     return NextResponse.json(
       {
         error: 'Authentication required',
@@ -199,8 +208,29 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     );
   }
 
+  // Try multiple ways to get the Discord ID
+  const discordId = (token as any).discordId || token.sub;
+  if (!discordId) {
+    console.log('[AUTH-DEBUG] No Discord ID found in token - returning 401');
+    return NextResponse.json(
+      {
+        error: 'Authentication required',
+        message: 'Please login to continue',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  console.log('[AUTH-DEBUG] Authentication successful for Discord ID:', discordId);
+
   const accessToken = (token as any).accessToken as string;
-  const discordId = (token as any).discordId as string;
 
   if (!accessToken || !discordId) {
     return NextResponse.json(
@@ -526,6 +556,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${dbAccessibleUserGuilds.length} guilds accessible for user ${userId}`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOKEN VALIDATION:`, {
+    hasToken: !!accessToken,
+    tokenLength: accessToken?.length,
+    discordId,
+    tokenStart: accessToken?.substring(0, 20) + '...'
+  });
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL DB GUILDS:`, dbAccessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
