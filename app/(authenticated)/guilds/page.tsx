@@ -47,7 +47,7 @@ function GuildsPageContent() {
       groups[groupKey].guilds.push(guild);
     });
 
-    console.log('[FRONTEND] Grouped result:', Object.values(groups).map(g => ({ groupName: g.group.name, guildCount: g.guilds.length })));
+    console.log('[FRONTEND] Grouped result:', Object.values(groups).map(g => ({ groupName: g.group?.name, guildCount: g.guilds.length, fullGroup: g.group })));
     return Object.values(groups);
   }, [guilds]);
 
@@ -118,9 +118,9 @@ function GuildsPageContent() {
                   <Shield className="w-5 h-5 text-gray-600" />
                   <div>
                     <span className="text-lg font-semibold">
-                      {groupData.group.name || 'Individual Servers'}
+                      {groupData.group?.name || 'Individual Servers'}
                     </span>
-                    {groupData.group.description && (
+                    {groupData.group?.description && (
                       <p className="text-sm text-gray-600 mt-1">{groupData.group.description}</p>
                     )}
                   </div>

@@ -652,11 +652,11 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     };
   });
 
-  console.log(`[GUILDS-API] SECURE RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles`));
+  console.log(`[GUILDS-API] SECURE RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles, group: ${g.group?.name || 'none'}`));
 
   console.log('Final results:', {
     guildCount: results.length,
-    guilds: results.map(g => ({ id: g.id, name: g.name })),
+    guilds: results.map(g => ({ id: g.id, name: g.name, group: g.group })),
     timestamp: new Date().toISOString(),
     requestId: Math.random().toString(36).substr(2, 9)
   });
@@ -664,11 +664,11 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // SECURITY: No fallbacks - only return authorized, bot-installed guilds
 
   console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
-  console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
   console.log(`[SECURITY-AUDIT] TOTAL GUILDS RETURNED: ${results.length}`);
   console.log(`[SECURITY-AUDIT] REQUEST COMPLETE FOR USER ${discordId} [${requestId}]`);
   console.log(`[SECURITY-AUDIT] ==================================================`);
-  console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name })));
+  console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
   
   // FINAL SECURITY CHECK: Ensure all returned guilds belong to this user
   const finalCheck = results.every(guild => {
