@@ -36,7 +36,7 @@ function GuildsPageContent() {
 
       if (!groups[groupKey]) {
         groups[groupKey] = {
-          group: guild.group || { name: 'Individual Servers' },
+          group: guild.group || { id: null, name: 'Individual Servers', description: null },
           guilds: []
         };
       }
@@ -107,12 +107,14 @@ function GuildsPageContent() {
       <Section title="My Servers">
         <div className="space-y-6">
           {groupedGuilds.map((groupData, groupIndex) => (
-            <Card key={groupIndex} className="border-2 border-gray-200">
+            <Card key={groupData.group.id || `group-${groupIndex}`} className="border-2 border-gray-200">
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <Shield className="w-5 h-5 text-gray-600" />
                   <div>
-                    <span className="text-lg font-semibold">{groupData.group.name}</span>
+                    <span className="text-lg font-semibold">
+                      {groupData.group.name || 'Individual Servers'}
+                    </span>
                     {groupData.group.description && (
                       <p className="text-sm text-gray-600 mt-1">{groupData.group.description}</p>
                     )}
