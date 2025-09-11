@@ -177,6 +177,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
 
   // Simple auth validation
+  console.log('[AUTH-DEBUG] Environment check:', {
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ? 'SET' : 'UNDEFINED',
+    NODE_ENV: process.env.NODE_ENV,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL
+  });
+
   const token = await getToken({
     req: req,
     secret: process.env.NEXTAUTH_SECRET
@@ -187,7 +193,16 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     tokenKeys: token ? Object.keys(token) : 'NO_TOKEN',
     discordId: token ? (token as any).discordId : 'NO_DISCORD_ID',
     sub: token ? token.sub : 'NO_SUB',
-    email: token ? token.email : 'NO_EMAIL'
+    email: token ? token.email : 'NO_EMAIL',
+    secretLength: process.env.NEXTAUTH_SECRET?.length
+  });
+
+  // Check cookies
+  const cookies = req.cookies;
+  console.log('[AUTH-DEBUG] Cookies check:', {
+    hasSessionToken: cookies.has('__Secure-next-auth.session-token'),
+    hasCallbackToken: cookies.has('__Secure-next-auth.callback-url'),
+    cookieNames: cookies.getAll().map(c => c.name)
   });
 
   if (!token) {
