@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -25,6 +25,26 @@ function GuildsPageContent() {
   const { trackStep } = useE2ETrackingContext();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Group guilds by their group
+  const groupedGuilds = React.useMemo(() => {
+    const groups: Record<string, { group: any; guilds: Guild[] }> = {};
+
+    guilds.forEach((guild) => {
+      const groupKey = guild.group?.id ? `group_${guild.group.id}` : 'ungrouped';
+      const groupName = guild.group?.name || 'Individual Servers';
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          group: guild.group || { name: 'Individual Servers' },
+          guilds: []
+        };
+      }
+      groups[groupKey].guilds.push(guild);
+    });
+
+    return Object.values(groups);
+  }, [guilds]);
 
   useEffect(() => {
     async function fetchGuilds() {
@@ -86,54 +106,64 @@ function GuildsPageContent() {
     <div className="p-8">
       <Section title="My Servers">
         <div className="space-y-6">
-          <Card className="border-2 border-gray-200">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-gray-600" />
-                <span className="text-lg font-semibold">Your Servers</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {guilds.map((guild) => (
-                  <Link
-                    key={guild.id}
-                    href={`/guilds/${guild.id}`}
-                    className="block"
-                  >
-                    <div className="rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-3">
-                        {guild.iconUrl ? (
-                          <Image
-                            src={guild.iconUrl}
-                            alt={guild.name || 'Server'}
-                            width={40}
-                            height={40}
-                            className="rounded-lg"
-                            unoptimized={true}
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                            <span className="text-sm font-bold text-blue-600">
-                              {guild.name ? guild.name.charAt(0).toUpperCase() : '?'}
-                            </span>
+          {groupedGuilds.map((groupData, groupIndex) => (
+            <Card key={groupIndex} className="border-2 border-gray-200">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <span className="text-lg font-semibold">{groupData.group.name}</span>
+                    {groupData.group.description && (
+                      <p className="text-sm text-gray-600 mt-1">{groupData.group.description}</p>
+                    )}
+                  </div>
+                  <div className="ml-auto text-sm text-gray-500">
+                    {groupData.guilds.length} server{groupData.guilds.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groupData.guilds.map((guild) => (
+                    <Link
+                      key={guild.id}
+                      href={`/guilds/${guild.id}`}
+                      className="block"
+                    >
+                      <div className="rounded-lg border bg-white p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-3">
+                          {guild.iconUrl ? (
+                            <Image
+                              src={guild.iconUrl}
+                              alt={guild.name || 'Server'}
+                              width={40}
+                              height={40}
+                              className="rounded-lg"
+                              unoptimized={true}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                              <span className="text-sm font-bold text-blue-600">
+                                {guild.name ? guild.name.charAt(0).toUpperCase() : '?'}
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="font-medium">
+                              {guild.name || 'Unknown Server'}
+                            </h4>
+                            <p className="text-sm text-gray-600">
+                              {guild.memberCount || 0} members, {guild.roleCount || 0} roles
+                            </p>
                           </div>
-                        )}
-                        <div>
-                          <h4 className="font-medium">
-                            {guild.name || 'Unknown Server'}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {guild.memberCount || 0} members
-                          </p>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </Section>
     </div>
