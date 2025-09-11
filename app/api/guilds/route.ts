@@ -614,6 +614,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     });
 
     console.log(`[SECURITY-AUDIT] GROUP INFO: Found groups for ${Object.keys(groupInfo).length} guilds`);
+    console.log(`[SECURITY-AUDIT] GROUP INFO DETAILS:`, groupInfo);
   } catch (error) {
     console.warn('[SECURITY-AUDIT] Failed to fetch group info:', error);
   }
@@ -633,7 +634,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     const botGuildId = String(botGuild.id || botGuild.guild_id || "");
     const group = groupInfo[botGuildId];
 
-    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? group.groupName : 'NONE'}`);
+    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? JSON.stringify(group) : 'NONE'}`);
 
     return {
       id: botGuildId,

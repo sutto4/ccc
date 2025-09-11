@@ -28,9 +28,13 @@ function GuildsPageContent() {
 
   // Group guilds by their group
   const groupedGuilds = React.useMemo(() => {
+    console.log('[FRONTEND] All guilds:', guilds.map(g => ({ id: g.id, name: g.name, group: g.group })));
+    
     const groups: Record<string, { group: any; guilds: Guild[] }> = {};
 
     guilds.forEach((guild) => {
+      console.log('[FRONTEND] Processing guild:', guild.name, 'group:', guild.group);
+      
       const groupKey = guild.group?.id ? `group_${guild.group.id}` : 'ungrouped';
       const groupName = guild.group?.name || 'Individual Servers';
 
@@ -43,6 +47,7 @@ function GuildsPageContent() {
       groups[groupKey].guilds.push(guild);
     });
 
+    console.log('[FRONTEND] Grouped result:', Object.values(groups).map(g => ({ groupName: g.group.name, guildCount: g.guilds.length })));
     return Object.values(groups);
   }, [guilds]);
 
