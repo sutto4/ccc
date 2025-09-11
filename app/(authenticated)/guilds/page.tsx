@@ -35,9 +35,9 @@ function GuildsPageContent() {
     guilds.forEach((guild) => {
       console.log('[FRONTEND] Processing guild:', guild.name, 'group:', guild.group);
       
+      // Use the actual group data from the API
       const groupKey = guild.group?.id ? `group_${guild.group.id}` : 'ungrouped';
-      const groupName = guild.group?.name || 'Individual Servers';
-
+      
       if (!groups[groupKey]) {
         groups[groupKey] = {
           group: guild.group || { id: null, name: 'Individual Servers', description: null },
