@@ -65,7 +65,6 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
   
   // Modal state for adding user
   const [addUserRoleId, setAddUserRoleId] = useState<string|null>(null);
-  const [userSearch, setUserSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [addingUser, setAddingUser] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
