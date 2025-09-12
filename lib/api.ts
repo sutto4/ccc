@@ -47,6 +47,7 @@ export type Features = {
   verification_system?: boolean
   feedback_system?: boolean
   moderation?: boolean
+  sticky_messages?: boolean
   
   // Premium features
   fdg_donator_sync?: boolean
@@ -69,6 +70,7 @@ export type Features = {
   verification_system_package?: string
   feedback_system_package?: string
   moderation_package?: string
+  sticky_messages_package?: string
   fdg_donator_sync_package?: string
   custom_prefix_package?: string
   fivem_esx_package?: string

@@ -1232,7 +1232,9 @@ function GuildSettingsPageContent() {
                         { name: 'sendverify', description: 'Send verification message', feature: 'utilities' },
                         { name: 'setverifylog', description: 'Set verification log channel', feature: 'utilities' },
                         { name: 'feedback', description: 'Submit feedback', feature: 'utilities' },
-                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' }
+                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' },
+                        { name: 'sticky', description: 'Create a sticky message in this channel', feature: 'sticky_messages' },
+                        { name: 'unsticky', description: 'Remove the sticky message from this channel', feature: 'sticky_messages' }
                       ].map((cmd) => {
                         const perm = commandPermissions?.commands[cmd.name];
                         const canModify = perm?.canModify ?? true;
@@ -1400,7 +1402,9 @@ function GuildSettingsPageContent() {
                         { name: 'sendverify', feature: 'utilities' },
                         { name: 'setverifylog', feature: 'utilities' },
                         { name: 'feedback', feature: 'utilities' },
-                        { name: 'embed', feature: 'utilities' }
+                        { name: 'embed', feature: 'utilities' },
+                        { name: 'sticky', feature: 'sticky_messages' },
+                        { name: 'unsticky', feature: 'sticky_messages' }
                       ];
                       
                       const commandsToUpdate = Object.entries(commandSettings).map(([name, enabled]) => {
