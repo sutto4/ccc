@@ -12,8 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
 import { Shield, Server, Settings, Crown, FileText, Folder } from "lucide-react";
-import { useEffect, useState } from "react";
-import { fetchFeatures, type FeaturesResponse, type Features } from "@/lib/api";
+import { useSidebarFeatures } from "@/hooks/use-features-query";
 import { useSharedSession, signIn, signOut } from "@/components/providers";
 
 // CollapsibleSection component
@@ -176,41 +175,19 @@ NavLeaf.displayName = 'NavLeaf';
 const Sidebar = React.memo(function Sidebar() {
   const pathname = usePathname() || "";
   const { data: session, status } = useSharedSession();
-  const [features, setFeatures] = useState<Features | null>(null);
-
+  
   // detect if we're inside a guild route
   const parts = pathname.split("/").filter(Boolean);
   const inGuild = parts[0] === "guilds" && parts[1];
   const guildId = inGuild ? parts[1] : null;
+  
+  // Use React Query for features fetching
+  const { features, loading } = useSidebarFeatures(guildId || '');
 
   // Check if user is admin
   const isAdmin = session?.role === "admin" || session?.role === "owner";
 
-  // Always call useEffect hook before any conditional returns (Rules of Hooks)
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!guildId) {
-        setFeatures(null);
-        return;
-      }
-      try {
-        console.log('Sidebar: Fetching features for guild:', guildId);
-        const fx: FeaturesResponse = await fetchFeatures(guildId);
-        console.log('Sidebar: Received features response:', fx);
-        console.log('Sidebar: Features object:', fx?.features);
-        if (!alive) return;
-        setFeatures(fx?.features || {});
-      } catch (error) {
-        if (!alive) return;
-        console.warn('Sidebar: Failed to fetch guild features:', error);
-        setFeatures({});
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [guildId]);
+  // Features are now handled by React Query hook above
 
   // Show loading state while session is loading
   if (status === "loading") {

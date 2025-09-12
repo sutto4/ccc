@@ -5,7 +5,7 @@ import RoleUsersList from "@/components/role-users-list";
 import { UserChips } from "@/components/ui/user-chips";
 import { RoleUserChipsOnDemand } from "@/components/ui/role-user-chips-on-demand";
 import { RoleUserModal } from "@/components/ui/role-user-modal";
-import { useGuildMembersKanban } from "@/hooks/use-guild-members";
+import { useMembersKanbanQuery } from "@/hooks/use-members-query";
 
 export default function RoleExplorer({ guildId, roles = [] }: { guildId: string; roles?: any[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
   const [modalRoleUserIds, setModalRoleUserIds] = useState<string[]>([]);
   
   // Use the shared hook for member management
-  const { members, loading, error } = useGuildMembersKanban(guildId);
+  const { data: members = [], isLoading: loading, error } = useMembersKanbanQuery(guildId);
 
   // Sort roles by position (descending, like Discord)
   const filteredRoles = (roles || [])

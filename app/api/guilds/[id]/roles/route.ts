@@ -168,7 +168,6 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
   }
   
   const data = await res.json();
-  console.log(`Discord roles response for guild ${guildId}:`, JSON.stringify(data, null, 2));
   
   const normalized = (Array.isArray(data) ? data : []).map((r: any) => {
     const hexColor = typeof r.color === 'number' && r.color > 0
@@ -190,8 +189,6 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
       permissions: [], // We don't need Discord permissions anymore
     };
   });
-  
-  console.log(`Normalized roles for guild ${guildId}:`, JSON.stringify(normalized, null, 2));
   
   cache.set(cacheKey, normalized, 120_000);
   return NextResponse.json({ roles: normalized });

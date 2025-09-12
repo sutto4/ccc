@@ -4,14 +4,14 @@ import { Dialog } from "@headlessui/react";
 import { useSession } from "next-auth/react";
 import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
-import { useGuildMembersKanban } from "@/hooks/use-guild-members";
+import { useMembersKanbanQuery } from "@/hooks/use-members-query";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_AVATAR = "/placeholder-user.jpg";
 
 export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: string; roleId: string; roleName?: string }) {
-	// Use the shared hook for member management
-	const { members: allMembers, loading, error, loadMembers } = useGuildMembersKanban(guildId);
+	// Use React Query for member management
+	const { data: allMembers = [], isLoading: loading, error, refetch: loadMembers } = useMembersKanbanQuery(guildId);
 	
 	const [users, setUsers] = useState<any[]>([]);
 	const [search, setSearch] = useState("");

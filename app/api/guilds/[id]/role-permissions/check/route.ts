@@ -40,11 +40,52 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
 
   const accessToken = (token as any).accessToken as string;
   const discordId = (token as any).discordId as string;
+  let expiresAt = (token as any).expiresAt as number;
+  const now = Date.now() / 1000;
+
+  // MIGRATION: Fix old tokens that have incorrect expiration times
+  // If the expiration is more than 2 hours in the future, it's likely the old refresh token expiration
+  if (expiresAt && (expiresAt - now) > 7200) {
+    console.log(`\x1b[33m[PERMISSION]\x1b[0m MIGRATION: Detected old token with incorrect expiration, setting to 1 hour from now`);
+    expiresAt = now + 3600; // Set to 1 hour from now
+    (token as any).expiresAt = expiresAt;
+  }
+
+  console.log(`\x1b[31m[PERMISSION]\x1b[0m Token status:`, {
+    hasAccessToken: !!accessToken,
+    hasDiscordId: !!discordId,
+    expiresAt: expiresAt,
+    now: now,
+    isExpired: expiresAt ? now > expiresAt : false,
+    timeUntilExpiry: expiresAt ? expiresAt - now : 'N/A',
+    accessTokenLength: accessToken?.length || 0,
+    accessTokenStart: accessToken?.substring(0, 20) + '...',
+    tokenCreatedAt: (token as any).iat ? new Date((token as any).iat * 1000).toISOString() : 'N/A'
+  });
 
   if (!accessToken || !discordId) {
     return NextResponse.json(
       {
         error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  // Check if token is expired
+  if (expiresAt && now > expiresAt) {
+    console.log(`\x1b[31m[PERMISSION]\x1b[0m Token expired, forcing re-authentication`);
+    return NextResponse.json(
+      {
+        error: 'Token expired',
         message: 'Please login again',
         redirectTo: '/signin'
       },
@@ -76,63 +117,80 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
     let actualOwnerId = null;
 
     try {
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Making Discord API call to: https://discord.com/api/v10/guilds/${guildId}`);
-      const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API response status: ${guildResponse.status}`);
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API call result - OK: ${guildResponse.ok}`);
-
-      if (guildResponse.ok) {
-        const guildData = await guildResponse.json();
-        userGuildAccess = true;
-        actualOwnerId = guildData.owner_id;
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API success - Guild owner: ${actualOwnerId}`);
-
-        // Get user's actual roles from Discord
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Fetching user roles from Discord API`);
-        const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+      console.log(`\x1b[31m[PERMISSION]\x1b[0m Making Discord API call to: https://discord.com/api/v10/users/@me/guilds`);
+      
+      // Add retry logic for rate limiting
+      let guildResponse;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        guildResponse = await fetch(`https://discord.com/api/v10/users/@me/guilds`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           }
         });
-
-        if (memberResponse.ok) {
-          const memberData = await memberResponse.json();
-          const actualUserRoles = memberData.roles || [];
-          console.log(`\x1b[31m[PERMISSION]\x1b[0m User's ACTUAL Discord roles:`, actualUserRoles);
-
-          // Override the session roles with actual Discord roles
-          userRoles.length = 0; // Clear the array
-          userRoles.push(...actualUserRoles); // Add actual roles
-          console.log(`\x1b[31m[PERMISSION]\x1b[0m Updated userRoles to actual Discord roles:`, userRoles);
+        
+        if (guildResponse.status === 429) {
+          const retryAfter = guildResponse.headers.get('retry-after');
+          const delay = retryAfter ? parseFloat(retryAfter) * 1000 : 1000; // Convert to milliseconds
+          console.log(`\x1b[33m[PERMISSION]\x1b[0m Rate limited, waiting ${delay}ms before retry ${retryCount + 1}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          retryCount++;
         } else {
-          console.log(`\x1b[31m[PERMISSION]\x1b[0m ❌ MEMBER API FAILED: ${memberResponse.status} - Cannot get user's actual roles!`);
-          console.log(`\x1b[31m[PERMISSION]\x1b[0m This is why we're using session roles (empty) and falling back to server_access_control`);
-          userGuildAccess = false; // Mark as failed so we use fallback
+          break; // Success or non-rate-limit error
+        }
+      }
+
+      console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API response status: ${guildResponse.status}`);
+      console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API call result - OK: ${guildResponse.ok}`);
+
+      if (!guildResponse.ok) {
+        const errorText = await guildResponse.text();
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API error response:`, errorText);
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API headers:`, Object.fromEntries(guildResponse.headers.entries()));
+      }
+
+      if (guildResponse.ok) {
+        const userGuilds = await guildResponse.json();
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API success - User is in ${userGuilds.length} guilds`);
+        
+        // Check if the user is in the specific guild
+        const userGuild = userGuilds.find((guild: any) => guild.id === guildId);
+        if (userGuild) {
+          userGuildAccess = true;
+          actualOwnerId = userGuild.owner ? 'true' : 'false';
+          console.log(`\x1b[31m[PERMISSION]\x1b[0m User is in guild ${guildId}, owner: ${actualOwnerId}`);
+
+          // Note: We don't fetch user roles from Discord API here because:
+          // 1. The /guilds/${guildId}/members/${userId} endpoint requires bot permissions
+          // 2. We're using user access tokens, not bot tokens
+          // 3. The guilds API already confirms the user is in the guild
+          // 4. Role checking is handled by the database fallback system
+          console.log(`\x1b[31m[PERMISSION]\x1b[0m User confirmed in guild via Discord API - using session roles for permission check`);
+        } else {
+          console.log(`\x1b[31m[PERMISSION]\x1b[0m User is not in guild ${guildId} according to Discord API`);
+          userGuildAccess = false;
         }
       } else if (guildResponse.status === 401) {
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 401 - Token expired, user needs to re-authenticate`);
+        console.log(`\x1b[33m[PERMISSION]\x1b[0m Discord API 401 - Access token expired (expected, using fallback)`);
         // Don't attempt refresh here - NextAuth JWT callback handles token refresh
         userGuildAccess = false;
       } else if (guildResponse.status === 403) {
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 403 - User not authorized for guild ${guildId}`);
+        console.log(`\x1b[33m[PERMISSION]\x1b[0m Discord API 403 - User not authorized for guild ${guildId} (using fallback)`);
       } else if (guildResponse.status === 404) {
         console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 404 - Guild ${guildId} not found`);
       } else if (guildResponse.status === 429) {
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API 429 - Rate limited`);
+        console.log(`\x1b[33m[PERMISSION]\x1b[0m Discord API 429 - Rate limited (after retries)`);
+        // Don't treat rate limiting as an error - use fallback
       } else {
         console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API unexpected status: ${guildResponse.status}`);
       }
 
-      if (guildResponse.status === 403 || guildResponse.status === 401) {
-        // User doesn't have access to this guild via Discord API
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m User ${userId} denied access to guild ${guildId} via Discord API, checking server_access_control fallback`);
+      if (guildResponse.status === 403 || guildResponse.status === 401 || guildResponse.status === 429) {
+        // User doesn't have access to this guild via Discord API or rate limited
+        console.log(`\x1b[33m[PERMISSION]\x1b[0m User ${userId} denied access to guild ${guildId} via Discord API (${guildResponse.status}), checking server_access_control fallback`);
         // FALLBACK: Check server_access_control table if Discord API denies access
         try {
           const fallbackConnection = await getDbConnection();
@@ -143,8 +201,8 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
             );
 
           if ((accessRows as any[]).length > 0) {
-            console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild ${guildId}: user ${userId} has access via server_access_control fallback (Discord API 403)`);
-            console.log(`\x1b[31m[PERMISSION]\x1b[0m Found ${accessRows.length} access records for user ${userId} in guild ${guildId}`);
+            console.log(`\x1b[32m[PERMISSION]\x1b[0m Guild ${guildId}: user ${userId} has access via server_access_control fallback (Discord API 403)`);
+            console.log(`\x1b[32m[PERMISSION]\x1b[0m Found ${accessRows.length} access records for user ${userId} in guild ${guildId}`);
               return NextResponse.json({
                 canUseApp: true,
                 isOwner: false,
@@ -211,6 +269,115 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
         userId,
         userRoles
       });
+    }
+
+    // If Discord API confirmed user is in guild, check both database access AND current Discord roles
+    if (userGuildAccess) {
+      console.log(`\x1b[33m[PERMISSION]\x1b[0m Discord API confirmed user is in guild, checking server_access_control for explicit access`);
+      
+      // First check if user has explicit database access
+      let hasExplicitAccess = false;
+      try {
+        const fallbackConnection = await getDbConnection();
+        try {
+          const [accessRows] = await fallbackConnection.execute(
+            'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+            [guildId, userId]
+          );
+
+          if ((accessRows as any[]).length > 0) {
+            hasExplicitAccess = true;
+            console.log(`\x1b[32m[PERMISSION]\x1b[0m Guild ${guildId}: user ${userId} has explicit database access`);
+            console.log(`\x1b[32m[PERMISSION]\x1b[0m Found ${accessRows.length} access records for user ${userId} in guild ${guildId}`);
+          } else {
+            console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild ${guildId}: user ${userId} is in guild but has NO explicit database access`);
+          }
+        } finally {
+          await fallbackConnection.end();
+        }
+      } catch (fallbackError) {
+        console.error(`\x1b[31m[PERMISSION]\x1b[0m Database error checking explicit access:`, fallbackError);
+      }
+
+      // If user has explicit access, still verify they have the required Discord roles
+      if (hasExplicitAccess) {
+        console.log(`\x1b[33m[PERMISSION]\x1b[0m User has explicit database access, now verifying current Discord roles...`);
+        
+        // Get user's current Discord roles (we need to fetch this from Discord API)
+        try {
+          const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+            headers: {
+              Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (memberResponse.ok) {
+            const memberData = await memberResponse.json();
+            const currentDiscordRoles = memberData.roles || [];
+            console.log(`\x1b[31m[PERMISSION]\x1b[0m User's current Discord roles:`, currentDiscordRoles);
+
+            // Check which roles have app access
+            const connection = await getDbConnection();
+            try {
+              const [roleRows] = await connection.execute(
+                'SELECT role_id FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
+                [guildId]
+              );
+
+              const allowedRoleIds = (roleRows as any[]).map(row => row.role_id);
+              console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild ${guildId} roles with app access:`, allowedRoleIds);
+
+              // Check if user has any of the required roles
+              const hasRequiredRole = currentDiscordRoles.some((roleId: string) => allowedRoleIds.includes(roleId));
+              
+              if (hasRequiredRole) {
+                console.log(`\x1b[32m[PERMISSION]\x1b[0m User has required Discord role for app access`);
+                return NextResponse.json({
+                  canUseApp: true,
+                  isOwner: actualOwnerId === 'true',
+                  hasRoleAccess: true,
+                  userId,
+                  userRoles: currentDiscordRoles
+                });
+              } else {
+                console.log(`\x1b[31m[PERMISSION]\x1b[0m User has explicit database access but NO required Discord roles`);
+                console.log(`\x1b[31m[PERMISSION]\x1b[0m User roles: ${currentDiscordRoles.join(', ')}`);
+                console.log(`\x1b[31m[PERMISSION]\x1b[0m Required roles: ${allowedRoleIds.join(', ')}`);
+                return NextResponse.json({
+                  canUseApp: false,
+                  isOwner: actualOwnerId === 'true',
+                  hasRoleAccess: false,
+                  userId,
+                  userRoles: currentDiscordRoles
+                });
+              }
+            } finally {
+              await connection.end();
+            }
+          } else {
+            console.log(`\x1b[31m[PERMISSION]\x1b[0m Failed to fetch user's Discord roles: ${memberResponse.status}`);
+            // If we can't get Discord roles, deny access for security
+            return NextResponse.json({
+              canUseApp: false,
+              isOwner: actualOwnerId === 'true',
+              hasRoleAccess: false,
+              userId,
+              userRoles: []
+            });
+          }
+        } catch (discordError) {
+          console.error(`\x1b[31m[PERMISSION]\x1b[0m Error fetching Discord roles:`, discordError);
+          // If we can't verify Discord roles, deny access for security
+          return NextResponse.json({
+            canUseApp: false,
+            isOwner: actualOwnerId === 'true',
+            hasRoleAccess: false,
+            userId,
+            userRoles: []
+          });
+        }
+      }
     }
 
     // Check if user is the actual server owner

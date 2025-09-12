@@ -4,7 +4,7 @@ import UserTransferPicker from "@/components/ui/user-transfer-picker";
 import RoleMultiPicker from "@/components/ui/role-multi-picker";
 import { addRole, removeRole, type Member, type Role } from "@/lib/api";
 import { logAction } from "@/lib/logger";
-import { usePermissions } from "@/hooks/use-permissions";
+import { usePermissions } from "@/hooks/use-permissions-query";
 import { useSharedSession } from "@/components/providers";
 
 export default function MassRoleAssign({ guildId, roles }: { guildId: string; roles: Role[] }) {

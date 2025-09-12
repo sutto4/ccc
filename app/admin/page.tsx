@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import PremiumModal from "@/components/premium-modal";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
+import { useAdminGuildsQuery, useAdminStatsQuery, useAdminHealthQuery, useUserActivityQuery } from "@/hooks/use-admin-query";
+import { useSession } from "next-auth/react";
 
 interface Guild {
   id: string;
@@ -113,9 +115,49 @@ export default function AdminDashboard() {
 }
 
 function AdminDashboardContent() {
+  const { data: session, status: sessionStatus } = useSession();
   
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({
+  // Use React Query hooks for data fetching
+  const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [sortField, setSortField] = useState<"name" | "member_count" | "status" | "created_at">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'warning' | 'info'} | null>(null);
+  
+  // React Query hooks - only enable when user is authenticated
+  const guildsQuery = useAdminGuildsQuery();
+  const statsQuery = useAdminStatsQuery();
+  const healthQuery = useAdminHealthQuery();
+  const userActivityQuery = useUserActivityQuery();
+
+  // Show loading while session is loading
+  if (sessionStatus === "loading") {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading admin dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user is authenticated
+  if (sessionStatus === "unauthenticated" || !session?.user) {
+    return (
+      <div className="p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
+          <p className="text-gray-600">You must be logged in to access the admin dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  const guilds = guildsQuery.data || [];
+  const stats = statsQuery.data || {
     totalServers: 0,
     totalUsers: 0,
     newServers24h: 0,
@@ -126,180 +168,73 @@ function AdminDashboardContent() {
     totalEmbeds: 0,
     conversionRate: "0",
     averageUsersPerServer: 0
-  });
-  const [health, setHealth] = useState<HealthStatus>({
-    bot: "healthy",
-    database: "healthy",
-    api: "healthy",
-    overall: "healthy",
-    lastCheck: new Date().toISOString(),
-    checks: {
-      database: { status: "healthy", message: "Database connection successful" },
-      bot: { status: "healthy", message: "Bot is running" },
-      api: { status: "healthy", message: "API responding normally" }
-    }
-  });
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
-  const [error, setError] = useState<string | null>(null);
-  const [testModalOpen, setTestModalOpen] = useState(false);
-  const [sortField, setSortField] = useState<"name" | "member_count" | "status" | "created_at">("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'warning' | 'info'} | null>(null);
-  const [apiHealth, setApiHealth] = useState<ApiHealthStatus | null>(null);
-  const [healthLoading, setHealthLoading] = useState(false);
+  };
+  const apiHealth = healthQuery.data;
+  const loading = guildsQuery.isLoading || statsQuery.isLoading || userActivityQuery.isLoading;
+  const error = guildsQuery.error || statsQuery.error || userActivityQuery.error;
 
-  // User activity state
-  const [userActivityStats, setUserActivityStats] = useState({
+  // Debug logging
+  console.log('[ADMIN] Session info:', {
+    sessionStatus,
+    user: session?.user,
+    userEmail: session?.user?.email,
+    userRole: (session?.user as any)?.role
+  });
+
+  console.log('[ADMIN] Query states:', {
+    guildsLoading: guildsQuery.isLoading,
+    guildsError: guildsQuery.error,
+    guildsData: guildsQuery.data,
+    statsLoading: statsQuery.isLoading,
+    statsError: statsQuery.error,
+    statsData: statsQuery.data,
+    userActivityLoading: userActivityQuery.isLoading,
+    userActivityError: userActivityQuery.error,
+    userActivityData: userActivityQuery.data
+  });
+
+  // Check if queries are actually running
+  console.log('[ADMIN] Query status:', {
+    guildsStatus: guildsQuery.status,
+    statsStatus: statsQuery.status,
+    userActivityStatus: userActivityQuery.status,
+    healthStatus: healthQuery.status
+  });
+  
+  // Legacy health object for compatibility
+  const health: HealthStatus = {
+    bot: "healthy",
+    database: apiHealth?.database?.healthy ? "healthy" : "error",
+    api: apiHealth?.status === 'healthy' ? "healthy" : "error",
+    overall: apiHealth?.status === 'healthy' ? "healthy" : "error",
+    lastCheck: apiHealth?.timestamp || new Date().toISOString(),
+    checks: {
+      database: { 
+        status: apiHealth?.database?.healthy ? "healthy" : "error", 
+        message: apiHealth?.database?.healthy ? "Database connection successful" : "Database connection failed" 
+      },
+      bot: { status: "healthy", message: "Bot is running" },
+      api: { 
+        status: apiHealth?.status === 'healthy' ? "healthy" : "error", 
+        message: apiHealth?.status === 'healthy' ? "API responding normally" : "API responding with errors" 
+      }
+    }
+  };
+
+  // User activity data from React Query
+  const userActivityStats = userActivityQuery.data?.stats || {
     totalLogins: 0,
     firstTimeLogins: 0,
     returningLogins: 0,
     recentLogins24h: 0,
     uniqueUsers: 0
-  });
-  const [loginHistory, setLoginHistory] = useState<any[]>([]);
-
-  useEffect(() => {
-    fetchDashboardData();
-    fetchApiHealth();
-    // Remove automatic refresh to prevent connection issues
-    // const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
-    // return () => clearInterval(interval);
-  }, []);
-
-
-  const fetchDashboardData = async () => {
-    try {
-      setError(null);
-      const [guildsRes, statsRes, healthRes] = await Promise.all([
-        fetch('/api/admin/guilds'),
-        fetch('/api/admin/stats'),
-        fetch('/api/admin/health')
-      ]);
-
-      if (guildsRes.ok) {
-        const guildsData = await guildsRes.json();
-        setGuilds(guildsData);
-        
-        // Calculate stats from guilds data
-        const now = new Date();
-        const cutoff48h = now.getTime() - (48 * 60 * 60 * 1000);
-        
-        const newServers48h = guildsData.filter((g: Guild) => {
-          const createdAt = new Date(g.created_at);
-          return createdAt.getTime() > cutoff48h;
-        }).length;
-
-        setStats({
-          totalServers: guildsData.length,
-          totalUsers: 0, // Will be set from stats API
-          newServers24h: newServers48h, // Keep name for stats but use 48h value
-          newServers48h,
-          activeServers: guildsData.filter((g: Guild) => g.status === 'active').length,
-          premiumServers: guildsData.filter((g: Guild) => g.premium).length,
-          totalCommands: 0, // Will be fetched separately
-          totalEmbeds: 0, // Will be fetched separately
-          conversionRate: guildsData.length > 0 ? ((guildsData.filter((g: Guild) => g.premium).length / guildsData.length) * 100).toFixed(1) : "0",
-          averageUsersPerServer: 0 // Will be calculated from API stats
-        });
-      } else {
-        const errorData = await guildsRes.json().catch(() => ({}));
-        console.error('Guilds API error:', errorData);
-        setError(`Failed to load servers: ${errorData.error || 'Unknown error'}`);
-      }
-
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        console.log('Stats data received:', statsData);
-        setStats(prev => ({ 
-          ...prev, 
-          ...statsData,
-          // Ensure totalUsers comes from the API, not calculated from guilds
-          totalUsers: statsData.totalUsers || 0,
-          // Calculate average users per server from API data
-          averageUsersPerServer: statsData.totalUsers && statsData.totalServers ? 
-            Math.round(statsData.totalUsers / statsData.totalServers) : 0
-        }));
-      } else {
-        const errorData = await statsRes.json().catch(() => ({}));
-        console.error('Stats API error:', errorData);
-        setError(`Failed to load stats: ${errorData.error || 'Unknown error'}`);
-      }
-
-      if (healthRes.ok) {
-        const healthData = await healthRes.json();
-        setHealth(healthData);
-      } else {
-        const errorData = await healthRes.json().catch(() => ({}));
-        console.error('Health API error:', errorData);
-        setError(`Failed to load health status: ${errorData.error || 'Unknown error'}`);
-      }
-
-      // Fetch user activity data
-      try {
-        const userActivityRes = await fetch('/api/admin/user-logins?limit=50');
-        if (userActivityRes.ok) {
-          const userActivityData = await userActivityRes.json();
-          setUserActivityStats(userActivityData.stats || {
-            totalLogins: 0,
-            firstTimeLogins: 0,
-            returningLogins: 0,
-            recentLogins24h: 0,
-            uniqueUsers: 0
-          });
-          setLoginHistory(userActivityData.loginHistory || []);
-        } else {
-          const errorText = await userActivityRes.text().catch(() => 'Unknown error');
-          console.error('User activity API error:', errorText);
-          // Set default values if API fails
-          setUserActivityStats({
-            totalLogins: 0,
-            firstTimeLogins: 0,
-            returningLogins: 0,
-            recentLogins24h: 0,
-            uniqueUsers: 0
-          });
-          setLoginHistory([]);
-        }
-      } catch (userActivityError) {
-        console.error('Failed to fetch user activity:', userActivityError);
-        // Set default values if fetch fails
-        setUserActivityStats({
-          totalLogins: 0,
-          firstTimeLogins: 0,
-          returningLogins: 0,
-          recentLogins24h: 0,
-          uniqueUsers: 0
-        });
-        setLoginHistory([]);
-      }
-
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-      setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setLoading(false);
-    }
   };
+  const loginHistory = userActivityQuery.data?.loginHistory || [];
 
-  const fetchApiHealth = async () => {
-    try {
-      setHealthLoading(true);
-      const response = await fetch('/api/health');
-      if (response.ok) {
-        const healthData = await response.json();
-        setApiHealth(healthData);
-      } else {
-        console.error('Health API error:', response.status);
-        setApiHealth(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch API health:', error);
-      setApiHealth(null);
-    } finally {
-      setHealthLoading(false);
-    }
-  };
+  // Data fetching is now handled by React Query hooks above
+
+
+  // Old fetch functions removed - now using React Query hooks
 
   const getFilteredGuilds = () => {
     const now = new Date();
@@ -515,7 +450,12 @@ function AdminDashboardContent() {
               <span className="font-medium capitalize">{health.overall}</span>
             </div>
             <button
-              onClick={fetchDashboardData}
+              onClick={() => {
+                guildsQuery.refetch();
+                statsQuery.refetch();
+                healthQuery.refetch();
+                userActivityQuery.refetch();
+              }}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
@@ -527,7 +467,12 @@ function AdminDashboardContent() {
                   const response = await fetch('/api/admin/reset-db', { method: 'POST' });
                   if (response.ok) {
                     // Wait a moment then refresh data
-                    setTimeout(fetchDashboardData, 1000);
+                    setTimeout(() => {
+                      guildsQuery.refetch();
+                      statsQuery.refetch();
+                      healthQuery.refetch();
+                      userActivityQuery.refetch();
+                    }, 1000);
                   }
                 } catch (error) {
                   console.error('Failed to reset database:', error);
@@ -610,12 +555,12 @@ function AdminDashboardContent() {
                     if (cleanupResponse.ok) {
                       console.log('✅ Cleanup completed');
                       // Refresh the dashboard data
-                      await fetchDashboardData();
+                      await guildsQuery.refetch();
                       // Show success notification
                       showNotification('✅ Guild sync and cleanup completed! Server list has been refreshed.', 'success');
                     } else {
                       console.warn('⚠️ Sync completed but cleanup failed:', cleanupResponse.status);
-                      await fetchDashboardData();
+                      await guildsQuery.refetch();
                       showNotification('✅ Guild sync completed, but cleanup failed. Some guilds may still show incorrect status.', 'warning');
                     }
                   } else {
@@ -657,7 +602,12 @@ function AdminDashboardContent() {
                 <p className="text-sm text-red-700 mt-1">{error}</p>
                 <div className="mt-3">
                   <button
-                    onClick={fetchDashboardData}
+                    onClick={() => {
+                      guildsQuery.refetch();
+                      statsQuery.refetch();
+                      healthQuery.refetch();
+                      userActivityQuery.refetch();
+                    }}
                     className="text-sm text-red-800 hover:text-red-900 underline"
                   >
                     Try again
@@ -685,11 +635,11 @@ function AdminDashboardContent() {
                   {apiHealth.status}
                 </div>
                 <button
-                  onClick={fetchApiHealth}
-                  disabled={healthLoading}
+                  onClick={() => healthQuery.refetch()}
+                  disabled={healthQuery.isFetching}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-4 h-4 ${healthLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${healthQuery.isFetching ? 'animate-spin' : ''}`} />
                   Refresh
                 </button>
               </div>
@@ -1132,7 +1082,7 @@ function AdminDashboardContent() {
                                   if (response.ok) {
                                     const result = await response.json();
                                     alert(`Premium access cleaned up successfully!\n\nBefore: ${JSON.stringify(result.before, null, 2)}\nAfter: ${JSON.stringify(result.after, null, 2)}\nFeatures disabled: ${result.featuresDisabled}`);
-                                    fetchDashboardData(); // Refresh the dashboard
+                                    guildsQuery.refetch(); // Refresh the dashboard
                                   } else {
                                     const error = await response.json();
                                     alert(`Failed to cleanup premium access: ${error.error || 'Unknown error'}`);
@@ -1166,7 +1116,7 @@ function AdminDashboardContent() {
                                   if (response.ok) {
                                     const result = await response.json();
                                     alert(`Guild status fixed successfully!\n\n${result.message}`);
-                                    fetchDashboardData(); // Refresh the dashboard
+                                    guildsQuery.refetch(); // Refresh the dashboard
                                   } else {
                                     const error = await response.json();
                                     alert(`Failed to fix guild status: ${error.error || 'Unknown error'}`);
@@ -1211,7 +1161,12 @@ function AdminDashboardContent() {
                 try {
                   const response = await fetch('/api/admin/reset-db', { method: 'POST' });
                   if (response.ok) {
-                    setTimeout(fetchDashboardData, 1000);
+                    setTimeout(() => {
+                      guildsQuery.refetch();
+                      statsQuery.refetch();
+                      healthQuery.refetch();
+                      userActivityQuery.refetch();
+                    }, 1000);
                   }
                 } catch (error) {
                   console.error('Failed to reset database:', error);
@@ -1238,7 +1193,7 @@ function AdminDashboardContent() {
                     if (response.ok) {
                       const result = await response.json();
                       alert(`Premium access cleaned up successfully!\n\nBefore: ${JSON.stringify(result.before, null, 2)}\nAfter: ${JSON.stringify(result.after, null, 2)}\nFeatures disabled: ${result.featuresDisabled}`);
-                      fetchDashboardData(); // Refresh the dashboard
+                      guildsQuery.refetch(); // Refresh the dashboard
                     } else {
                       const error = await response.json();
                       alert(`Failed to cleanup premium access: ${error.error || 'Unknown error'}`);
@@ -1273,7 +1228,7 @@ function AdminDashboardContent() {
                     if (response.ok) {
                       const result = await response.json();
                       alert(`Guild status fixed successfully!\n\n${result.message}`);
-                      fetchDashboardData(); // Refresh the dashboard
+                      guildsQuery.refetch(); // Refresh the dashboard
                     } else {
                       const error = await response.json();
                       alert(`Failed to fix guild status: ${error.error || 'Unknown error'}`);
@@ -1316,7 +1271,7 @@ function AdminDashboardContent() {
                       if (fixResponse.ok) {
                         const result = await fixResponse.json();
                         alert(`Bulk status fix completed!\n\n${result.message}`);
-                        fetchDashboardData(); // Refresh the dashboard
+                        guildsQuery.refetch(); // Refresh the dashboard
                       } else {
                         const error = await fixResponse.json();
                         alert(`Failed to fix guild statuses: ${error.error || 'Unknown error'}`);

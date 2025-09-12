@@ -128,18 +128,26 @@ export const authOptions: NextAuthOptions = {
         ;(token as any).accessToken = account.access_token
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).refreshToken = account.refresh_token
-        // Discord returns expires_at in seconds (standard OAuth2)
-        let expiresAt = account.expires_at;
-        if (!expiresAt) {
-          // Default to 7 days if not provided
-          expiresAt = Math.floor(Date.now() / 1000) + 604800;
-          console.log('[AUTH] No expires_at provided, defaulting to 7 days');
+        // Discord returns expires_at in seconds for ACCESS TOKEN (typically 1 hour)
+        let accessTokenExpiresAt = account.expires_at;
+        if (!accessTokenExpiresAt) {
+          // Default to 1 hour if not provided
+          accessTokenExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+          console.log('[AUTH] No expires_at provided, defaulting to 1 hour');
         } else {
-          console.log('[AUTH] Discord provided expires_at:', expiresAt, 'formatted:', new Date(expiresAt * 1000).toISOString());
+          console.log('[AUTH] Discord provided access token expires_at:', accessTokenExpiresAt, 'formatted:', new Date(accessTokenExpiresAt * 1000).toISOString());
         }
 
+        // Refresh token typically expires in 7 days
+        const refreshTokenExpiresAt = Math.floor(Date.now() / 1000) + 604800;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).expiresAt = expiresAt
+        ;(token as any).accessTokenExpiresAt = accessTokenExpiresAt
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(token as any).refreshTokenExpiresAt = refreshTokenExpiresAt
+        // Keep expiresAt for backward compatibility (use access token expiration)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(token as any).expiresAt = accessTokenExpiresAt
 
         console.log('[AUTH] Token stored:', {
           hasAccessToken: !!(token as any).accessToken,
@@ -193,30 +201,48 @@ export const authOptions: NextAuthOptions = {
       const now = Date.now() / 1000; // Convert to seconds
       const accessToken = (token as any).accessToken;
       const refreshToken = (token as any).refreshToken;
-      const expiresAt = (token as any).expiresAt;
+      let accessTokenExpiresAt = (token as any).accessTokenExpiresAt || (token as any).expiresAt;
+      let refreshTokenExpiresAt = (token as any).refreshTokenExpiresAt;
+
+      // MIGRATION: Fix old tokens that have incorrect expiration times
+      // If the expiration is more than 2 hours in the future, it's likely the old refresh token expiration
+      if (accessTokenExpiresAt && (accessTokenExpiresAt - now) > 7200) {
+        console.log('[AUTH] MIGRATION: Detected old token with incorrect expiration, setting to 1 hour from now');
+        accessTokenExpiresAt = now + 3600; // Set to 1 hour from now
+        (token as any).accessTokenExpiresAt = accessTokenExpiresAt;
+        (token as any).expiresAt = accessTokenExpiresAt;
+      }
+
+      // Set refresh token expiration if not set
+      if (!refreshTokenExpiresAt) {
+        refreshTokenExpiresAt = now + 604800; // 7 days
+        (token as any).refreshTokenExpiresAt = refreshTokenExpiresAt;
+      }
 
       console.log('[AUTH] Token check:', {
         hasAccessToken: !!accessToken,
         hasRefreshToken: !!refreshToken,
-        expiresAt: expiresAt,
+        accessTokenExpiresAt: accessTokenExpiresAt,
+        refreshTokenExpiresAt: refreshTokenExpiresAt,
         now: now,
-        isExpired: expiresAt ? now > expiresAt : false,
-        timeUntilExpiry: expiresAt ? expiresAt - now : 'N/A',
+        isAccessTokenExpired: accessTokenExpiresAt ? now > accessTokenExpiresAt : false,
+        isRefreshTokenExpired: refreshTokenExpiresAt ? now > refreshTokenExpiresAt : false,
+        timeUntilAccessTokenExpiry: accessTokenExpiresAt ? accessTokenExpiresAt - now : 'N/A',
         currentTimeFormatted: new Date(now * 1000).toISOString(),
-        expiryTimeFormatted: expiresAt ? new Date(expiresAt * 1000).toISOString() : 'N/A'
+        accessTokenExpiryFormatted: accessTokenExpiresAt ? new Date(accessTokenExpiresAt * 1000).toISOString() : 'N/A'
       });
 
-      // Check if token needs refresh (only when actually expired or very close to expiry)
-      const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
-      const shouldRefresh = accessToken && refreshToken && expiresAt && (now > expiresAt || timeUntilExpiry < 21600); // Refresh if expired or < 6 hours left
+      // Check if access token needs refresh (refresh when expired or < 10 minutes left)
+      const timeUntilAccessTokenExpiry = accessTokenExpiresAt ? accessTokenExpiresAt - now : 0;
+      const shouldRefresh = accessToken && refreshToken && accessTokenExpiresAt && (now > accessTokenExpiresAt || timeUntilAccessTokenExpiry < 600); // Refresh if expired or < 10 minutes left
 
       if (shouldRefresh) {
         // Check if we should attempt refresh (prevent infinite loops)
         const userId = (token as any).discordId;
         const sessionState = userId ? SessionManager.getSessionState(userId) : null;
 
-        // Prevent refresh attempts more than once every 30 seconds
-        if (sessionState?.lastValidated && (Date.now() - sessionState.lastValidated) < 30000) {
+        // Prevent refresh attempts more than once every 10 seconds
+        if (sessionState?.lastValidated && (Date.now() - sessionState.lastValidated) < 10000) {
           console.log('[AUTH] Skipping refresh - too soon since last attempt');
           return token;
         }
@@ -226,6 +252,8 @@ export const authOptions: NextAuthOptions = {
           console.log('[AUTH] Too many refresh attempts, forcing re-login');
           (token as any).accessToken = null;
           (token as any).refreshToken = null;
+          (token as any).accessTokenExpiresAt = null;
+          (token as any).refreshTokenExpiresAt = null;
           (token as any).expiresAt = null;
           token.exp = Math.floor(Date.now() / 1000) - 1;
           return token;
@@ -262,7 +290,11 @@ export const authOptions: NextAuthOptions = {
             // Update token with refreshed data
             (token as any).accessToken = refreshData.access_token;
             (token as any).refreshToken = refreshData.refresh_token || refreshToken;
-            (token as any).expiresAt = Math.floor(Date.now() / 1000) + (refreshData.expires_in || 604800); // Default to 7 days
+            // Set access token expiration (typically 1 hour)
+            const newAccessTokenExpiresAt = Math.floor(Date.now() / 1000) + (refreshData.expires_in || 3600);
+            (token as any).accessTokenExpiresAt = newAccessTokenExpiresAt;
+            // Keep expiresAt for backward compatibility
+            (token as any).expiresAt = newAccessTokenExpiresAt;
 
             console.log('[AUTH] Updated token with refreshed data');
 
@@ -278,6 +310,8 @@ export const authOptions: NextAuthOptions = {
             // Clear tokens to force re-login
             (token as any).accessToken = null;
             (token as any).refreshToken = null;
+            (token as any).accessTokenExpiresAt = null;
+            (token as any).refreshTokenExpiresAt = null;
             (token as any).expiresAt = null;
             token.exp = Math.floor(Date.now() / 1000) - 1; // Force session expiry
             console.log('[AUTH] Cleared tokens due to refresh failure - user will need to re-login');

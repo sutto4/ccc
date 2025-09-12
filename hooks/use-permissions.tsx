@@ -36,7 +36,7 @@ export function usePermissions(guildId: string): PermissionCheck {
 
       // Get user's roles from session or fetch them
       const userRoles = (session?.user as any)?.roles || [];
-      const userId = (session?.user as any)?.id;
+      const userId = (session?.user as any)?.discordId || (session?.user as any)?.id;
 
       console.log('usePermissions - Session data:', {
         userId,
@@ -50,7 +50,7 @@ export function usePermissions(guildId: string): PermissionCheck {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: (session?.user as any)?.id,
+          userId: (session?.user as any)?.discordId || (session?.user as any)?.id,
           userRoles
         }),
       });

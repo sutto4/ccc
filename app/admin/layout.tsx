@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 import AdminSidebar from "@/components/admin-sidebar";
 import AdminTopbar from "@/components/admin-topbar";
-import { SoundNotification } from "@/components/sound-notification";
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 
 export default function AdminLayout({ children }: PropsWithChildren) {
@@ -47,7 +46,6 @@ export default function AdminLayout({ children }: PropsWithChildren) {
 				</footer>
 
 				{/* Sound Notifications for admin pages */}
-				<SoundNotification />
 			</div>
 		</AuthErrorBoundary>
 	);

@@ -11,6 +11,7 @@ import { Shield } from "lucide-react";
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 import { useE2ETrackingContext } from '@/components/e2e-tracking-provider';
 import type { Guild } from "@/lib/api";
+import { useGuildsQuery } from "@/hooks/use-guilds-query";
 
 export default function GuildsPage() {
   return (
@@ -23,8 +24,10 @@ export default function GuildsPage() {
 function GuildsPageContent() {
   const router = useRouter();
   const { trackStep } = useE2ETrackingContext();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Use React Query for guilds data
+  const { data: guildsData = [], isLoading: loading, error } = useGuildsQuery();
+  const guilds: Guild[] = guildsData as Guild[];
 
   // Group guilds by their group
   const groupedGuilds = React.useMemo(() => {
@@ -59,29 +62,7 @@ function GuildsPageContent() {
     return result;
   }, [guilds]);
 
-  useEffect(() => {
-    async function fetchGuilds() {
-      try {
-        const response = await fetch('/api/guilds');
-        
-        if (response.ok) {
-          const data = await response.json();
-          setGuilds(data.guilds || []);
-        } else if (response.status === 401) {
-          router.replace('/signin');
-          return;
-        } else {
-          setGuilds([]);
-        }
-      } catch (error) {
-        setGuilds([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchGuilds();
-  }, [router]);
+  // Data fetching is now handled by React Query hook above
 
   if (loading) {
     return (

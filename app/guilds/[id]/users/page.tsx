@@ -6,10 +6,11 @@ import Section from "@/components/ui/section";
 import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { Select } from "@/components/ui/select";
-import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
+import { useMembersQuery, useRolesQuery, type MemberRow } from "@/hooks/use-members-query";
+import { type Role } from "@/lib/api";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { usePermissions } from "@/hooks/use-permissions";
+import { usePermissions } from "@/hooks/use-permissions-query";
 import { useToast } from "@/hooks/use-toast";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
@@ -29,31 +30,42 @@ function UsersPageContent() {
   const { canUseApp, loading: permissionsLoading, error: permissionsError } = usePermissions(guildId);
   const { toast } = useToast();
   
-  // Use the shared hook for all member management
-  const {
-    loading,
-    loadingRoles,
-    members,
-    roles,
-    error,
-    search,
-    setSearch,
-    roleFilter,
-    setRoleFilter,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    hasMore,
-    totalMembers,
-    loadMembers,
-    loadMore,
-    roleMap,
-    DEFAULT_AVATAR
-  } = useGuildMembers(guildId);
+  // Use React Query hooks for data fetching
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  
+  const membersQuery = useMembersQuery(guildId, { search, roleFilter, page, pageSize });
+  const rolesQuery = useRolesQuery(guildId);
+  
+  const loading = membersQuery.isLoading;
+  const loadingRoles = rolesQuery.isLoading;
+  const members: MemberRow[] = (membersQuery.data as any)?.members || [];
+  const roles: Role[] = (rolesQuery.data as any) || [];
+  const error = membersQuery.error || rolesQuery.error;
+  const hasMore = (membersQuery.data as any)?.hasMore || false;
+  const totalMembers = (membersQuery.data as any)?.totalCount || 0;
+  
+  // Create role map for quick lookups
+  const roleMap = new Map(roles.map((role: any) => [role.roleId, role]));
+  
+  const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
+  
+  // Load more function for pagination
+  const loadMore = () => {
+    if (hasMore) {
+      setPage(prev => prev + 1);
+    }
+  };
+  
+  // Load members function (for compatibility)
+  const loadMembers = () => {
+    membersQuery.refetch();
+  };
   
   // UI state
-  const [selectedUser, setSelectedUser] = useState<Row | null>(null);
+  const [selectedUser, setSelectedUser] = useState<MemberRow | null>(null);
   const [modalRole, setModalRole] = useState<string>("");
   const [searchRole, setSearchRole] = useState("");
 
@@ -316,7 +328,7 @@ function UsersPageContent() {
         </div>
       }
     >
-      {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
+      {error && <div className="mb-3 text-sm text-red-600">{String(error)}</div>}
 
       {/* Search and filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-4">

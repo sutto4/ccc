@@ -5,30 +5,61 @@ import { addRole, removeRole } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useSharedSession } from "@/components/providers";
-import { useGuildMembersKanban } from "@/hooks/use-guild-members";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useMembersKanbanQuery, useRolesQuery } from "@/hooks/use-members-query";
+import { usePermissions } from "@/hooks/use-permissions-query";
 import { useToast } from "@/hooks/use-toast";
 
 export default function RoleKanban({ guildId, customGroups = [] }: { guildId: string, customGroups?: any[] }) {
 
-  // Use the shared hook for all member management
-  const {
-    loading,
-    loadingRoles,
-    members,
-    roles,
-    error,
-    search: roleSearch,
-    setSearch: setRoleSearch,
-    debouncedSearch: debouncedUserSearch,
-    roleMap,
-    filteredMembers,
-    roleMapMembers,
-    noRole,
-    usersNotInRole,
-    loadMembers,
-    DEFAULT_AVATAR
-  } = useGuildMembersKanban(guildId);
+  // Use React Query hooks for data fetching
+  const [roleSearch, setRoleSearch] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  
+  const membersQuery = useMembersKanbanQuery(guildId);
+  const rolesQuery = useRolesQuery(guildId);
+  
+  const loading = membersQuery.isLoading;
+  const loadingRoles = rolesQuery.isLoading;
+  const members = membersQuery.data || [];
+  const roles = rolesQuery.data || [];
+  const error = membersQuery.error || rolesQuery.error;
+  
+  const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
+  
+  // Create role map for quick lookups
+  const roleMap = new Map(roles.map(role => [role.id, role]));
+  
+  // Filter members based on search
+  const filteredMembers = members.filter(member => 
+    member.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+    member.discordUserId.includes(userSearch)
+  );
+  
+  // Group members by roles
+  const roleMapMembers = useMemo(() => {
+    const grouped: { [roleId: string]: any[] } = {};
+    roles.forEach(role => {
+      grouped[role.id] = filteredMembers.filter(member => 
+        member.roleIds && member.roleIds.includes(role.id)
+      );
+    });
+    return grouped;
+  }, [filteredMembers, roles]);
+  
+  // Members without roles
+  const noRole = filteredMembers.filter(member => 
+    !member.roleIds || member.roleIds.length === 0
+  );
+  
+  // Users not in any role (for adding to roles)
+  const usersNotInRole = filteredMembers.filter(member => 
+    !member.roleIds || member.roleIds.length === 0
+  );
+  
+  // Load members function for compatibility
+  const loadMembers = () => {
+    membersQuery.refetch();
+  };
 
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]); // Default to empty (Clear All)
   
