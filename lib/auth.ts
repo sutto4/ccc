@@ -260,9 +260,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         console.log('[AUTH] Token needs refresh:', {
-          timeUntilExpiry: `${Math.round(timeUntilExpiry / 3600)} hours (${Math.round(timeUntilExpiry)}s)`,
-          isExpired: now > expiresAt,
-          willExpireSoon: timeUntilExpiry < 21600,
+          timeUntilExpiry: `${Math.round(timeUntilAccessTokenExpiry / 3600)} hours (${Math.round(timeUntilAccessTokenExpiry)}s)`,
+          isExpired: now > accessTokenExpiresAt,
+          willExpireSoon: timeUntilAccessTokenExpiry < 21600,
           refreshAttempts: sessionState?.refreshAttempts || 0
         });
 
