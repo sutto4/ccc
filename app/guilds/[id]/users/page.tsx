@@ -98,8 +98,13 @@ function UsersPageContent() {
         variant: "success",
       });
 
-      // Reload current page to reflect changes
-      loadMembers(false);
+      // Update selectedUser if it's the same user to reflect role changes in modal
+      if (selectedUser && selectedUser.discordUserId === userId) {
+        setSelectedUser(prev => prev ? {
+          ...prev,
+          roleIds: [...prev.roleIds, roleId]
+        } : null);
+      }
       
       // Log the action
       const role = roles.find(r => r.roleId === roleId);
@@ -121,11 +126,24 @@ function UsersPageContent() {
       const errorMessage = (error as any)?.message || (error as any)?.toString() || 'Unknown error';
 
       // For expected errors (hierarchy/permission issues), only log minimal info
-      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles') || errorMessage.includes('uneditable_role')) {
         console.log('[USERS] Role assignment blocked (expected):', errorMessage);
+        
+        // Provide friendly error messages for common issues
+        let friendlyMessage = errorMessage;
+        if (errorMessage.toLowerCase().includes('hierarchy') || errorMessage.toLowerCase().includes('higher') || errorMessage.toLowerCase().includes('position')) {
+          friendlyMessage = "❌ Bot's role is not high enough in the server hierarchy to assign this role. Move the bot's role above the target role in Server Settings > Roles.";
+        } else if (errorMessage.toLowerCase().includes('permission') || errorMessage.toLowerCase().includes('manage_roles')) {
+          friendlyMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+        } else if (errorMessage.toLowerCase().includes('cannot assign roles')) {
+          friendlyMessage = "❌ Bot cannot assign this role due to permission restrictions.";
+        } else if (errorMessage.toLowerCase().includes('uneditable_role')) {
+          friendlyMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+        }
+        
         toast({
           title: "Role Assignment Blocked",
-          description: errorMessage,
+          description: friendlyMessage,
           variant: "destructive",
         });
         return; // Prevent any further error propagation
@@ -183,8 +201,13 @@ function UsersPageContent() {
         variant: "success",
       });
 
-      // Reload current page to reflect changes
-      loadMembers(false);
+      // Update selectedUser if it's the same user to reflect role changes in modal
+      if (selectedUser && selectedUser.discordUserId === userId) {
+        setSelectedUser(prev => prev ? {
+          ...prev,
+          roleIds: prev.roleIds.filter(id => id !== roleId)
+        } : null);
+      }
       
       // Log the action
       const role = roles.find(r => r.roleId === roleId);
@@ -206,11 +229,24 @@ function UsersPageContent() {
       const errorMessage = (error as any)?.message || (error as any)?.toString() || 'Unknown error';
 
       // For expected errors (hierarchy/permission issues), only log minimal info
-      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+      if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles') || errorMessage.includes('uneditable_role')) {
         console.log('[USERS] Role removal blocked (expected):', errorMessage);
+        
+        // Provide friendly error messages for common issues
+        let friendlyMessage = errorMessage;
+        if (errorMessage.toLowerCase().includes('hierarchy') || errorMessage.toLowerCase().includes('higher') || errorMessage.toLowerCase().includes('position')) {
+          friendlyMessage = "❌ Bot's role is not high enough in the server hierarchy to remove this role. Move the bot's role above the target role in Server Settings > Roles.";
+        } else if (errorMessage.toLowerCase().includes('permission') || errorMessage.toLowerCase().includes('manage_roles')) {
+          friendlyMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+        } else if (errorMessage.toLowerCase().includes('cannot assign roles')) {
+          friendlyMessage = "❌ Bot cannot remove this role due to permission restrictions.";
+        } else if (errorMessage.toLowerCase().includes('uneditable_role')) {
+          friendlyMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+        }
+        
         toast({
           title: "Role Removal Blocked",
-          description: errorMessage,
+          description: friendlyMessage,
           variant: "destructive",
         });
         return; // Prevent any further error propagation

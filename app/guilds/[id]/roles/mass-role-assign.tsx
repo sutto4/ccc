@@ -58,7 +58,19 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
               if (roleError?.error === "user_not_found") {
                 errorMessage = "User is no longer a member of the server";
               } else if (roleError?.message) {
-                errorMessage = roleError.message;
+                // Check for common permission/hierarchy issues and provide friendly messages
+                const message = roleError.message.toLowerCase();
+                if (message.includes('hierarchy') || message.includes('higher') || message.includes('position') || message.includes('uneditable_role')) {
+                  errorMessage = "❌ Bot's role is not high enough in the server hierarchy to assign this role. Move the bot's role above the target role in Server Settings > Roles.";
+                } else if (message.includes('permission') || message.includes('manage_roles')) {
+                  errorMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+                } else if (message.includes('cannot assign roles')) {
+                  errorMessage = "❌ Bot cannot assign this role due to permission restrictions.";
+                } else if (message.includes('uneditable_role')) {
+                  errorMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+                } else {
+                  errorMessage = roleError.message;
+                }
               } else if (typeof roleError === 'string') {
                 errorMessage = roleError;
               }
@@ -143,7 +155,19 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
               if (roleError?.error === "user_not_found") {
                 errorMessage = "User is no longer a member of the server";
               } else if (roleError?.message) {
-                errorMessage = roleError.message;
+                // Check for common permission/hierarchy issues and provide friendly messages
+                const message = roleError.message.toLowerCase();
+                if (message.includes('hierarchy') || message.includes('higher') || message.includes('position') || message.includes('uneditable_role')) {
+                  errorMessage = "❌ Bot's role is not high enough in the server hierarchy to remove this role. Move the bot's role above the target role in Server Settings > Roles.";
+                } else if (message.includes('permission') || message.includes('manage_roles')) {
+                  errorMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+                } else if (message.includes('cannot assign roles')) {
+                  errorMessage = "❌ Bot cannot remove this role due to permission restrictions.";
+                } else if (message.includes('uneditable_role')) {
+                  errorMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+                } else {
+                  errorMessage = roleError.message;
+                }
               } else if (typeof roleError === 'string') {
                 errorMessage = roleError;
               }

@@ -3,9 +3,10 @@ import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { getToken } from 'next-auth/jwt';
 import { apiAnalytics } from "@/lib/api-analytics-db";
+import { analyticsBatcher } from "@/lib/analytics-batcher";
 import mysql from 'mysql2/promise';
 
-const limiter = createRateLimiter(1000, 60_000); // 1000 requests per minute per key (suitable for large scale)
+const limiter = createRateLimiter(2000, 60_000); // 2000 requests per minute per key (scaled for high traffic)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 
 // Cache for permission checks to reduce API calls and logging
@@ -444,27 +445,24 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       inFlightUserGuilds.delete(tokenKey);
     }
       
-      // Log analytics for error
+      // Log analytics for error (temporarily disabled due to connection issues)
       const responseTime = Date.now() - startTime;
-      setImmediate(() => {
-        apiAnalytics.logRequest({
-          endpoint: '/api/guilds',
-          method: 'GET',
-          userId: discordId,
-          userName: 'Unknown',
-          discordId: discordId,
-          userAgent: req.headers.get('user-agent') || 'unknown',
-          ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-          statusCode: 503,
-          responseTime,
-          error: "Discord API unavailable",
-          rateLimited: false,
-          environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
-          instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        }).catch(error => {
-          console.error('❌ Failed to log analytics request:', error);
-        });
-      });
+      // analyticsBatcher.addRequest({
+      //   id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      //   endpoint: '/api/guilds',
+      //   method: 'GET',
+      //   userId: discordId,
+      //   userName: 'Unknown',
+      //   discordId: discordId,
+      //   userAgent: req.headers.get('user-agent') || 'unknown',
+      //   ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      //   statusCode: 503,
+      //   responseTime,
+      //   error: "Discord API unavailable",
+      //   rateLimited: false,
+      //   environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
+      //   instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      // });
     }
 
     // Continue with normal processing after successful fetch or error handling
@@ -608,7 +606,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     groups.forEach((g: any) => {
       groupInfo[g.guild_id] = {
         groupId: g.group_id,
-        groupName: g.group_name || 'Unnamed Group',
+        groupName: g.group_name,
         groupDescription: g.group_description
       };
     });
@@ -680,26 +678,23 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     console.log(`[SECURITY-ALERT] 🚨 INVALID GUILD DATA DETECTED FOR USER ${discordId}!`);
   }
 
-  // Log analytics
+  // Log analytics (temporarily disabled due to connection issues)
   const responseTime = Date.now() - startTime;
-  setImmediate(() => {
-    apiAnalytics.logRequest({
-      endpoint: '/api/guilds',
-      method: 'GET',
-      userId: discordId,
-      userName: 'Unknown', // We don't have user name here easily
-      discordId: discordId,
-      userAgent: req.headers.get('user-agent') || 'unknown',
-      ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-      statusCode: 200,
-      responseTime,
-      rateLimited: false,
-      environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
-      instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    }).catch(error => {
-      console.error('❌ Failed to log analytics request:', error);
-    });
-  });
+  // analyticsBatcher.addRequest({
+  //   id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  //   endpoint: '/api/guilds',
+  //   method: 'GET',
+  //   userId: discordId,
+  //   userName: 'Unknown', // We don't have user name here easily
+  //   discordId: discordId,
+  //   userAgent: req.headers.get('user-agent') || 'unknown',
+  //   ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+  //   statusCode: 200,
+  //   responseTime,
+  //   rateLimited: false,
+  //   environment: (process.env.NODE_ENV as 'development' | 'production' | 'staging') || 'production',
+  //   instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  // });
 
   console.log(`[GUILDS-API] DEBUG: Final API response:`, {
     guildCount: results.length,

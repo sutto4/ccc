@@ -11,7 +11,7 @@ const DEFAULT_AVATAR = "/placeholder-user.jpg";
 
 export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: string; roleId: string; roleName?: string }) {
 	// Use the shared hook for member management
-	const { members: allMembers, loading, error } = useGuildMembersKanban(guildId);
+	const { members: allMembers, loading, error, loadMembers } = useGuildMembersKanban(guildId);
 	
 	const [users, setUsers] = useState<any[]>([]);
 	const [search, setSearch] = useState("");
@@ -27,9 +27,17 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 	useEffect(() => {
 		if (allMembers.length > 0) {
 			const filteredUsers = allMembers.filter((m) => 
-				m.roleIds.includes(roleId) && 
+				m.roleIds && m.roleIds.includes(roleId) && 
 				(search === "" || m.username.toLowerCase().includes(search.toLowerCase()))
 			);
+			// console.log(`[ROLE-USERS-LIST] Filtering users for role ${roleId}:`, {
+			// 	allMembersCount: allMembers.length,
+			// 	filteredUsersCount: filteredUsers.length,
+			// 	roleId,
+			// 	search,
+			// 	refreshTrigger,
+			// 	sampleMember: allMembers[0] ? { id: allMembers[0].discordUserId, roleIds: allMembers[0].roleIds } : null
+			// });
 			setUsers(filteredUsers);
 		}
 	}, [allMembers, roleId, search]);
@@ -50,8 +58,11 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 		   try {
 			   await addRole(guildId, userId, roleId, session.user.id);
 
-			   // Success - update UI and log action
-			   setUsers((prev) => [...prev, addResults.find((u) => u.discordUserId === userId)]);
+			   // Success - update UI optimistically and log action
+			   const targetUser = addResults.find((u) => u.discordUserId === userId) || {};
+			   // Add the role to the user's roleIds for immediate UI update
+			   const updatedTargetUser = { ...targetUser, roleIds: [...(targetUser.roleIds || []), roleId] };
+			   setUsers((prev) => [...prev, updatedTargetUser]);
 			   setAddModalOpen(false);
 			   setUserSearch("");
 			   setAddResults([]);
@@ -60,7 +71,6 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 			   // Logging
 			   const actor = session.user.id;
 			   const actorUsername = session.user.name || (session.user as any).username || session.user.id;
-			   const targetUser = addResults.find((u) => u.discordUserId === userId) || {};
 			   logAction({
 				   guildId,
 				   userId: actor,
@@ -79,16 +89,35 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 				   title: "User Added",
 				   description: `${targetUser.username} has been added to ${roleName || 'the role'}.`,
 			   });
+
+			   // Refresh member data to reflect role changes (with small delay to allow API to process)
+			   // This ensures the parent Role Explorer gets updated user counts
+			   setTimeout(() => {
+				   loadMembers();
+			   }, 500);
 		   } catch (error: any) {
 			   // Ensure error is properly handled and doesn't bubble up
 			   const errorMessage = error?.message || error?.toString() || 'Unknown error';
 
 			   // For expected errors (hierarchy/permission issues), only log minimal info
-			   if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+			   if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles') || errorMessage.includes('uneditable_role')) {
 				   console.log('[ROLE-USERS-LIST] Role assignment blocked (expected):', errorMessage);
+				   
+				   // Provide friendly error messages for common issues
+				   let friendlyMessage = errorMessage;
+			   if (errorMessage.toLowerCase().includes('hierarchy') || errorMessage.toLowerCase().includes('higher') || errorMessage.toLowerCase().includes('position')) {
+				   friendlyMessage = "❌ Bot's role is not high enough in the server hierarchy to assign this role. Move the bot's role above the target role in Server Settings > Roles.";
+				   } else if (errorMessage.toLowerCase().includes('permission') || errorMessage.toLowerCase().includes('manage_roles')) {
+					   friendlyMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+				   } else if (errorMessage.toLowerCase().includes('cannot assign roles')) {
+					   friendlyMessage = "❌ Bot cannot assign this role due to permission restrictions.";
+				   } else if (errorMessage.toLowerCase().includes('uneditable_role')) {
+					   friendlyMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+				   }
+				   
 				   toast({
 					   title: "Role Assignment Blocked",
-					   description: errorMessage,
+					   description: friendlyMessage,
 					   variant: "destructive",
 				   });
 				   return; // Prevent any further error propagation
@@ -119,7 +148,7 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 			   const targetUser = users.find((u) => u.discordUserId === userId) || {};
 			   await removeRole(guildId, userId, roleId, session.user.id);
 
-			   // Success - update UI and log action
+			   // Success - update UI optimistically and log action
 			   setUsers((prev) => prev.filter((u) => u.discordUserId !== userId));
 
 			   // Logging
@@ -143,16 +172,32 @@ export default function RoleUsersList({ guildId, roleId, roleName }: { guildId: 
 				   title: "User Removed",
 				   description: `${targetUser.username} has been removed from ${roleName || 'the role'}.`,
 			   });
+
+			   // Note: No need to refresh member data for remove operations
+			   // The optimistic update above handles the UI immediately
 		   } catch (error: any) {
 			   // Ensure error is properly handled and doesn't bubble up
 			   const errorMessage = error?.message || error?.toString() || 'Unknown error';
 
 			   // For expected errors (hierarchy/permission issues), only log minimal info
-			   if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles')) {
+			   if (errorMessage.includes('hierarchy') || errorMessage.includes('permission') || errorMessage.includes('higher') || errorMessage.includes('cannot assign roles') || errorMessage.includes('uneditable_role')) {
 				   console.log('[ROLE-USERS-LIST] Role removal blocked (expected):', errorMessage);
+				   
+				   // Provide friendly error messages for common issues
+				   let friendlyMessage = errorMessage;
+			   if (errorMessage.toLowerCase().includes('hierarchy') || errorMessage.toLowerCase().includes('higher') || errorMessage.toLowerCase().includes('position')) {
+				   friendlyMessage = "❌ Bot's role is not high enough in the server hierarchy to remove this role. Move the bot's role above the target role in Server Settings > Roles.";
+				   } else if (errorMessage.toLowerCase().includes('permission') || errorMessage.toLowerCase().includes('manage_roles')) {
+					   friendlyMessage = "❌ Bot lacks 'Manage Roles' permission. Grant this permission in Server Settings > Roles.";
+				   } else if (errorMessage.toLowerCase().includes('cannot assign roles')) {
+					   friendlyMessage = "❌ Bot cannot remove this role due to permission restrictions.";
+				   } else if (errorMessage.toLowerCase().includes('uneditable_role')) {
+					   friendlyMessage = "❌ This role cannot be assigned/removed. It may be a managed role (from a bot or integration) or have special restrictions.";
+				   }
+				   
 				   toast({
 					   title: "Role Removal Blocked",
-					   description: errorMessage,
+					   description: friendlyMessage,
 					   variant: "destructive",
 				   });
 				   return; // Prevent any further error propagation

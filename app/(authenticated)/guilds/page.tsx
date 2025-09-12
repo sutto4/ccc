@@ -45,6 +45,16 @@ function GuildsPageContent() {
     });
 
     const result = Object.values(groups);
+    
+    // Sort so that defined groups come first, then Individual Servers at the bottom
+    result.sort((a, b) => {
+      // If one is Individual Servers (no group id), put it last
+      if (!a.group?.id && b.group?.id) return 1;
+      if (a.group?.id && !b.group?.id) return -1;
+      // If both have groups or both don't, sort by name
+      return (a.group?.name || '').localeCompare(b.group?.name || '');
+    });
+    
     console.log('[FRONTEND] Grouped result:', result.map(g => ({ name: g.group?.name, count: g.guilds.length })));
     return result;
   }, [guilds]);

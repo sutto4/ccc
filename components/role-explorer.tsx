@@ -25,13 +25,23 @@ export default function RoleExplorer({ guildId, roles = [] }: { guildId: string;
     )
     .sort((a: any, b: any) => (b.position ?? 0) - (a.position ?? 0));
 
-  // Fetch user count for a role when expanded
+  // Calculate user count for all roles from existing member data
   useEffect(() => {
-    if (!expanded) return;
-    fetch(`/api/guilds/${guildId}/roles/${expanded}/user-count`)
-      .then(res => res.json())
-      .then(data => setUserCounts((prev) => ({ ...prev, [expanded]: data.count })));
-  }, [expanded, guildId]);
+    if (!members.length) return;
+    try {
+      const newUserCounts: { [roleId: string]: number } = {};
+      
+      // Calculate counts for all roles, not just the expanded one
+      roles.forEach((role: any) => {
+        const count = members.filter(member => member.roleIds && member.roleIds.includes(role.roleId)).length;
+        newUserCounts[role.roleId] = count;
+      });
+      
+      setUserCounts(newUserCounts);
+    } catch (error) {
+      console.error('[ROLE-EXPLORER] Error calculating user counts:', error);
+    }
+  }, [members, roles]);
 
   return (
     <div>

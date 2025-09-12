@@ -22,7 +22,11 @@ import {
   Target,
   AlertCircle,
   Info,
-  UserPlus
+  UserPlus,
+  Heart,
+  Monitor,
+  Cpu,
+  HardDrive
 } from "lucide-react";
 import PremiumModal from "@/components/premium-modal";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
@@ -48,7 +52,43 @@ interface DashboardStats {
   totalCommands: number;
   totalEmbeds: number;
   conversionRate: string;
-  averageUsersPerServer: number;
+}
+
+interface ApiHealthStatus {
+  status: 'healthy' | 'unhealthy';
+  timestamp: string;
+  responseTime: string;
+  database: {
+    healthy: boolean;
+    details: {
+      responseTime: string;
+      poolStatus: {
+        status: string;
+        totalConnections: number;
+        message: string;
+      };
+      timestamp: string;
+    };
+  };
+  analytics: {
+    status: string;
+    batchSize: number;
+    isProcessing: boolean;
+    maxBatchSize: number;
+    flushInterval: number;
+  };
+  system: {
+    uptime: number;
+    memory: {
+      rss: number;
+      heapTotal: number;
+      heapUsed: number;
+      external: number;
+      arrayBuffers: number;
+    };
+    nodeVersion: string;
+    platform: string;
+  };
 }
 
 interface HealthStatus {
@@ -106,6 +146,8 @@ function AdminDashboardContent() {
   const [sortField, setSortField] = useState<"name" | "member_count" | "status" | "created_at">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'warning' | 'info'} | null>(null);
+  const [apiHealth, setApiHealth] = useState<ApiHealthStatus | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   // User activity state
   const [userActivityStats, setUserActivityStats] = useState({
@@ -119,6 +161,7 @@ function AdminDashboardContent() {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchApiHealth();
     // Remove automatic refresh to prevent connection issues
     // const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
     // return () => clearInterval(interval);
@@ -236,6 +279,25 @@ function AdminDashboardContent() {
       console.error('Failed to fetch dashboard data:', error);
       setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
+    }
+  };
+
+  const fetchApiHealth = async () => {
+    try {
+      setHealthLoading(true);
+      const response = await fetch('/api/health');
+      if (response.ok) {
+        const healthData = await response.json();
+        setApiHealth(healthData);
+      } else {
+        console.error('Health API error:', response.status);
+        setApiHealth(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch API health:', error);
+      setApiHealth(null);
+    } finally {
+      setHealthLoading(false);
     }
   };
 
@@ -602,6 +664,93 @@ function AdminDashboardContent() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* API Health Section */}
+        {apiHealth && (
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Heart className="w-5 h-5 text-red-500" />
+                <h2 className="text-lg font-semibold text-gray-900">API Health Status</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  apiHealth.status === 'healthy' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {apiHealth.status}
+                </div>
+                <button
+                  onClick={fetchApiHealth}
+                  disabled={healthLoading}
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${healthLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Database Health */}
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-blue-500" />
+                  <span className="font-medium text-sm">Database</span>
+                </div>
+                <div className={`text-sm ${apiHealth.database.healthy ? 'text-green-600' : 'text-red-600'}`}>
+                  {apiHealth.database.healthy ? 'Healthy' : 'Unhealthy'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Response: {apiHealth.database.details.responseTime}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Pool: {apiHealth.database.details.poolStatus.totalConnections} connections
+                </div>
+              </div>
+
+              {/* System Health */}
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Monitor className="w-4 h-4 text-green-500" />
+                  <span className="font-medium text-sm">System</span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Uptime: {Math.floor(apiHealth.system.uptime / 3600)}h
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Memory: {Math.round(apiHealth.system.memory.heapUsed / 1024 / 1024)}MB
+                </div>
+                <div className="text-xs text-gray-500">
+                  Node: {apiHealth.system.nodeVersion}
+                </div>
+              </div>
+
+              {/* Analytics Health */}
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="w-4 h-4 text-purple-500" />
+                  <span className="font-medium text-sm">Analytics</span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Status: {apiHealth.analytics.status}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Batch: {apiHealth.analytics.batchSize}/{apiHealth.analytics.maxBatchSize}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Processing: {apiHealth.analytics.isProcessing ? 'Yes' : 'No'}
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t text-xs text-gray-500">
+              Last updated: {new Date(apiHealth.timestamp).toLocaleString()} 
+              (Response time: {apiHealth.responseTime})
             </div>
           </div>
         )}

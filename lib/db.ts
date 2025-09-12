@@ -12,9 +12,9 @@ function getPool(): mysql.Pool {
       user: env.DB_USER,
       password: env.DB_PASS,
       database: env.DB_NAME,
-      connectionLimit: 3, // Further reduced to prevent buildup
+      connectionLimit: 25, // Reasonable for increased MySQL max_connections
       waitForConnections: true,
-      queueLimit: 5, // Reduced queue limit
+      queueLimit: 50 // Balanced queue for high traffic
     });
   }
   return pool;
@@ -108,7 +108,34 @@ export function getPoolStatus() {
   
   return {
     status: 'active',
-    totalConnections: 5, // connectionLimit from pool config
+    totalConnections: 25, // connectionLimit from pool config
     message: 'Pool is active and managing connections efficiently'
   };
+}
+
+// Health check function for monitoring
+export async function healthCheck(): Promise<{ healthy: boolean; details: any }> {
+  try {
+    const startTime = Date.now();
+    await query('SELECT 1 as health_check');
+    const responseTime = Date.now() - startTime;
+    
+    return {
+      healthy: true,
+      details: {
+        responseTime: `${responseTime}ms`,
+        poolStatus: getPoolStatus(),
+        timestamp: new Date().toISOString()
+      }
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      details: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        poolStatus: getPoolStatus(),
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
 }

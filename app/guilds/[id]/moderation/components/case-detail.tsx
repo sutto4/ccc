@@ -8,6 +8,7 @@ import { Shield, User, Clock, MessageSquare, Upload, X, FileText, Image, Link } 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageModal } from "@/components/ui/image-modal";
 
 interface ModerationCase {
   id: number;
@@ -52,6 +53,8 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState('');
 
   // Fetch case details
   const fetchCaseDetails = async () => {
@@ -79,6 +82,17 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
   };
 
 
+
+  // Handle image modal
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImageUrl(imageUrl);
+    setImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setImageModalOpen(false);
+    setSelectedImageUrl('');
+  };
 
   // Upload evidence
   const uploadEvidence = async (type?: string, content?: string) => {
@@ -432,8 +446,10 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
                         <img
                           src={item.content}
                           alt="Evidence"
-                          className="max-w-full h-auto rounded border"
+                          className="max-w-full h-auto rounded border cursor-pointer hover:opacity-90 transition-opacity"
                           style={{ maxHeight: '200px' }}
+                          onClick={() => openImageModal(item.content)}
+                          title="Click to view larger"
                         />
                       ) : item.evidence_type === 'video' && item.content.startsWith('http') ? (
                         <a
@@ -465,6 +481,14 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
         </CardContent>
       </Card>
       </div>
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModalOpen}
+        onClose={closeImageModal}
+        imageUrl={selectedImageUrl}
+        alt="Evidence"
+      />
     </div>
   );
 }
