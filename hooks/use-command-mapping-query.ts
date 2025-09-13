@@ -15,7 +15,7 @@ interface CommandMappingResponse {
 }
 
 async function fetchCommandMappings(): Promise<CommandMapping[]> {
-  const response = await fetch('/api/command-mapping');
+  const response = await fetch(`/api/command-mapping?t=${Date.now()}`);
   
   if (!response.ok) {
     throw new Error('Failed to fetch command mappings');
