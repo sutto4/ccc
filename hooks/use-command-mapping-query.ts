@@ -34,8 +34,8 @@ export function useCommandMappingsQuery() {
   return useQuery({
     queryKey: queryKeys.commandMappings(),
     queryFn: fetchCommandMappings,
-    staleTime: 10 * 60 * 1000, // 10 minutes - command mappings don't change often
-    gcTime: 30 * 60 * 1000, // 30 minutes cache
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache
     retry: 1,
     retryDelay: 1000,
   });

@@ -29,7 +29,7 @@ interface RolePermission {
 export default function GuildSettingsPage() {
   return (
     <AuthErrorBoundary>
-      <GuildSettingsPageContent undefined />
+      <GuildSettingsPageContent />
     </AuthErrorBoundary>
   );
 }
@@ -367,7 +367,11 @@ function GuildSettingsPageContent() {
         console.error('🚨🚨🚨 ERROR LOADING WEB APP FEATURES! 🚨🚨🚨');
         console.error('Error loading web app features:', error);
         // Set default empty state
-        setWebAppFeatures({});
+        setWebAppFeatures({
+          features: [],
+          states: {},
+          isPremium: false
+        });
       }
 
     } catch (error) {
@@ -1218,7 +1222,7 @@ function GuildSettingsPageContent() {
                                   checked={isEnabled}
                                   disabled={!canModify}
                                   onChange={canModify ? (e) => {
-                                    setCommandSettings(prev => ({
+                                    setCommandSettings((prev: any) => ({
                                       ...prev,
                                       [cmd.command_name]: e.target.checked
                                     }));
