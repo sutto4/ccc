@@ -7,7 +7,7 @@ export async function GET() {
     
     try {
       const [rows] = await connection.execute(
-        'SELECT command_name, feature_name, description FROM command_feature_mapping ORDER BY feature_name, command_name'
+        'SELECT command_name, feature_name, description FROM command_mappings ORDER BY feature_name, command_name'
       );
       
       return NextResponse.json({
