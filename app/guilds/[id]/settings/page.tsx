@@ -1174,112 +1174,71 @@ function GuildSettingsPageContent() {
                   Enable or disable individual slash commands for this server. Disabled commands won't appear in Discord.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Moderation Commands */}
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Moderation</h4>
-                    <div className="space-y-2">
-                      {[
-                        { name: 'warn', description: 'Warn a user for breaking rules', feature: 'moderation' },
-                        { name: 'kick', description: 'Kick a user from the server', feature: 'moderation' },
-                        { name: 'ban', description: 'Ban a user from the server', feature: 'moderation' },
-                        { name: 'mute', description: 'Mute a user in the server', feature: 'moderation' },
-                        { name: 'role', description: 'Manage user roles', feature: 'moderation' },
-                        { name: 'setmodlog', description: 'Set moderation log channel', feature: 'moderation' }
-                      ].map((cmd) => {
-                        const perm = commandPermissions?.commands[cmd.name];
-                        const canModify = perm?.canModify ?? true;
-                        const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
-                        
-
-
-                        return (
-                          <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="flex-1">
-                              <p className="font-medium text-sm">/{cmd.name}</p>
-                              <p className="text-xs text-muted-foreground">{cmd.description}</p>
-                              {!perm?.adminEnabled && (
-                                <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
-                              )}
-                            </div>
-                            <input
-                              type="checkbox"
-                              id={`cmd-${cmd.name}`}
-                              checked={isEnabled}
-                              disabled={!canModify}
-                              onChange={canModify ? (e) => {
-                                setCommandSettings(prev => ({
-                                  ...prev,
-                                  [cmd.name]: e.target.checked
-                                }));
-                              } : () => {
-                                toast({
-                                  title: "Access Denied",
-                                  description: "This command is disabled by admin and cannot be modified.",
-                                  variant: "destructive"
-                                });
-                              }}
-                              className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                {commandMappingsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                    Loading commands...
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Group commands by feature */}
+                    {Object.entries(
+                      commandMappings.reduce((acc, cmd) => {
+                        const feature = cmd.feature_name;
+                        if (!acc[feature]) acc[feature] = [];
+                        acc[feature].push(cmd);
+                        return acc;
+                      }, {} as Record<string, typeof commandMappings>)
+                    ).map(([featureName, commands]) => (
+                      <div key={featureName} className="space-y-3">
+                        <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                          {featureName === 'moderation' ? 'Moderation' : 
+                           featureName === 'utilities' ? 'Utilities' : 
+                           featureName === 'sticky_messages' ? 'Sticky Messages' :
+                           featureName}
+                        </h4>
+                        <div className="space-y-2">
+                          {commands.map((cmd) => {
+                            const perm = commandPermissions?.commands[cmd.command_name];
+                            const canModify = perm?.canModify ?? true;
+                            const isEnabled = commandSettings[cmd.command_name] ?? perm?.guildEnabled ?? true;
 
-                  {/* Utility Commands */}
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Utilities</h4>
-                    <div className="space-y-2">
-                      {[
-                        { name: 'custom', description: 'Execute custom commands', feature: 'utilities' },
-                        { name: 'sendverify', description: 'Send verification message', feature: 'utilities' },
-                        { name: 'setverifylog', description: 'Set verification log channel', feature: 'utilities' },
-                        { name: 'feedback', description: 'Submit feedback', feature: 'utilities' },
-                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' },
-                        { name: 'sticky', description: 'Create a sticky message in this channel', feature: 'sticky_messages' },
-                        { name: 'unsticky', description: 'Remove the sticky message from this channel', feature: 'sticky_messages' }
-                      ].map((cmd) => {
-                        const perm = commandPermissions?.commands[cmd.name];
-                        const canModify = perm?.canModify ?? true;
-                        const isEnabled = commandSettings[cmd.name] ?? perm?.guildEnabled ?? true;
-                        
-
-
-                        return (
-                          <div key={cmd.name} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="flex-1">
-                              <p className="font-medium text-sm">/{cmd.name}</p>
-                              <p className="text-xs text-muted-foreground">{cmd.description}</p>
-                              {!perm?.adminEnabled && (
-                                <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
-                              )}
-                            </div>
-                            <input
-                              type="checkbox"
-                              id={`cmd-${cmd.name}`}
-                              checked={isEnabled}
-                              disabled={!canModify}
-                              onChange={canModify ? (e) => {
-                                setCommandSettings(prev => ({
-                                  ...prev,
-                                  [cmd.name]: e.target.checked
-                                }));
-                              } : () => {
-                                toast({
-                                  title: "Access Denied",
-                                  description: "This command is disabled by admin and cannot be modified.",
-                                  variant: "destructive"
-                                });
-                              }}
-                              className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                            return (
+                              <div key={cmd.command_name} className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">/{cmd.command_name}</p>
+                                  <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                                  {!perm?.adminEnabled && (
+                                    <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
+                                  )}
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  id={`cmd-${cmd.command_name}`}
+                                  checked={isEnabled}
+                                  disabled={!canModify}
+                                  onChange={canModify ? (e) => {
+                                    setCommandSettings(prev => ({
+                                      ...prev,
+                                      [cmd.command_name]: e.target.checked
+                                    }));
+                                  } : () => {
+                                    toast({
+                                      title: "Access Denied",
+                                      description: "This command is disabled by admin and cannot be modified.",
+                                      variant: "destructive"
+                                    });
+                                  }}
+                                  className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Feature Management */}

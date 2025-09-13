@@ -5,8 +5,9 @@ import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Crown, Shield, Settings } from "lucide-react";
+import { Crown, Shield, Settings, RefreshCw } from "lucide-react";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
+import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
 
 interface Feature {
   feature_key: string;
@@ -56,6 +57,9 @@ function AdminGuildSettingsPageContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Use React Query for command mappings
+  const { data: commandMappings = [], isLoading: commandMappingsLoading } = useCommandMappingsQuery();
 
   useEffect(() => {
     console.log('Admin page loaded, guildId:', guildId);
@@ -418,80 +422,58 @@ function AdminGuildSettingsPageContent() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Moderation Commands */}
-                <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Moderation</h4>
-                  {[
-                    { name: 'warn', description: 'Warn a user for breaking rules' },
-                    { name: 'kick', description: 'Kick a user from the server' },
-                    { name: 'ban', description: 'Ban a user from the server' },
-                    { name: 'mute', description: 'Mute a user in the server' },
-                    { name: 'role', description: 'Manage user roles' },
-                    { name: 'setmodlog', description: 'Set moderation log channel' }
-                  ].map((cmd) => (
-                    <div key={cmd.name} className="flex items-center justify-between p-2 border rounded">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">/{cmd.name}</p>
-                        <p className="text-xs text-muted-foreground">{cmd.description}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`cmd-${cmd.name}`}
-                          checked={commandStates[cmd.name] || false}
-                          onChange={(e) => {
-                            setCommandStates(prev => ({
-                              ...prev,
-                              [cmd.name]: e.target.checked
-                            }));
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <label htmlFor={`cmd-${cmd.name}`} className="text-xs">
-                          {commandStates[cmd.name] ? 'Enabled' : 'Disabled'}
-                        </label>
-                      </div>
+              {commandMappingsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                  Loading commands...
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Group commands by feature */}
+                  {Object.entries(
+                    commandMappings.reduce((acc, cmd) => {
+                      const feature = cmd.feature_name;
+                      if (!acc[feature]) acc[feature] = [];
+                      acc[feature].push(cmd);
+                      return acc;
+                    }, {} as Record<string, typeof commandMappings>)
+                  ).map(([featureName, commands]) => (
+                    <div key={featureName} className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                        {featureName === 'moderation' ? 'Moderation' : 
+                         featureName === 'utilities' ? 'Utilities' : 
+                         featureName === 'sticky_messages' ? 'Sticky Messages' :
+                         featureName}
+                      </h4>
+                      {commands.map((cmd) => (
+                        <div key={cmd.command_name} className="flex items-center justify-between p-2 border rounded">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">/{cmd.command_name}</p>
+                            <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`cmd-${cmd.command_name}`}
+                              checked={commandStates[cmd.command_name] || false}
+                              onChange={(e) => {
+                                setCommandStates(prev => ({
+                                  ...prev,
+                                  [cmd.command_name]: e.target.checked
+                                }));
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <label htmlFor={`cmd-${cmd.command_name}`} className="text-xs">
+                              {commandStates[cmd.command_name] ? 'Enabled' : 'Disabled'}
+                            </label>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
-
-                {/* Utility Commands */}
-                <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Utilities</h4>
-                  {[
-                    { name: 'custom', description: 'Execute custom commands' },
-                    { name: 'sendverify', description: 'Send verification message' },
-                    { name: 'setverifylog', description: 'Set verification log channel' },
-                    { name: 'feedback', description: 'Submit feedback' },
-                    { name: 'embed', description: 'Send embedded messages' }
-                  ].map((cmd) => (
-                    <div key={cmd.name} className="flex items-center justify-between p-2 border rounded">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">/{cmd.name}</p>
-                        <p className="text-xs text-muted-foreground">{cmd.description}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`cmd-${cmd.name}`}
-                          checked={commandStates[cmd.name] || false}
-                          onChange={(e) => {
-                            setCommandStates(prev => ({
-                              ...prev,
-                              [cmd.name]: e.target.checked
-                            }));
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <label htmlFor={`cmd-${cmd.name}`} className="text-xs">
-                          {commandStates[cmd.name] ? 'Enabled' : 'Disabled'}
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
 
               <div className="flex justify-end pt-4 border-t">
                 <Button
@@ -504,28 +486,14 @@ function AdminGuildSettingsPageContent() {
                       // Get all command checkboxes and their current state
                       const commandUpdates = [];
                       
-                      // Process command checkboxes
-                      const allCommands = [
-                        { name: 'warn', description: 'Warn a user for breaking rules', feature: 'moderation' },
-                        { name: 'kick', description: 'Kick a user from the server', feature: 'moderation' },
-                        { name: 'ban', description: 'Ban a user from the server', feature: 'moderation' },
-                        { name: 'mute', description: 'Mute a user in the server', feature: 'moderation' },
-                        { name: 'role', description: 'Manage user roles', feature: 'moderation' },
-                        { name: 'setmodlog', description: 'Set moderation log channel', feature: 'moderation' },
-                        { name: 'custom', description: 'Execute custom commands', feature: 'utilities' },
-                        { name: 'sendverify', description: 'Send verification message', feature: 'utilities' },
-                        { name: 'setverifylog', description: 'Set verification log channel', feature: 'utilities' },
-                        { name: 'feedback', description: 'Submit feedback', feature: 'utilities' },
-                        { name: 'embed', description: 'Send embedded messages', feature: 'utilities' }
-                      ];
-                      
-                      for (const cmd of allCommands) {
-                        const checkbox = document.getElementById(`cmd-${cmd.name}`) as HTMLInputElement;
+                      // Process command checkboxes using database-driven commands
+                      for (const cmd of commandMappings) {
+                        const checkbox = document.getElementById(`cmd-${cmd.command_name}`) as HTMLInputElement;
                         if (checkbox) {
                           const isChecked = checkbox.checked;
                           commandUpdates.push({
-                            command_name: cmd.name,
-                            feature_name: cmd.feature,
+                            command_name: cmd.command_name,
+                            feature_name: cmd.feature_name,
                             enabled: isChecked
                           });
                         }
