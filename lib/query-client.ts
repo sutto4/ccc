@@ -43,4 +43,7 @@ export const queryKeys = {
   
   // User activity queries
   userActivity: (guildId: string) => ['user-activity', guildId] as const,
+  
+  // Command mapping queries
+  commandMappings: () => ['command-mappings'] as const,
 } as const;

@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles, fetchGuildCommandPermissions, fetchWebAppFeatures, updateWebAppFeatures } from "@/lib/api";
+import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
 import type { Role } from "@/lib/api";
 import PremiumModal from "@/components/premium-modal";
 import GuildPremiumBadge from "@/components/guild-premium-badge";
@@ -46,6 +47,9 @@ function GuildSettingsPageContent() {
   const [saved, setSaved] = useState(false);
   const [commandPermissions, setCommandPermissions] = useState<any>(null);
   const [commandSettings, setCommandSettings] = useState<any>({});
+  
+  // Use React Query for command mappings
+  const { data: commandMappings = [], isLoading: commandMappingsLoading } = useCommandMappingsQuery();
   const [webAppFeatures, setWebAppFeatures] = useState<{
     features: Array<{
       key: string;
@@ -1391,21 +1395,10 @@ function GuildSettingsPageContent() {
                       console.log('commandPermissions:', commandPermissions);
 
                       // Convert command settings to the format expected by the API
-                      const allCommands = [
-                        { name: 'warn', feature: 'moderation' },
-                        { name: 'kick', feature: 'moderation' },
-                        { name: 'ban', feature: 'moderation' },
-                        { name: 'mute', feature: 'moderation' },
-                        { name: 'role', feature: 'moderation' },
-                        { name: 'setmodlog', feature: 'moderation' },
-                        { name: 'custom', feature: 'utilities' },
-                        { name: 'sendverify', feature: 'utilities' },
-                        { name: 'setverifylog', feature: 'utilities' },
-                        { name: 'feedback', feature: 'utilities' },
-                        { name: 'embed', feature: 'utilities' },
-                        { name: 'sticky', feature: 'sticky_messages' },
-                        { name: 'unsticky', feature: 'sticky_messages' }
-                      ];
+                      const allCommands = commandMappings.map(cmd => ({
+                        name: cmd.command_name,
+                        feature: cmd.feature_name
+                      }));
                       
                       const commandsToUpdate = Object.entries(commandSettings).map(([name, enabled]) => {
                         const cmd = allCommands.find(c => c.name === name);
