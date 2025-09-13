@@ -29,10 +29,9 @@ export async function GET(
     console.log('🚨🚨🚨 USING FALLBACK FOR COMMAND PERMISSIONS! 🚨🚨🚨');
     const { query } = await import('@/lib/db');
     
-    // Get all available commands from the database
+    // Get all available commands from the command_mappings table
     const allCommandsFromDb = await query(
-      'SELECT DISTINCT command_name, feature_name FROM guild_commands WHERE guild_id = ?',
-      [guildId]
+      'SELECT command_name, feature_name FROM command_mappings ORDER BY feature_name, command_name'
     );
     
     console.log('🚨🚨🚨 ALL COMMANDS FROM DB:', allCommandsFromDb);
