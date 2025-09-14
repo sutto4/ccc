@@ -6,7 +6,7 @@ import { apiAnalytics } from "@/lib/api-analytics-db";
 import { analyticsBatcher } from "@/lib/analytics-batcher";
 import { TokenManager } from "@/lib/token-manager";
 import { SessionManager } from "@/lib/session-manager";
-import { query } from "@/lib/db-pool";
+import { query } from "@/lib/db";
 
 const limiter = createRateLimiter(2000, 60_000); // 2000 requests per minute per key (scaled for high traffic)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
@@ -246,7 +246,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   }
 
   if (!token) {
-    console.log('[AUTH-DEBUG] No token found - returning 401');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH-DEBUG] No token found - returning 401');
+    }
     return NextResponse.json(
       {
         error: 'Authentication required',
@@ -266,7 +268,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Try multiple ways to get the Discord ID
   const discordId = (token as any).discordId || token.sub;
   if (!discordId) {
-    console.log('[AUTH-DEBUG] No Discord ID found in token - returning 401');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH-DEBUG] No Discord ID found in token - returning 401');
+    }
     return NextResponse.json(
       {
         error: 'Authentication required',
@@ -311,7 +315,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   const validAccessToken = await ensureValidToken(accessToken, refreshToken, discordId);
   
   if (!validAccessToken) {
-    console.log(`[GUILDS-API] No valid token available for user ${discordId}, forcing re-login`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[GUILDS-API] No valid token available for user ${discordId}, forcing re-login`);
+    }
     return NextResponse.json(
       {
         error: 'Authentication expired',

@@ -12,9 +12,12 @@ function getPool(): mysql.Pool {
       user: env.DB_USER,
       password: env.DB_PASS,
       database: env.DB_NAME,
-      connectionLimit: 25, // Reasonable for increased MySQL max_connections
+      connectionLimit: 5, // Reduced to avoid max_user_connections limit
       waitForConnections: true,
-      queueLimit: 50 // Balanced queue for high traffic
+      queueLimit: 10, // Reduced queue size
+      acquireTimeout: 60000, // 60 seconds timeout
+      timeout: 60000, // 60 seconds timeout
+      reconnect: true // Enable reconnection
     });
   }
   return pool;
@@ -49,7 +52,9 @@ export async function query(sql: string, params?: any[]): Promise<any> {
     console.error('Database query error:', error);
     
     // If it's a connection error, reset the pool
-    if (error.code === 'ER_CON_COUNT_ERROR' || error.code === 'ER_ACCESS_DENIED_ERROR') {
+    if (error.code === 'ER_CON_COUNT_ERROR' || 
+        error.code === 'ER_ACCESS_DENIED_ERROR' ||
+        error.code === 'ER_TOO_MANY_USER_CONNECTIONS') {
       console.log('Connection error detected, resetting pool...');
       await resetPool();
     }
@@ -108,7 +113,7 @@ export function getPoolStatus() {
   
   return {
     status: 'active',
-    totalConnections: 25, // connectionLimit from pool config
+    totalConnections: 5, // connectionLimit from pool config
     message: 'Pool is active and managing connections efficiently'
   };
 }

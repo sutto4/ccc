@@ -26,8 +26,11 @@ function GuildsPageContent() {
   const { trackStep } = useE2ETrackingContext();
   
   // Use React Query for guilds data
-  const { data: guildsData = [], isLoading: loading, error } = useGuildsQuery();
+  const { data: guildsData = [], isLoading: loading, error, isError } = useGuildsQuery();
   const guilds: Guild[] = guildsData as Guild[];
+  
+  // Check if it's an authentication error
+  const isAuthError = isError && error?.message?.includes('Authentication expired');
 
   // Group guilds by their group
   const groupedGuilds = React.useMemo(() => {
@@ -80,6 +83,60 @@ function GuildsPageContent() {
     );
   }
 
+  // Handle authentication errors
+  if (isAuthError) {
+    return (
+      <div className="p-8">
+        <Section title="Authentication Required">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+              <Shield className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Session Expired</h2>
+            <p className="text-gray-600 mb-6">Your session has expired. Please sign in again to continue.</p>
+            <button
+              onClick={() => window.location.href = '/signin'}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Sign In Again
+            </button>
+          </div>
+        </Section>
+      </div>
+    );
+  }
+
+  // Handle other errors
+  if (isError && !isAuthError) {
+    return (
+      <div className="p-8">
+        <Section title="Error Loading Servers">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Shield className="w-8 h-8 text-yellow-600" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Unable to Load Servers</h2>
+            <p className="text-gray-600 mb-6">There was an error loading your servers. Please try again.</p>
+            <div className="space-x-4">
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/signin'}
+                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Sign In Again
+              </button>
+            </div>
+          </div>
+        </Section>
+      </div>
+    );
+  }
+
   if (guilds.length === 0) {
     return (
       <div className="p-8">
@@ -89,7 +146,23 @@ function GuildsPageContent() {
               <Shield className="w-8 h-8 text-blue-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2">No Servers Found</h2>
-            <p className="text-gray-600">You don't have access to any servers.</p>
+            <p className="text-gray-600 mb-6">
+              You don't have access to any servers, or your session may have expired.
+            </p>
+            <div className="space-x-4">
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Refresh
+              </button>
+              <button
+                onClick={() => window.location.href = '/signin'}
+                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Sign In Again
+              </button>
+            </div>
           </div>
         </Section>
       </div>

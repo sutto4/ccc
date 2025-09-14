@@ -6,9 +6,21 @@ import { type Guild } from '@/lib/api';
 
 async function fetchGuilds(): Promise<Guild[]> {
   const response = await fetch('/api/guilds');
+  
   if (!response.ok) {
+    // Check if it's an authentication error
+    if (response.status === 401) {
+      const errorData = await response.json().catch(() => ({}));
+      if (errorData.redirectTo === '/signin') {
+        // Redirect to signin page
+        window.location.href = '/signin';
+        throw new Error('Authentication expired - redirecting to login');
+      }
+    }
+    
     throw new Error(`Failed to fetch guilds: ${response.statusText}`);
   }
+  
   const data = await response.json();
   return data.guilds || [];
 }
