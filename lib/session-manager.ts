@@ -9,7 +9,7 @@ export interface SessionState {
 
 export class SessionManager {
   private static readonly SESSION_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-  private static readonly MAX_REFRESH_ATTEMPTS = 1; // Simple: try once
+  private static readonly MAX_REFRESH_ATTEMPTS = 5; // Allow more attempts for better reliability
   
   private static sessionCache = new Map<string, SessionState>();
 

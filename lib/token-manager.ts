@@ -14,7 +14,7 @@ export interface TokenValidationResult {
 
 export class TokenManager {
   private static readonly VALIDATION_CACHE_TTL = 1 * 60 * 1000; // 1 minute
-  private static readonly REFRESH_THRESHOLD = 30 * 60 * 1000; // 30 minutes before expiry (even less aggressive)
+  private static readonly REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry - more aggressive refresh
 
   private static validationCache = new Map<string, { isValid: boolean; timestamp: number }>();
   private static refreshAttempts = new Map<string, number>();
@@ -42,17 +42,21 @@ export class TokenManager {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'User-Agent': 'ServerMate/1.0'
-        }
+        },
+        timeout: 10000 // 10 second timeout
       });
 
       const isValid = response.ok;
 
-      console.log(`[TOKEN-MANAGER] Token validation result:`, {
-        endpoint: 'https://discord.com/api/users/@me/guilds',
-        status: response.status,
-        statusText: response.statusText,
-        isValid
-      });
+      // Only log in development or for errors
+      if (process.env.NODE_ENV === 'development' || !isValid) {
+        console.log(`[TOKEN-MANAGER] Token validation result:`, {
+          endpoint: 'https://discord.com/api/users/@me/guilds',
+          status: response.status,
+          statusText: response.statusText,
+          isValid
+        });
+      }
 
       // Cache the result
       this.validationCache.set(accessToken, { isValid, timestamp: Date.now() });
@@ -102,9 +106,9 @@ export class TokenManager {
       return null;
     }
 
-    // Check if any refresh is already in progress (not just for this specific token)
-    if (this.refreshInProgress.size > 0) {
-      console.log(`[TOKEN-MANAGER] ⚠️ Refresh already in progress (${this.refreshInProgress.size} active), skipping`);
+    // Check if refresh is already in progress for this specific token
+    if (this.refreshInProgress.has(refreshToken)) {
+      console.log(`[TOKEN-MANAGER] ⚠️ Refresh already in progress for this token, skipping`);
       return null;
     }
 
@@ -157,6 +161,14 @@ export class TokenManager {
         const attempts = this.refreshAttempts.get(refreshToken) || 0;
         this.refreshAttempts.set(refreshToken, attempts + 1);
         
+        // If we haven't exceeded max attempts, return null to allow retry
+        if (attempts < 3) {
+          console.log(`[TOKEN-MANAGER] Refresh failed, attempt ${attempts + 1}/3`);
+          return null;
+        }
+        
+        // After max attempts, mark as expired
+        this.expiredRefreshTokens.add(refreshToken);
         return null;
       }
     } catch (error) {

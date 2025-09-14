@@ -3,10 +3,7 @@ import { env } from "@/lib/env";
 import { CommandRegistry } from "@/services/commandRegistry";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  console.log('🚨🚨🚨 FEATURES GET FUNCTION IS RUNNING! 🚨🚨🚨');
-  console.log('[FEATURES-GET] GET request received');
   const { id: guildId } = await params;
-  console.log('[FEATURES-GET] Guild ID:', guildId);
   
   try {
     // Require DB configuration
@@ -27,10 +24,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       password: env.DB_PASS,
       database: env.DB_NAME,
     });
-    
-    // Check which database we're actually connected to
-    const [dbResult] = await connection.execute(`SELECT DATABASE() as current_db`);
-    console.log('[FEATURES-GET] Connected to database:', dbResult);
 
     try {
       // Check if guild exists (no status check - guild is confirmed active)
@@ -43,76 +36,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ error: "Guild not found" }, { status: 404 });
       }
 
-      // Debug: Log the guild status to see what's in the database
-      const [statusRows] = await connection.execute(
-        `SELECT guild_id, status, premium, subscription_id, product_name FROM guilds WHERE guild_id = ? LIMIT 1`,
-        [guildId]
-      );
-      
-      if (statusRows.length > 0) {
-        console.log('[FEATURES-GET] Guild status from Next.js DB:', statusRows[0]);
-      }
-
-      // Get all features from the features table - we need the actual feature keys, not display names
+      // Get all features from the features table
       const [featuresRows] = await connection.execute(
         `SELECT feature_key, feature_name, description, minimum_package, is_active FROM features WHERE is_active = 1 ORDER BY feature_key`
       );
-      console.log('[FEATURES-GET] Raw features result:', featuresRows);
-      console.log('[FEATURES-GET] Features table structure:', featuresRows.length > 0 ? Object.keys(featuresRows[0]) : 'No features');
-      
-      // We now use feature_key directly from the database
 
       // Get guild-specific feature settings
       let guildFeaturesRows: any[] = [];
       try {
-        console.log('[FEATURES-GET] Querying guild_features for guild_id:', guildId);
-        
-        // First, let's check if the guild_features table exists and has data
-        const [tableCheck] = await connection.execute(`SHOW TABLES LIKE 'guild_features'`);
-        console.log('[FEATURES-GET] guild_features table exists:', tableCheck.length > 0);
-        
-        if (tableCheck.length > 0) {
-          // Check total count of guild_features
-          const [countResult] = await connection.execute(`SELECT COUNT(*) as total FROM guild_features`);
-          console.log('[FEATURES-GET] Total guild_features records:', countResult);
-          
-          // Check if this specific guild has any features
-          const [guildCountResult] = await connection.execute(
-            `SELECT COUNT(*) as count FROM guild_features WHERE guild_id = ?`,
-            [guildId]
-          );
-          console.log('[FEATURES-GET] Features count for this guild:', guildCountResult);
-        }
-        
         const [guildFeaturesResult] = await connection.execute(
           `SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?`,
           [guildId]
         );
         guildFeaturesRows = guildFeaturesResult;
-        console.log('[FEATURES-GET] Raw guild features result:', guildFeaturesResult);
-        console.log('[FEATURES-GET] Raw guild features result length:', guildFeaturesResult.length);
-        
-        // Let's also see the exact SQL being executed
-        console.log('[FEATURES-GET] SQL Query:', `SELECT feature_name, enabled FROM guild_features WHERE guild_id = '${guildId}'`);
-        
-        // Let's also check if there are any features for this guild with a different query
-        const [allGuildFeatures] = await connection.execute(`SELECT * FROM guild_features WHERE guild_id = ? LIMIT 5`, [guildId]);
-        console.log('[FEATURES-GET] All guild features for this guild (first 5):', allGuildFeatures);
       } catch (error) {
-        console.log('[FEATURES-GET] guild_features table might not exist, using empty features');
-        console.log('[FEATURES-GET] Error details:', error);
         guildFeaturesRows = [];
       }
 
       // Create a map of guild feature settings using feature keys
       const guildFeaturesMap: Record<string, boolean> = {};
       guildFeaturesRows.forEach((row: any) => {
-        console.log('[FEATURES-GET] Processing guild feature row:', row);
-        // Use feature_key directly since we're now querying it
         guildFeaturesMap[row.feature_key] = Boolean(row.enabled);
       });
-
-      console.log('[FEATURES-GET] Guild features map:', guildFeaturesMap);
 
       // Build the features response
       const features: Record<string, any> = {};
@@ -120,21 +65,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const featureKey = row.feature_key;
         const isEnabled = guildFeaturesMap.hasOwnProperty(featureKey) ? guildFeaturesMap[featureKey] : false;
 
-        console.log(`[FEATURES-GET] Building feature ${featureKey}:`, {
-          featureKey,
-          hasProperty: guildFeaturesMap.hasOwnProperty(featureKey),
-          rawValue: guildFeaturesMap[featureKey],
-          isEnabled,
-          guildFeaturesMap
-        });
-
-        // Use the feature key directly
         features[featureKey] = isEnabled;
         features[`${featureKey}_package`] = row.minimum_package;
       });
-
-      console.log('[FEATURES-GET] Features response:', features);
-      console.log('[FEATURES-GET] Features response keys:', Object.keys(features));
       
       return NextResponse.json({ 
         guildId,
@@ -155,10 +88,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  console.log('🚨🚨🚨 FEATURES PUT FUNCTION IS RUNNING! 🚨🚨🚨');
-  console.log('[FEATURES-PUT] PUT request received');
   const { id: guildId } = await params;
-  console.log('[FEATURES-PUT] Guild ID:', guildId);
   
   try {
     // Require DB configuration
@@ -179,18 +109,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       password: env.DB_PASS,
       database: env.DB_NAME,
     });
-    
-    // Check which database we're actually connected to
-    const [dbResult] = await connection.execute(`SELECT DATABASE() as current_db`);
-    console.log('[FEATURES-PUT] Connected to database:', dbResult);
 
     try {
       // Parse request body
       const body = await req.json();
       const { feature_name, enabled } = body;
-      
-      console.log('🚨🚨🚨 REQUEST BODY PARSED! 🚨🚨🚨');
-      console.log('[FEATURES-PUT] Request body:', { feature_name, enabled, guildId });
       
       if (!feature_name || typeof enabled !== 'boolean') {
         return NextResponse.json({ error: "Invalid request body. Requires feature_name and enabled fields." }, { status: 400 });
@@ -222,26 +145,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             KEY feature_key (feature_key)
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         );
-        console.log('[FEATURES-PUT] Created guild_features table');
       } catch (error) {
-        console.log('[FEATURES-PUT] guild_features table already exists or creation failed:', error);
+        // Table already exists or creation failed
       }
 
-            // Insert or update the feature setting
-      console.log('[FEATURES-PUT] About to execute database query:', {
-        query: `INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
-        params: [guildId, feature_name, enabled ? 1 : 0]
-      });
-      
-      const result = await connection.execute(
+      // Insert or update the feature setting
+      await connection.execute(
         `INSERT INTO guild_features (guild_id, feature_key, enabled) 
          VALUES (?, ?, ?) 
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
         [guildId, feature_name, enabled ? 1 : 0]
       );
-      
-      console.log('[FEATURES-PUT] Database query result:', result);
-      console.log('[FEATURES-PUT] Feature updated successfully');
 
       // Get all current features for this guild to update commands
       const [currentFeaturesResult] = await connection.execute(
@@ -250,18 +164,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       );
       
       const currentFeatures = currentFeaturesResult.map((row: any) => row.feature_key);
-      console.log('[FEATURES-PUT] Current enabled features for guild:', currentFeatures);
 
       // Update Discord commands for this guild via bot command server
       try {
         const botUrl = process.env.BOT_API_URL || 'http://127.0.0.1:3001';
-        console.log('[FEATURES-PUT] Making HTTP call to bot server...');
-        console.log('[FEATURES-PUT] Target URL:', `${botUrl}/api/commands`);
-        console.log('[FEATURES-PUT] Request payload:', {
-          guildId,
-          action: enabled ? 'enabled' : 'disabled',
-          features: currentFeatures
-        });
 
         const botResponse = await fetch(`${botUrl}/api/commands`, {
           method: 'POST',
@@ -275,10 +181,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           })
         });
 
-        if (botResponse.ok) {
-          const result = await botResponse.json();
-          console.log('[FEATURES-PUT] Bot command update successful:', result);
-        } else {
+        if (!botResponse.ok) {
           console.error('[FEATURES-PUT] Bot command update failed:', await botResponse.text());
         }
       } catch (commandError) {
@@ -313,7 +216,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           
           // Write back to file
           fs.writeFileSync(commandFile, JSON.stringify(updates, null, 2));
-          console.log('[FEATURES-PUT] Command update written to file as fallback');
         } catch (fileError) {
           console.error('[FEATURES-PUT] Failed to write command update to file:', fileError);
         }

@@ -101,8 +101,8 @@ function AdminManagementContent() {
     setTimeout(() => setNotification(null), 5000);
   }, []);
 
-  // Load data functions
-  const loadFeatures = async () => {
+  // Load data functions - memoized to prevent unnecessary re-renders
+  const loadFeatures = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/management/features');
       if (response.ok) {
@@ -113,9 +113,9 @@ function AdminManagementContent() {
       console.error('Failed to load features:', error);
       showNotification('Failed to load features', 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadGuildFeatures = async () => {
+  const loadGuildFeatures = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/management/guild-features');
       if (response.ok) {
@@ -126,9 +126,9 @@ function AdminManagementContent() {
       console.error('Failed to load guild features:', error);
       showNotification('Failed to load guild features', 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadCommandMappings = async () => {
+  const loadCommandMappings = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/management/command-mappings');
       if (response.ok) {
@@ -139,9 +139,9 @@ function AdminManagementContent() {
       console.error('Failed to load command mappings:', error);
       showNotification('Failed to load command mappings', 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadDefaultConfig = async () => {
+  const loadDefaultConfig = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/management/defaults');
       if (response.ok) {
@@ -152,10 +152,10 @@ function AdminManagementContent() {
       console.error('Failed to load default config:', error);
       showNotification('Failed to load default configuration', 'error');
     }
-  };
+  }, [showNotification]);
 
-  // Load all data
-  const loadAllData = async () => {
+  // Load all data - memoized to prevent unnecessary re-renders
+  const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
       await Promise.all([
@@ -167,12 +167,52 @@ function AdminManagementContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadFeatures, loadGuildFeatures, loadCommandMappings, loadDefaultConfig]);
 
   // Load data on mount
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [loadAllData]);
+
+  // Memoized filtered data to prevent unnecessary recalculations
+  const filteredFeatures = useMemo(() => {
+    return features.filter(feature => {
+      const matchesSearch = !searchTerm || 
+        feature.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        feature.display_name.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filterEnabled === 'all' || 
+        (filterEnabled === 'enabled' && feature.enabled) ||
+        (filterEnabled === 'disabled' && !feature.enabled);
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [features, searchTerm, filterEnabled]);
+
+  const filteredGuildFeatures = useMemo(() => {
+    return guildFeatures.filter(gf => {
+      const matchesSearch = !searchTerm || 
+        gf.guild_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        gf.feature_key.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (gf.guild_name && gf.guild_name.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesFilter = filterEnabled === 'all' || 
+        (filterEnabled === 'enabled' && gf.enabled) ||
+        (filterEnabled === 'disabled' && !gf.enabled);
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [guildFeatures, searchTerm, filterEnabled]);
+
+  const filteredCommandMappings = useMemo(() => {
+    return commandMappings.filter(cm => {
+      const matchesSearch = !searchTerm || 
+        cm.command_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cm.feature_key.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      return matchesSearch;
+    });
+  }, [commandMappings, searchTerm]);
 
   // CRUD operations
   const handleCreate = useCallback(async (type: string, data: any) => {
