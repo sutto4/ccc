@@ -40,8 +40,8 @@ export function useMembersQuery(guildId: string, params: MembersParams = {}) {
   return useQuery<MembersResponse>({
     queryKey: queryKeys.members(guildId, params),
     queryFn: () => fetchMembersWithParams(guildId, params),
-    staleTime: 1 * 60 * 1000, // 1 minute - members can change moderately
-    cacheTime: 3 * 60 * 1000, // 3 minutes cache
+    staleTime: 2 * 60 * 1000, // 2 minutes - longer cache for better performance
+    cacheTime: 5 * 60 * 1000, // 5 minutes cache
     enabled: !!guildId,
     retry: 1,
     retryDelay: 1000,
@@ -52,8 +52,8 @@ export function useRolesQuery(guildId: string) {
   return useQuery<Role[]>({
     queryKey: queryKeys.roles(guildId),
     queryFn: () => fetchRoles(guildId),
-    staleTime: 2 * 60 * 1000, // 2 minutes - roles change less frequently
-    cacheTime: 5 * 60 * 1000, // 5 minutes cache
+    staleTime: 5 * 60 * 1000, // 5 minutes - roles change less frequently
+    cacheTime: 10 * 60 * 1000, // 10 minutes cache
     enabled: !!guildId,
     retry: 1,
     retryDelay: 1000,

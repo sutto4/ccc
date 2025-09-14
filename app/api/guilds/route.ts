@@ -6,7 +6,7 @@ import { apiAnalytics } from "@/lib/api-analytics-db";
 import { analyticsBatcher } from "@/lib/analytics-batcher";
 import { TokenManager } from "@/lib/token-manager";
 import { SessionManager } from "@/lib/session-manager";
-import mysql from 'mysql2/promise';
+import { query } from "@/lib/db-pool";
 
 const limiter = createRateLimiter(2000, 60_000); // 2000 requests per minute per key (scaled for high traffic)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
@@ -59,7 +59,9 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
   const cached = permissionCache.get(cacheKey);
 
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-    console.log(`[PERMISSION] Using cached result for guild ${guildId}: ${cached.result}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[PERMISSION] Using cached result for guild ${guildId}: ${cached.result}`);
+    }
     return cached.result;
   }
 
@@ -67,29 +69,21 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
     // Check server_access_control table first (most reliable)
     let hasAccessControl = false;
     try {
-      const connection = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASS || '',
-        database: process.env.DB_NAME || 'chester_bot',
-      });
+      // Check if user has explicit access via server_access_control
+      const accessResults = await query(
+        'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+        [guildId, userId]
+      );
 
-      try {
-        // Check if user has explicit access via server_access_control
-        const [accessResults] = await connection.execute(
-          'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
-          [guildId, userId]
-        );
-
-        hasAccessControl = (accessResults as any[]).length > 0;
+      hasAccessControl = (accessResults as any[]).length > 0;
+      if (process.env.NODE_ENV === 'development') {
         console.log(`[PERMISSION-DEBUG] server_access_control check for guild ${guildId}, user ${userId}: ${hasAccessControl} (found ${accessResults.length} records)`);
-        if (hasAccessControl) {
+      }
+      if (hasAccessControl) {
+        if (process.env.NODE_ENV === 'development') {
           console.log(`[PERMISSION] Guild ${guildId}: user ${userId} has explicit access via server_access_control`);
-          return true; // Early return if user has explicit access
         }
-        // Don't log when user is NOT found - reduces spam
-      } finally {
-        await connection.end();
+        return true; // Early return if user has explicit access
       }
     } catch (dbError) {
       console.error('Database error checking server_access_control:', dbError);
@@ -108,15 +102,19 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
       if (guildResponse.ok) {
         const guildData = await guildResponse.json();
         isOwner = userId === guildData.owner_id;
-        if (isOwner) {
+        if (process.env.NODE_ENV === 'development' && isOwner) {
           console.log(`[PERMISSION] Guild ${guildId}: user ${userId} is verified owner`);
         }
       } else {
-        console.log(`[PERMISSION] Could not verify ownership for guild ${guildId}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[PERMISSION] Could not verify ownership for guild ${guildId}`);
+        }
         isOwner = false;
       }
     } catch (error) {
-      console.log(`[PERMISSION] Error checking ownership for guild ${guildId}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[PERMISSION] Error checking ownership for guild ${guildId}`);
+      }
       isOwner = false;
     }
 
@@ -124,72 +122,75 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
     let hasRoleAccess = false;
 
     try {
-      const connection = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASS || '',
-        database: process.env.DB_NAME || 'chester_bot',
-      });
+      // Check if the server_role_permissions table exists
+      const tables = await query(
+        "SHOW TABLES LIKE 'server_role_permissions'"
+      );
 
-      try {
-        // Check if the server_role_permissions table exists
-        const [tables] = await connection.execute(
-          "SHOW TABLES LIKE 'server_role_permissions'"
+      if ((tables as any[]).length > 0) {
+        // Query for role permissions
+        const rows = await query(
+          'SELECT role_id FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
+          [guildId]
         );
 
-        if ((tables as any[]).length > 0) {
-          // Query for role permissions
-          const [rows] = await connection.execute(
-            'SELECT role_id FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
-            [guildId]
-          );
+        const allowedRoleIds = (rows as any[]).map(row => row.role_id);
 
-          const allowedRoleIds = (rows as any[]).map(row => row.role_id);
-
-          if (allowedRoleIds.length > 0) {
-            // There are role restrictions - check if user has allowed roles
+        if (allowedRoleIds.length > 0) {
+          // There are role restrictions - check if user has allowed roles
+          if (process.env.NODE_ENV === 'development') {
             console.log(`[PERMISSION] Guild ${guildId}: checking ${allowedRoleIds.length} configured roles`);
+          }
 
-            // Check if user has any of the allowed roles by fetching from Discord API
-            try {
-              const userRolesResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
-                headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }
-              });
-              
-              if (userRolesResponse.ok) {
-                const memberData = await userRolesResponse.json();
-                const userRoleIds = memberData.roles || [];
+          // Check if user has any of the allowed roles by fetching from Discord API
+          try {
+            const userRolesResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+              headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }
+            });
+            
+            if (userRolesResponse.ok) {
+              const memberData = await userRolesResponse.json();
+              const userRoleIds = memberData.roles || [];
+              if (process.env.NODE_ENV === 'development') {
                 console.log(`[PERMISSION] User ${userId} has roles in guild ${guildId}:`, userRoleIds);
-                
-                // Check if any of user's roles are in the allowed list
-                hasRoleAccess = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
-                console.log(`[PERMISSION] User role access check result: ${hasRoleAccess}`);
-              } else {
-                console.log(`[PERMISSION] Failed to fetch user roles for guild ${guildId}:`, userRolesResponse.status);
-                hasRoleAccess = false;
               }
-            } catch (roleError) {
-              console.error('[PERMISSION] Error fetching user roles:', roleError);
+              
+              // Check if any of user's roles are in the allowed list
+              hasRoleAccess = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[PERMISSION] User role access check result: ${hasRoleAccess}`);
+              }
+            } else {
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[PERMISSION] Failed to fetch user roles for guild ${guildId}:`, userRolesResponse.status);
+              }
               hasRoleAccess = false;
             }
-          } else {
-            // No specific role restrictions configured - allow access
-            hasRoleAccess = true;
-            console.log(`[PERMISSION] Guild ${guildId}: no role restrictions configured - allowing access`);
+          } catch (roleError) {
+            console.error('[PERMISSION] Error fetching user roles:', roleError);
+            hasRoleAccess = false;
           }
         } else {
-          // If no permissions table exists, allow access by default
+          // No specific role restrictions configured - allow access
           hasRoleAccess = true;
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[PERMISSION] Guild ${guildId}: no role restrictions configured - allowing access`);
+          }
+        }
+      } else {
+        // If no permissions table exists, allow access by default
+        hasRoleAccess = true;
+        if (process.env.NODE_ENV === 'development') {
           console.log(`[PERMISSION] No role permissions table found for guild ${guildId}, allowing access by default`);
         }
-      } finally {
-        await connection.end();
       }
     } catch (dbError) {
       console.error('Database error checking permissions:', dbError);
       // Allow access on database errors to prevent blocking users
       hasRoleAccess = true;
-      console.log(`[PERMISSION] Database error for guild ${guildId}, allowing access by default`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[PERMISSION] Database error for guild ${guildId}, allowing access by default`);
+      }
     }
 
     const canUseApp = isOwner || hasRoleAccess;
@@ -214,36 +215,35 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 let requestCounter = 0;
 export const GET = async (req: NextRequest, _ctx: unknown) => {
-  console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
-
-  // Simple auth validation
-  console.log('[AUTH-DEBUG] Environment check:', {
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ? 'SET' : 'UNDEFINED',
-    NODE_ENV: process.env.NODE_ENV,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL
-  });
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
+  }
 
   const token = await getToken({
     req: req,
     secret: process.env.NEXTAUTH_SECRET
   });
 
-  console.log('[AUTH-DEBUG] Token validation:', {
-    hasToken: !!token,
-    tokenKeys: token ? Object.keys(token) : 'NO_TOKEN',
-    discordId: token ? (token as any).discordId : 'NO_DISCORD_ID',
-    sub: token ? token.sub : 'NO_SUB',
-    email: token ? token.email : 'NO_EMAIL',
-    secretLength: process.env.NEXTAUTH_SECRET?.length
-  });
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[AUTH-DEBUG] Token validation:', {
+      hasToken: !!token,
+      tokenKeys: token ? Object.keys(token) : 'NO_TOKEN',
+      discordId: token ? (token as any).discordId : 'NO_DISCORD_ID',
+      sub: token ? token.sub : 'NO_SUB',
+      email: token ? token.email : 'NO_EMAIL',
+      secretLength: process.env.NEXTAUTH_SECRET?.length
+    });
 
-  // Check cookies
-  const cookies = req.cookies;
-  console.log('[AUTH-DEBUG] Cookies check:', {
-    hasSessionToken: cookies.has('__Secure-next-auth.session-token'),
-    hasCallbackToken: cookies.has('__Secure-next-auth.callback-url'),
-    cookieNames: cookies.getAll().map(c => c.name)
-  });
+    // Check cookies
+    const cookies = req.cookies;
+    console.log('[AUTH-DEBUG] Cookies check:', {
+      hasSessionToken: cookies.has('__Secure-next-auth.session-token'),
+      hasCallbackToken: cookies.has('__Secure-next-auth.callback-url'),
+      cookieNames: cookies.getAll().map(c => c.name)
+    });
+  }
 
   if (!token) {
     console.log('[AUTH-DEBUG] No token found - returning 401');
@@ -283,7 +283,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     );
   }
 
-  console.log('[AUTH-DEBUG] Authentication successful for Discord ID:', discordId);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[AUTH-DEBUG] Authentication successful for Discord ID:', discordId);
+  }
 
   const accessToken = (token as any).accessToken as string;
   const refreshToken = (token as any).refreshToken as string;
@@ -363,19 +365,11 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   const ugCacheKey = `userGuilds:${tokenKey}`;
   let userGuilds = cache.get<any[]>(ugCacheKey) || [];
-  // DEBUG: console.log(`[SECURITY-AUDIT] Cache key: ${ugCacheKey}, cached guilds: ${userGuilds.length}`);
-  // DEBUG: console.log(`[SECURITY-AUDIT] Cache should be user-specific: ${ugCacheKey.startsWith(`userGuilds:${discordId}:`)}`);
 
   // SECURITY: Verify cached data belongs to this user
   if (userGuilds.length > 0) {
-    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHED GUILDS SAMPLE:`, userGuilds.slice(0, 2).map(g => ({ id: g.id, name: g.name })));
-    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE VALIDATION: Key contains user ID: ${discordId && ugCacheKey.includes(discordId)}`);
-    // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - CACHE KEY: ${ugCacheKey}`);
-
     // EMERGENCY SECURITY: Clear cache if it doesn't belong to this user
     if (discordId && !ugCacheKey.includes(discordId)) {
-      // DEBUG: console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - CACHE POLLUTION DETECTED! User ${discordId} got cache for different user`);
-      // DEBUG: console.log(`[SECURITY-ALERT] 🚨 REQUEST ${requestId} - FORCED FRESH FETCH for user ${discordId}`);
       userGuilds = []; // Force fresh fetch
     }
   }
@@ -548,100 +542,128 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Fetch database access records for this user
   let dbAccessibleGuildIds = new Set<string>();
   try {
-    const db = await import('@/lib/db');
-    const accessRecords = await db.query(
+    const accessRecords = await query(
       'SELECT guild_id FROM server_access_control WHERE user_id = ? AND has_access = 1',
       [userId]
     );
 
     dbAccessibleGuildIds = new Set(accessRecords.map((record: any) => String(record.guild_id)));
-    console.log(`[GUILDS-DEBUG] User ${userId} has database access to ${dbAccessibleGuildIds.size} guilds:`, Array.from(dbAccessibleGuildIds));
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[GUILDS-DEBUG] User ${userId} has database access to ${dbAccessibleGuildIds.size} guilds:`, Array.from(dbAccessibleGuildIds));
+    }
 
   // Debug: Check which database-accessible guilds are in user's Discord guilds
-  try {
-    const discordGuildIds = new Set(userGuilds.map(g => g.id));
-    const missingFromDiscord = Array.from(dbAccessibleGuildIds).filter(id => !discordGuildIds.has(id));
-    const inDiscordButNoDbAccess = Array.from(discordGuildIds).filter(id => !dbAccessibleGuildIds.has(id));
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const discordGuildIds = new Set(userGuilds.map(g => g.id));
+      const missingFromDiscord = Array.from(dbAccessibleGuildIds).filter(id => !discordGuildIds.has(id));
+      const inDiscordButNoDbAccess = Array.from(discordGuildIds).filter(id => !dbAccessibleGuildIds.has(id));
 
-    console.log(`[GUILDS-DEBUG] User's Discord guilds: ${discordGuildIds.size} total`);
-    console.log(`[GUILDS-DEBUG] Database guilds missing from Discord: ${missingFromDiscord.length}:`, missingFromDiscord);
-    console.log(`[GUILDS-DEBUG] Discord guilds without DB access: ${inDiscordButNoDbAccess.length}:`, inDiscordButNoDbAccess);
-  } catch (debugError) {
-    console.error('[GUILDS-DEBUG] Error in Discord comparison:', debugError);
+      console.log(`[GUILDS-DEBUG] User's Discord guilds: ${discordGuildIds.size} total`);
+      console.log(`[GUILDS-DEBUG] Database guilds missing from Discord: ${missingFromDiscord.length}:`, missingFromDiscord);
+      console.log(`[GUILDS-DEBUG] Discord guilds without DB access: ${inDiscordButNoDbAccess.length}:`, inDiscordButNoDbAccess);
+    } catch (debugError) {
+      console.error('[GUILDS-DEBUG] Error in Discord comparison:', debugError);
+    }
   }
   } catch (error) {
     console.error('Failed to fetch database access records:', error);
   }
 
   // Debug: Compare with database access
-  try {
-    const dbAccessibleArray = Array.from(dbAccessibleGuildIds);
-    const botInstalledArray = Array.from(installedGuildIds);
-    console.log(`[GUILDS-DEBUG] Database accessible:`, dbAccessibleArray);
-    console.log(`[GUILDS-DEBUG] Bot installed:`, botInstalledArray);
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const dbAccessibleArray = Array.from(dbAccessibleGuildIds);
+      const botInstalledArray = Array.from(installedGuildIds);
+      console.log(`[GUILDS-DEBUG] Database accessible:`, dbAccessibleArray);
+      console.log(`[GUILDS-DEBUG] Bot installed:`, botInstalledArray);
 
-    const inDbNotInBot = dbAccessibleArray.filter(id => !installedGuildIds.has(id));
-    const inBotNotInDb = botInstalledArray.filter(id => !dbAccessibleGuildIds.has(id));
+      const inDbNotInBot = dbAccessibleArray.filter(id => !installedGuildIds.has(id));
+      const inBotNotInDb = botInstalledArray.filter(id => !dbAccessibleGuildIds.has(id));
 
-    console.log(`[GUILDS-DEBUG] In DB but bot not installed: ${inDbNotInBot.length}:`, inDbNotInBot);
-    console.log(`[GUILDS-DEBUG] Bot installed but no DB access: ${inBotNotInDb.length}:`, inBotNotInDb);
-  } catch (debugError) {
-    console.error('[GUILDS-DEBUG] Error in debug comparison:', debugError);
+      console.log(`[GUILDS-DEBUG] In DB but bot not installed: ${inDbNotInBot.length}:`, inDbNotInBot);
+      console.log(`[GUILDS-DEBUG] Bot installed but no DB access: ${inBotNotInDb.length}:`, inBotNotInDb);
+    } catch (debugError) {
+      console.error('[GUILDS-DEBUG] Error in debug comparison:', debugError);
+    }
   }
 
   // Filter user's Discord guilds to only those with database access
   const dbAccessibleUserGuilds = userGuilds.filter(guild => dbAccessibleGuildIds.has(guild.id));
-  console.log(`[GUILDS] User has database access to ${dbAccessibleUserGuilds.length} guilds`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS] User has database access to ${dbAccessibleUserGuilds.length} guilds`);
+  }
 
   // Check which of these have the bot installed
   const botInstalledCount = dbAccessibleUserGuilds.filter(guild => installedGuildIds.has(guild.id)).length;
-  console.log(`[GUILDS] Of these, ${botInstalledCount} have the bot installed`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS] Of these, ${botInstalledCount} have the bot installed`);
+  }
 
   // Now check permissions for database-accessible guilds
   const accessibleUserGuilds = [];
 
-  console.log(`[GUILDS-DEBUG] Starting permission checks for ${dbAccessibleUserGuilds.length} guilds`);
-  console.log(`[GUILDS-DEBUG] User ID: ${userId}`);
-  console.log(`[GUILDS-DEBUG] Access token available: ${!!validAccessToken}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS-DEBUG] Starting permission checks for ${dbAccessibleUserGuilds.length} guilds`);
+    console.log(`[GUILDS-DEBUG] User ID: ${userId}`);
+    console.log(`[GUILDS-DEBUG] Access token available: ${!!validAccessToken}`);
+  }
 
-  for (const userGuild of dbAccessibleUserGuilds) {
+  // Run permission checks in parallel for much better performance
+  const permissionPromises = dbAccessibleUserGuilds.map(async (userGuild) => {
     try {
-      console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
+      }
       // Check if user has management permissions in this guild
       const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken);
-      console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
-
-      // EXTRA DEBUGGING: Let's see what checkUserGuildPermission is doing
-      if (!hasPermission) {
-        console.log(`[SECURITY-AUDIT] 🚨 PERMISSION DENIED for user ${userId} on guild ${userGuild.id}`);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
       }
 
-      if (hasPermission) {
-        accessibleUserGuilds.push(userGuild);
-        console.log(`[GUILDS] User ${userId} has permission for guild ${userGuild.id} (${userGuild.name})`);
-      } else {
-        console.log(`[GUILDS] User ${userId} denied permission for guild ${userGuild.id} (${userGuild.name})`);
-      }
+      return { userGuild, hasPermission };
     } catch (error) {
       console.error(`[GUILDS] Error checking permission for guild ${userGuild.id}:`, error);
-      // Deny access if we can't verify permissions
+      return { userGuild, hasPermission: false };
+    }
+  });
+
+  // Wait for all permission checks to complete
+  const permissionResults = await Promise.all(permissionPromises);
+  
+  // Filter to only accessible guilds
+  for (const { userGuild, hasPermission } of permissionResults) {
+    if (hasPermission) {
+      accessibleUserGuilds.push(userGuild);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[GUILDS] User ${userId} has permission for guild ${userGuild.id} (${userGuild.name})`);
+      }
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[GUILDS] User ${userId} denied permission for guild ${userGuild.id} (${userGuild.name})`);
+      }
     }
   }
 
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${dbAccessibleUserGuilds.length} guilds accessible for user ${userId}`);
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOKEN VALIDATION:`, {
-    hasToken: !!validAccessToken,
-    tokenLength: validAccessToken?.length,
-    discordId,
-    tokenStart: validAccessToken?.substring(0, 20) + '...'
-  });
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL DB GUILDS:`, dbAccessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
-  console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${dbAccessibleUserGuilds.length} guilds accessible for user ${userId}`);
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOKEN VALIDATION:`, {
+      hasToken: !!validAccessToken,
+      tokenLength: validAccessToken?.length,
+      discordId,
+      tokenStart: validAccessToken?.substring(0, 20) + '...'
+    });
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL DB GUILDS:`, dbAccessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);
+    console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - DATA SOURCES: Bot API=${botBase}, Database=${process.env.DB_HOST}`);
+  }
 
   // SECURITY FIX: Only return guilds user has access to AND bot is installed
-  console.log(`[SECURITY-AUDIT] ACCESS CONTROL: Filtering installedGuilds to only accessible guilds`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[SECURITY-AUDIT] ACCESS CONTROL: Filtering installedGuilds to only accessible guilds`);
+  }
 
   // Create a set of accessible guild IDs for fast lookup
   const accessibleGuildIds = new Set(accessibleUserGuilds.map((g: any) => String(g.id)));
@@ -649,10 +671,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Fetch group information for all accessible guilds
   let groupInfo: any = {};
   try {
-    const db = await import('@/lib/db');
     let groups: any[] = [];
     if (accessibleGuildIds.size > 0) {
-      groups = await db.query(`
+      groups = await query(`
         SELECT
           g.guild_id,
           sg.id as group_id,
@@ -672,8 +693,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       };
     });
 
-    console.log(`[SECURITY-AUDIT] GROUP INFO: Found groups for ${Object.keys(groupInfo).length} guilds`);
-    console.log(`[SECURITY-AUDIT] GROUP INFO DETAILS:`, groupInfo);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[SECURITY-AUDIT] GROUP INFO: Found groups for ${Object.keys(groupInfo).length} guilds`);
+      console.log(`[SECURITY-AUDIT] GROUP INFO DETAILS:`, groupInfo);
+    }
   } catch (error) {
     console.warn('[SECURITY-AUDIT] Failed to fetch group info:', error);
   }
@@ -682,18 +705,29 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   const accessibleInstalledGuilds = (installedGuilds || []).filter((botGuild: any) => {
     const botGuildId = String(botGuild.id || botGuild.guild_id || "");
     const isAccessible = accessibleGuildIds.has(botGuildId);
-    console.log(`[SECURITY-AUDIT] Guild ${botGuild.name} (${botGuildId}): ${isAccessible ? 'ACCESSIBLE' : 'NOT ACCESSIBLE'}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[SECURITY-AUDIT] Guild ${botGuild.name} (${botGuildId}): ${isAccessible ? 'ACCESSIBLE' : 'NOT ACCESSIBLE'}`);
+    }
     return isAccessible;
   });
 
-  console.log(`[SECURITY-AUDIT] FINAL FILTER: ${accessibleInstalledGuilds.length} accessible guilds out of ${installedGuilds?.length || 0} installed guilds`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[SECURITY-AUDIT] FINAL FILTER: ${accessibleInstalledGuilds.length} accessible guilds out of ${installedGuilds?.length || 0} installed guilds`);
+  }
 
-  // Now map with memberCount/roleCount data AND group info
-  const results = accessibleInstalledGuilds.map((botGuild: any) => {
+  // Check if we have cached results for this user
+  const resultsCacheKey = `guilds-results:${tokenKey}`;
+  let results = cache.get<any[]>(resultsCacheKey);
+  
+  if (!results) {
+    // Now map with memberCount/roleCount data AND group info
+    results = accessibleInstalledGuilds.map((botGuild: any) => {
     const botGuildId = String(botGuild.id || botGuild.guild_id || "");
     const group = groupInfo[botGuildId];
 
-    console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? JSON.stringify(group) : 'NONE'}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? JSON.stringify(group) : 'NONE'}`);
+    }
 
     return {
       id: botGuildId,
@@ -710,24 +744,28 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       } : null
     };
   });
+  
+  // Cache the results for 2 minutes to prevent repeated processing
+  cache.set(resultsCacheKey, results, 120_000);
+  }
 
-  console.log(`[GUILDS-API] SECURE RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles, group: ${g.group?.name || 'none'}`));
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS-API] SECURE RESULTS:`, results.map(g => `${g.name}: ${g.memberCount} members, ${g.roleCount} roles, group: ${g.group?.name || 'none'}`));
 
-  console.log('Final results:', {
-    guildCount: results.length,
-    guilds: results.map(g => ({ id: g.id, name: g.name, group: g.group })),
-    timestamp: new Date().toISOString(),
-    requestId: Math.random().toString(36).substr(2, 9)
-  });
+    console.log('Final results:', {
+      guildCount: results.length,
+      guilds: results.map(g => ({ id: g.id, name: g.name, group: g.group })),
+      timestamp: new Date().toISOString(),
+      requestId: Math.random().toString(36).substr(2, 9)
+    });
 
-  // SECURITY: No fallbacks - only return authorized, bot-installed guilds
-
-  console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
-  console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
-  console.log(`[SECURITY-AUDIT] TOTAL GUILDS RETURNED: ${results.length}`);
-  console.log(`[SECURITY-AUDIT] REQUEST COMPLETE FOR USER ${discordId} [${requestId}]`);
-  console.log(`[SECURITY-AUDIT] ==================================================`);
-  console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
+    console.log(`✅ Request #${requestCounter} [${requestId}] completed - returning ${results.length} guilds`);
+    console.log(`[SECURITY-AUDIT] FINAL RESULT for user ${discordId}:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
+    console.log(`[SECURITY-AUDIT] TOTAL GUILDS RETURNED: ${results.length}`);
+    console.log(`[SECURITY-AUDIT] REQUEST COMPLETE FOR USER ${discordId} [${requestId}]`);
+    console.log(`[SECURITY-AUDIT] ==================================================`);
+    console.log(`[GUILDS-DEBUG] Guilds returned:`, results.map(g => ({ id: g.id, name: g.name, group: g.group })));
+  }
   
   // FINAL SECURITY CHECK: Ensure all returned guilds belong to this user
   const finalCheck = results.every(guild => {
@@ -757,15 +795,17 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   //   instanceId: `${process.env.NODE_ENV || 'production'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   // });
 
-  console.log(`[GUILDS-API] DEBUG: Final API response:`, {
-    guildCount: results.length,
-    firstGuild: results[0] ? {
-      id: results[0].id,
-      name: results[0].name,
-      memberCount: results[0].memberCount,
-      roleCount: results[0].roleCount
-    } : null
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[GUILDS-API] DEBUG: Final API response:`, {
+      guildCount: results.length,
+      firstGuild: results[0] ? {
+        id: results[0].id,
+        name: results[0].name,
+        memberCount: results[0].memberCount,
+        roleCount: results[0].roleCount
+      } : null
+    });
+  }
 
   return NextResponse.json({ guilds: results });
 };

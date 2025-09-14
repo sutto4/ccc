@@ -48,8 +48,8 @@ export function usePermissionsQuery(guildId: string) {
       (session?.user as any)?.discordId || session?.user?.id || '', 
       (session?.user as any)?.roles || []
     ),
-    staleTime: 2 * 60 * 1000, // 2 minutes - balance security vs performance
-    cacheTime: 5 * 60 * 1000, // 5 minutes cache
+    staleTime: 5 * 60 * 1000, // 5 minutes - longer cache for better performance
+    cacheTime: 10 * 60 * 1000, // 10 minutes cache
     enabled: !!guildId && !!session?.user?.id,
     retry: 1,
     retryDelay: 1000,

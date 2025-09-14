@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import mysql from 'mysql2/promise';
 import { env } from '@/lib/env';
+import { cache } from '@/lib/cache';
 
 // POST: Check if a user has permission to use the app
 // Database connection helper
@@ -51,17 +52,20 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
     (token as any).expiresAt = expiresAt;
   }
 
-  console.log(`\x1b[31m[PERMISSION]\x1b[0m Token status:`, {
-    hasAccessToken: !!accessToken,
-    hasDiscordId: !!discordId,
-    expiresAt: expiresAt,
-    now: now,
-    isExpired: expiresAt ? now > expiresAt : false,
-    timeUntilExpiry: expiresAt ? expiresAt - now : 'N/A',
-    accessTokenLength: accessToken?.length || 0,
-    accessTokenStart: accessToken?.substring(0, 20) + '...',
-    tokenCreatedAt: (token as any).iat ? new Date((token as any).iat * 1000).toISOString() : 'N/A'
-  });
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`\x1b[31m[PERMISSION]\x1b[0m Token status:`, {
+      hasAccessToken: !!accessToken,
+      hasDiscordId: !!discordId,
+      expiresAt: expiresAt,
+      now: now,
+      isExpired: expiresAt ? now > expiresAt : false,
+      timeUntilExpiry: expiresAt ? expiresAt - now : 'N/A',
+      accessTokenLength: accessToken?.length || 0,
+      accessTokenStart: accessToken?.substring(0, 20) + '...',
+      tokenCreatedAt: (token as any).iat ? new Date((token as any).iat * 1000).toISOString() : 'N/A'
+    });
+  }
 
   if (!accessToken || !discordId) {
     return NextResponse.json(
@@ -104,20 +108,33 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     const { userId, userRoles } = body;
 
+    // Check cache first to avoid expensive Discord API calls
+    const cacheKey = `permissions:${guildId}:${userId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`\x1b[32m[PERMISSION]\x1b[0m Using cached permissions for guild ${guildId}, user ${userId}`);
+      return NextResponse.json(cached);
+    }
+
     console.log(`\x1b[31m[PERMISSION]\x1b[0m Checking permissions for guild ${guildId}, user ${userId}, userRoles:`, userRoles);
 
     if (!userId || !userRoles) {
       return NextResponse.json({ error: 'Missing userId or userRoles' }, { status: 400 });
     }
 
-    console.log(`\x1b[31m[PERMISSION]\x1b[0m Starting Discord API verification for guild ${guildId}`);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\x1b[31m[PERMISSION]\x1b[0m Starting Discord API verification for guild ${guildId}`);
+    }
 
     // CRITICAL SECURITY: Verify user actually has access to this guild via Discord API
     let userGuildAccess = false;
     let actualOwnerId = null;
 
     try {
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Making Discord API call to: https://discord.com/api/v10/users/@me/guilds`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Making Discord API call to: https://discord.com/api/v10/users/@me/guilds`);
+      }
       
       // Add retry logic for rate limiting
       let guildResponse;
@@ -135,7 +152,9 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
         if (guildResponse.status === 429) {
           const retryAfter = guildResponse.headers.get('retry-after');
           const delay = retryAfter ? parseFloat(retryAfter) * 1000 : 1000; // Convert to milliseconds
-          console.log(`\x1b[33m[PERMISSION]\x1b[0m Rate limited, waiting ${delay}ms before retry ${retryCount + 1}/${maxRetries}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`\x1b[33m[PERMISSION]\x1b[0m Rate limited, waiting ${delay}ms before retry ${retryCount + 1}/${maxRetries}`);
+          }
           await new Promise(resolve => setTimeout(resolve, delay));
           retryCount++;
         } else {
@@ -143,13 +162,15 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
         }
       }
 
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API response status: ${guildResponse.status}`);
-      console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API call result - OK: ${guildResponse.ok}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API response status: ${guildResponse.status}`);
+        console.log(`\x1b[31m[PERMISSION]\x1b[0m Guild API call result - OK: ${guildResponse.ok}`);
 
-      if (!guildResponse.ok) {
-        const errorText = await guildResponse.text();
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API error response:`, errorText);
-        console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API headers:`, Object.fromEntries(guildResponse.headers.entries()));
+        if (!guildResponse.ok) {
+          const errorText = await guildResponse.text();
+          console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API error response:`, errorText);
+          console.log(`\x1b[31m[PERMISSION]\x1b[0m Discord API headers:`, Object.fromEntries(guildResponse.headers.entries()));
+        }
       }
 
       if (guildResponse.ok) {
@@ -462,13 +483,18 @@ export const POST = async (request: NextRequest, { params }: { params: Promise<{
       canUseApp
     });
 
-    return NextResponse.json({
+    const result = {
       canUseApp,
       isOwner,
       hasRoleAccess,
       userId,
       userRoles
-    });
+    };
+
+    // Cache the result for 2 minutes to avoid repeated Discord API calls
+    cache.set(cacheKey, result, 120_000);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error checking user permissions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
