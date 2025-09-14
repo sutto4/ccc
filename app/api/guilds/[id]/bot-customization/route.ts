@@ -6,7 +6,7 @@ import { query } from "@/lib/db";
 async function triggerBotUpdate(guildId: string) {
   try {
     // Call the bot's immediate update endpoint
-    const botUrl = process.env.BOT_WEBHOOK_URL || 'http://localhost:3001';
+    const botUrl = process.env.BOT_WEBHOOK_URL || 'http://localhost:3002';
     const response = await fetch(`${botUrl}/api/bot-customization/update`, {
       method: 'POST',
       headers: {
