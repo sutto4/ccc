@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS guilds (
 
 -- Table for storing available features
 CREATE TABLE IF NOT EXISTS features (
-    feature_name VARCHAR(100) PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    feature_key VARCHAR(50) NOT NULL UNIQUE,
+    feature_name VARCHAR(100) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     description TEXT,
     minimum_package ENUM('free', 'premium') NOT NULL DEFAULT 'free',
@@ -31,48 +33,50 @@ CREATE TABLE IF NOT EXISTS features (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
     -- Indexes for performance
+    INDEX idx_feature_key (feature_key),
     INDEX idx_minimum_package (minimum_package),
     INDEX idx_is_active (is_active)
 );
 
 -- Table for storing guild-specific feature settings
 CREATE TABLE IF NOT EXISTS guild_features (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     guild_id VARCHAR(255) NOT NULL,
-    feature_name VARCHAR(100) NOT NULL,
+    feature_key VARCHAR(50) NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     settings JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    -- Primary key
-    PRIMARY KEY (guild_id, feature_name),
+    -- Unique constraint
+    UNIQUE KEY unique_guild_feature (guild_id, feature_key),
     
     -- Foreign key constraints
     FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
-    FOREIGN KEY (feature_name) REFERENCES features(feature_name) ON DELETE CASCADE,
+    FOREIGN KEY (feature_key) REFERENCES features(feature_key) ON DELETE CASCADE,
     
     -- Indexes for performance
     INDEX idx_guild_id (guild_id),
-    INDEX idx_feature_name (feature_name),
+    INDEX idx_feature_key (feature_key),
     INDEX idx_enabled (enabled)
 );
 
 -- Insert default features
-INSERT IGNORE INTO features (feature_name, display_name, description, minimum_package) VALUES
-('verification_system', 'Verification System', 'Automated user verification system', 'free'),
-('feedback_system', 'Feedback System', 'Collect and manage user feedback', 'free'),
-('moderation', 'Moderation Tools', 'Basic moderation commands and tools', 'free'),
-('reaction_roles', 'Reaction Roles', 'Assign roles through reactions', 'free'),
-('custom_commands', 'Custom Commands', 'Create custom bot commands', 'free'),
-('embedded_messages', 'Embedded Messages', 'Create and manage embedded messages', 'free'),
-('fdg_donator_sync', 'FDG Donator Sync', 'Sync with FDG donator system', 'premium'),
-('custom_prefix', 'Custom Prefix', 'Set custom bot command prefix', 'premium'),
-('fivem_esx', 'FiveM ESX Support', 'FiveM ESX framework integration', 'premium'),
-('fivem_qbcore', 'FiveM QBCore Support', 'FiveM QBCore framework integration', 'premium'),
-('creator_alerts', 'Creator Alerts', 'Get notified about creator activities', 'premium'),
-('bot_customisation', 'Bot Customisation', 'Customize bot appearance and behavior', 'premium'),
-('custom_groups', 'Custom Groups', 'Create and manage custom user groups', 'premium'),
-('premium_members', 'Premium Members', 'Manage premium member benefits', 'premium');
+INSERT IGNORE INTO features (feature_key, feature_name, display_name, description, minimum_package) VALUES
+('verification_system', 'verification_system', 'Verification System', 'Automated user verification system', 'free'),
+('feedback_system', 'feedback_system', 'Feedback System', 'Collect and manage user feedback', 'free'),
+('moderation', 'moderation', 'Moderation Tools', 'Basic moderation commands and tools', 'free'),
+('reaction_roles', 'reaction_roles', 'Reaction Roles', 'Assign roles through reactions', 'free'),
+('custom_commands', 'custom_commands', 'Custom Commands', 'Create custom bot commands', 'free'),
+('embedded_messages', 'embedded_messages', 'Embedded Messages', 'Create and manage embedded messages', 'free'),
+('fdg_donator_sync', 'fdg_donator_sync', 'FDG Donator Sync', 'Sync with FDG donator system', 'premium'),
+('custom_prefix', 'custom_prefix', 'Custom Prefix', 'Set custom bot command prefix', 'premium'),
+('fivem_esx', 'fivem_esx', 'FiveM ESX Support', 'FiveM ESX framework integration', 'premium'),
+('fivem_qbcore', 'fivem_qbcore', 'FiveM QBCore Support', 'FiveM QBCore framework integration', 'premium'),
+('creator_alerts', 'creator_alerts', 'Creator Alerts', 'Get notified about creator activities', 'premium'),
+('bot_customisation', 'bot_customisation', 'Bot Customisation', 'Customize bot appearance and behavior', 'premium'),
+('custom_groups', 'custom_groups', 'Custom Groups', 'Create and manage custom user groups', 'premium'),
+('premium_members', 'premium_members', 'Premium Members', 'Manage premium member benefits', 'premium');
 
 -- Insert a sample guild (replace with actual data)
 INSERT IGNORE INTO guilds (guild_id, name, owner_id, premium) VALUES
@@ -199,7 +203,7 @@ CREATE TABLE IF NOT EXISTS slash_command_permissions (
 );
 
 -- Enable all free features for the sample guild
-INSERT IGNORE INTO guild_features (guild_id, feature_name, enabled)
-SELECT '1403257704222429224', feature_name, TRUE
+INSERT IGNORE INTO guild_features (guild_id, feature_key, enabled)
+SELECT '1403257704222429224', feature_key, TRUE
 FROM features
 WHERE minimum_package = 'free';

@@ -10,7 +10,7 @@ const ADMIN_ITEMS: NavItem[] = [
 	{ href: "/admin", label: "Dashboard", icon: Shield },
 	{ href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
 	{ href: "/admin/service-quotas", label: "Service Quotas", icon: Activity },
-	{ href: "/admin/features", label: "Features", icon: Zap },
+	{ href: "/admin/management", label: "Features", icon: Zap },
 	{ href: "/guilds", label: "Guilds", icon: Settings },
 	{ href: "/design-system", label: "Design System", icon: FileText },
 ];

@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 export async function GET() {
   try {
     const rows = await query(
-      'SELECT command_name, feature_name, description FROM command_mappings ORDER BY feature_name, command_name'
+      'SELECT command_name, feature_key, description FROM command_mappings ORDER BY feature_key, command_name'
     );
     
     console.log('🔍 Command mappings API - Found commands:', rows.length);

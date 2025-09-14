@@ -31,7 +31,7 @@ export async function GET(
     
     // Get all available commands from the command_mappings table
     const allCommandsFromDb = await query(
-      'SELECT command_name, feature_name FROM command_mappings ORDER BY feature_name, command_name'
+      'SELECT command_name, feature_key FROM command_mappings ORDER BY feature_key, command_name'
     );
     
     console.log('🚨🚨🚨 ALL COMMANDS FROM DB:', allCommandsFromDb);
@@ -39,7 +39,7 @@ export async function GET(
     // Convert to the format expected by the rest of the code
     const allCommands = allCommandsFromDb.map((cmd: any) => ({
       name: cmd.command_name,
-      category: cmd.feature_name
+      category: cmd.feature_key
     }));
     
     // Ensure setmodlog is included if it exists in the database
@@ -48,7 +48,7 @@ export async function GET(
     
     // Get admin-enabled features for this guild
     const adminFeatures = await query(
-      'SELECT feature_name FROM guild_features WHERE guild_id = ? AND enabled = 1',
+      'SELECT feature_key FROM guild_features WHERE guild_id = ? AND enabled = 1',
       [guildId]
     );
     
@@ -56,19 +56,19 @@ export async function GET(
     
     // Get guild-enabled commands with feature information
     const guildCommands = await query(
-      'SELECT command_name, feature_name, enabled FROM guild_commands WHERE guild_id = ?',
+      'SELECT command_name, feature_key, enabled FROM guild_commands WHERE guild_id = ?',
       [guildId]
     );
     
     console.log('🚨🚨🚨 GUILD COMMANDS FROM DB:', guildCommands);
     
-    const adminEnabledFeatures = adminFeatures.map((f: any) => f.feature_name);
+    const adminEnabledFeatures = adminFeatures.map((f: any) => f.feature_key);
     const guildCommandMap = new Map();
     const commandFeatureMap = new Map();
     
     guildCommands.forEach((cmd: any) => {
       guildCommandMap.set(cmd.command_name, cmd.enabled === 1);
-      commandFeatureMap.set(cmd.command_name, cmd.feature_name);
+      commandFeatureMap.set(cmd.command_name, cmd.feature_key);
     });
     
     console.log('🚨🚨🚨 ADMIN ENABLED FEATURES:', adminEnabledFeatures);

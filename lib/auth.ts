@@ -232,17 +232,17 @@ export const authOptions: NextAuthOptions = {
         accessTokenExpiryFormatted: accessTokenExpiresAt ? new Date(accessTokenExpiresAt * 1000).toISOString() : 'N/A'
       });
 
-      // Check if access token needs refresh (refresh when expired or < 10 minutes left)
+      // Check if access token needs refresh (refresh when expired or < 30 minutes left)
       const timeUntilAccessTokenExpiry = accessTokenExpiresAt ? accessTokenExpiresAt - now : 0;
-      const shouldRefresh = accessToken && refreshToken && accessTokenExpiresAt && (now > accessTokenExpiresAt || timeUntilAccessTokenExpiry < 600); // Refresh if expired or < 10 minutes left
+      const shouldRefresh = accessToken && refreshToken && accessTokenExpiresAt && (now > accessTokenExpiresAt || timeUntilAccessTokenExpiry < 1800); // Refresh if expired or < 30 minutes left
 
       if (shouldRefresh) {
         // Check if we should attempt refresh (prevent infinite loops)
         const userId = (token as any).discordId;
         const sessionState = userId ? SessionManager.getSessionState(userId) : null;
 
-        // Prevent refresh attempts more than once every 10 seconds
-        if (sessionState?.lastValidated && (Date.now() - sessionState.lastValidated) < 10000) {
+        // Prevent refresh attempts more than once every 5 seconds
+        if (sessionState?.lastValidated && (Date.now() - sessionState.lastValidated) < 5000) {
           console.log('[AUTH] Skipping refresh - too soon since last attempt');
           return token;
         }

@@ -55,30 +55,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
       // Get all features from the features table - we need the actual feature keys, not display names
       const [featuresRows] = await connection.execute(
-        `SELECT feature_name, description, minimum_package, is_active FROM features WHERE is_active = 1 ORDER BY feature_name`
+        `SELECT feature_key, feature_name, description, minimum_package, is_active FROM features WHERE is_active = 1 ORDER BY feature_key`
       );
       console.log('[FEATURES-GET] Raw features result:', featuresRows);
       console.log('[FEATURES-GET] Features table structure:', featuresRows.length > 0 ? Object.keys(featuresRows[0]) : 'No features');
       
-      // We need to create a mapping from display names to feature keys
-      // Since the features table seems to have display names, let's check if there's a separate mapping table
-      // For now, let's create a manual mapping based on what we see in the data
-      const displayNameToKeyMap: Record<string, string> = {
-        'Ban Syncing': 'ban_sync',
-        'Bot Customisation': 'bot_customisation',
-        'Creator Alerts': 'creator_alerts',
-        'Custom Commands': 'custom_commands',
-        'Custom Dot Command Prefix': 'custom_prefix',
-        'Custom Groups': 'custom_groups',
-        'Embedded Messages': 'embedded_messages',
-        'FDG Donator Sync': 'fdg_donator_sync',
-        'Feedback Collection': 'feedback_system',
-        'FiveM ESX Integration': 'fivem_esx',
-        'FiveM QBcore Integration': 'fivem_qbcore',
-        'Moderation Tools': 'moderation',
-        'Reaction Roles': 'reaction_roles',
-        'User Verification System': 'verification_system'
-      };
+      // We now use feature_key directly from the database
 
       // Get guild-specific feature settings
       let guildFeaturesRows: any[] = [];
@@ -103,7 +85,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         }
         
         const [guildFeaturesResult] = await connection.execute(
-          `SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?`,
+          `SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?`,
           [guildId]
         );
         guildFeaturesRows = guildFeaturesResult;
@@ -126,14 +108,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const guildFeaturesMap: Record<string, boolean> = {};
       guildFeaturesRows.forEach((row: any) => {
         console.log('[FEATURES-GET] Processing guild feature row:', row);
-        // Convert display name to feature key for the map
-        const featureKey = displayNameToKeyMap[row.feature_name];
-        if (featureKey) {
-          guildFeaturesMap[featureKey] = Boolean(row.enabled);
-        } else {
-          console.log(`[FEATURES-GET] No mapping found for ${row.feature_name}, using as-is`);
-          guildFeaturesMap[row.feature_name] = Boolean(row.enabled);
-        }
+        // Use feature_key directly since we're now querying it
+        guildFeaturesMap[row.feature_key] = Boolean(row.enabled);
       });
 
       console.log('[FEATURES-GET] Guild features map:', guildFeaturesMap);
@@ -141,26 +117,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       // Build the features response
       const features: Record<string, any> = {};
       featuresRows.forEach((row: any) => {
-        const displayName = row.feature_name;
-        const actualFeatureKey = displayNameToKeyMap[displayName];
-        const isEnabled = actualFeatureKey && guildFeaturesMap.hasOwnProperty(actualFeatureKey) ? guildFeaturesMap[actualFeatureKey] : false;
+        const featureKey = row.feature_key;
+        const isEnabled = guildFeaturesMap.hasOwnProperty(featureKey) ? guildFeaturesMap[featureKey] : false;
 
-        console.log(`[FEATURES-GET] Building feature ${displayName}:`, {
-          displayName,
-          actualFeatureKey,
-          hasProperty: actualFeatureKey && guildFeaturesMap.hasOwnProperty(actualFeatureKey),
-          rawValue: actualFeatureKey ? guildFeaturesMap[actualFeatureKey] : undefined,
+        console.log(`[FEATURES-GET] Building feature ${featureKey}:`, {
+          featureKey,
+          hasProperty: guildFeaturesMap.hasOwnProperty(featureKey),
+          rawValue: guildFeaturesMap[featureKey],
           isEnabled,
           guildFeaturesMap
         });
 
-        // Use the actual feature key, not the display name
-        if (actualFeatureKey) {
-          features[actualFeatureKey] = isEnabled;
-          features[`${actualFeatureKey}_package`] = row.minimum_package;
-        } else {
-          console.log(`[FEATURES-GET] No mapping found for ${displayName}, skipping`);
-        }
+        // Use the feature key directly
+        features[featureKey] = isEnabled;
+        features[`${featureKey}_package`] = row.minimum_package;
       });
 
       console.log('[FEATURES-GET] Features response:', features);
@@ -242,14 +212,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           `CREATE TABLE IF NOT EXISTS guild_features (
             id int(11) NOT NULL AUTO_INCREMENT,
             guild_id varchar(255) NOT NULL,
-            feature_name varchar(255) NOT NULL,
+            feature_key varchar(255) NOT NULL,
             enabled tinyint(1) NOT NULL DEFAULT 0,
             created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY guild_feature (guild_id, feature_name),
+            UNIQUE KEY guild_feature (guild_id, feature_key),
             KEY guild_id (guild_id),
-            KEY feature_name (feature_name)
+            KEY feature_key (feature_key)
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         );
         console.log('[FEATURES-PUT] Created guild_features table');
@@ -259,12 +229,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
             // Insert or update the feature setting
       console.log('[FEATURES-PUT] About to execute database query:', {
-        query: `INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
+        query: `INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
         params: [guildId, feature_name, enabled ? 1 : 0]
       });
       
       const result = await connection.execute(
-        `INSERT INTO guild_features (guild_id, feature_name, enabled) 
+        `INSERT INTO guild_features (guild_id, feature_key, enabled) 
          VALUES (?, ?, ?) 
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
         [guildId, feature_name, enabled ? 1 : 0]
@@ -275,11 +245,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       // Get all current features for this guild to update commands
       const [currentFeaturesResult] = await connection.execute(
-        `SELECT feature_name FROM guild_features WHERE guild_id = ? AND enabled = 1`,
+        `SELECT feature_key FROM guild_features WHERE guild_id = ? AND enabled = 1`,
         [guildId]
       );
       
-      const currentFeatures = currentFeaturesResult.map((row: any) => row.feature_name);
+      const currentFeatures = currentFeaturesResult.map((row: any) => row.feature_key);
       console.log('[FEATURES-PUT] Current enabled features for guild:', currentFeatures);
 
       // Update Discord commands for this guild via bot command server

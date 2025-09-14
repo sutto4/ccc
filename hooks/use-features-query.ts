@@ -26,3 +26,4 @@ export function useSidebarFeatures(guildId: string) {
     error: isError ? (error as Error)?.message || 'Failed to fetch features' : null,
   };
 }
+

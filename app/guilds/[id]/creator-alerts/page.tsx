@@ -21,6 +21,7 @@ type AlertRule = {
   discordUserId?: string; // New field for Discord user mapping
   roleId: string;
   channelId?: string;
+  customMessage?: string; // Custom message for alerts
   notes?: string;
   enabled: boolean;
 };
@@ -49,7 +50,11 @@ function CreatorAlertsPageContent() {
   // Local-only state for UI scaffolding
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [editing, setEditing] = useState<AlertRule | null>(null);
-  const [form, setForm] = useState<Partial<AlertRule>>({ platform: "twitch", enabled: true });
+  const [form, setForm] = useState<Partial<AlertRule>>({ 
+    platform: "twitch", 
+    enabled: true,
+    customMessage: "[user] has just gone live!"
+  });
 
   // Mock roles list to wire dropdown UI; wiring will replace this
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
@@ -67,6 +72,9 @@ function CreatorAlertsPageContent() {
           const data = await rolesRes.json();
           const list = (Array.isArray(data) ? data : data.roles || []).map((r: any) => ({ id: r.roleId || r.id, name: r.name }));
           setRoles(list);
+        } else if (rolesRes.status === 401) {
+          console.log('Authentication expired, redirecting to signin');
+          window.location.href = '/signin';
         }
       } catch {}
       try {
@@ -74,6 +82,9 @@ function CreatorAlertsPageContent() {
         if (chRes.ok) {
           const { channels } = await chRes.json();
           setChannels(channels || []);
+        } else if (chRes.status === 401) {
+          console.log('Authentication expired, redirecting to signin');
+          window.location.href = '/signin';
         }
       } catch {}
       try {
@@ -88,6 +99,7 @@ function CreatorAlertsPageContent() {
               discordUserId: r.discord_user_id,
               roleId: r.role_id,
               channelId: r.channel_id,
+              customMessage: r.custom_message || "[user] has just gone live!",
               notes: r.notes || "",
               enabled: !!r.enabled,
             }))
@@ -97,7 +109,11 @@ function CreatorAlertsPageContent() {
     })();
   }, [guildId]);
 
-  const resetForm = () => setForm({ platform: "twitch", enabled: true });
+  const resetForm = () => setForm({ 
+    platform: "twitch", 
+    enabled: true,
+    customMessage: "[user] has just gone live!"
+  });
 
   const startCreate = () => {
     setEditing(null);
@@ -141,6 +157,9 @@ function CreatorAlertsPageContent() {
       if (res.ok) {
         const data = await res.json();
         setDiscordUsers(data.members || []);
+      } else if (res.status === 401) {
+        console.log('Authentication expired, redirecting to signin');
+        window.location.href = '/signin';
       } else {
         setDiscordUsers([]);
       }
@@ -162,13 +181,14 @@ function CreatorAlertsPageContent() {
   }, [searchQuery]);
 
   const submit = async () => {
-    if (!form.platform || !form.channelOrUser || !form.roleId) return;
+    if (!form.platform || !form.channelOrUser) return;
     const payload = {
       platform: form.platform,
       creator: form.channelOrUser,
       discordUserId: form.discordUserId, // Include Discord user ID for role assignment
       roleId: form.roleId,
       channelId: form.channelId,
+      customMessage: form.customMessage,
       notes: form.notes,
       enabled: form.enabled,
     } as any;
@@ -192,13 +212,13 @@ function CreatorAlertsPageContent() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Creator Alerts</h1>
-        <p className="text-muted-foreground">Assign a role to members automatically when creators go live or start a stream/post.</p>
+        <p className="text-muted-foreground">Get notified when creators go live! Send custom messages with stream thumbnails and profile images to Discord channels, optionally assign roles to members.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Form */}
         <Card>
-          <CardHeader title={editing ? "Edit Alert" : "Create Alert"} subtitle="Choose a platform, the creator handle/channel, and the role to assign." />
+          <CardHeader title={editing ? "Edit Alert" : "Create Alert"} subtitle="Choose a platform, creator handle, notification channel, and optionally assign a role." />
           <CardContent className="space-y-4">
             {/* Platform */}
             <div className="space-y-2">
@@ -284,10 +304,10 @@ function CreatorAlertsPageContent() {
 
             {/* Role */}
             <div className="space-y-2">
-              <Label>Assign Role</Label>
+              <Label>Assign Role (optional)</Label>
               <Select value={(form.roleId as string) || ""} onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}>
-                <option value="" disabled>
-                  Select a role
+                <option value="">
+                  No role assignment
                 </option>
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -295,6 +315,9 @@ function CreatorAlertsPageContent() {
                   </option>
                 ))}
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave empty if you only want notifications without role assignment.
+              </p>
             </div>
 
             {/* Channel */}
@@ -310,6 +333,22 @@ function CreatorAlertsPageContent() {
                   </option>
                 ))}
               </Select>
+            </div>
+
+            {/* Custom Message */}
+            <div className="space-y-2">
+              <Label>Custom Message</Label>
+              <Input
+                placeholder="[user] has just gone live!"
+                value={form.customMessage || ""}
+                onChange={(e) => setForm((f) => ({ ...f, customMessage: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                This replaces the default "@[user], you have a creator alert!" text. Use [user] as placeholder for the creator's name. Leave empty for default message.
+              </p>
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                <strong>Note:</strong> The embedded post will include the stream thumbnail and creator's profile image automatically.
+              </div>
             </div>
 
             {/* Enabled & Notes */}
@@ -368,8 +407,12 @@ function CreatorAlertsPageContent() {
                           {!r.enabled && <Badge variant="secondary" className="ml-2">Disabled</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Role: {roles.find((x) => x.id === r.roleId)?.name || r.roleId}
-                          {r.discordUserId && (
+                          {r.roleId ? (
+                            <>Role: {roles.find((x) => x.id === r.roleId)?.name || r.roleId}</>
+                          ) : (
+                            <>No role assignment</>
+                          )}
+                          {r.discordUserId && r.roleId && (
                             <span className="ml-2 text-green-600">• Role assignment enabled</span>
                           )}
                         </div>
@@ -391,17 +434,6 @@ function CreatorAlertsPageContent() {
         </Card>
       </div>
 
-      {/* Coming next */}
-      <Card>
-        <CardHeader title="Planned capabilities" subtitle="These will be wired when API/bot integration is added." />
-        <CardContent className="grid gap-2 text-sm text-muted-foreground">
-          <div>• Live polling and webhook ingest per platform.</div>
-          <div>• Cooldowns and grace-periods to avoid rapid role flapping.</div>
-          <div>• Per-platform API token management and connection testers.</div>
-          <div>• Channel announcements and role auto-removal after offline.</div>
-          <div>• Granular rule conditions (min viewers, categories, keywords).</div>
-        </CardContent>
-      </Card>
     </div>
   );
 

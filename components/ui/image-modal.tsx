@@ -180,3 +180,4 @@ export function ImageModal({ isOpen, onClose, imageUrl, alt = "Evidence" }: Imag
     </div>
   );
 }
+

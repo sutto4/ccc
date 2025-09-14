@@ -6,7 +6,7 @@ import { query } from "@/lib/db";
 export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const rows = await query(
-    `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, notes, enabled
+    `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, custom_message, notes, enabled
      FROM creator_alert_rules WHERE guild_id = ? ORDER BY id DESC`,
     [guildId]
   );
@@ -17,14 +17,14 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Pr
 export const POST = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const body = await req.json();
-  const { platform, creator, roleId, channelId, discordUserId, notes, enabled } = body || {};
-  if (!platform || !creator || !roleId || !channelId) {
-    return NextResponse.json({ error: "platform, creator, roleId, channelId required" }, { status: 400 });
+  const { platform, creator, roleId, channelId, discordUserId, customMessage, notes, enabled } = body || {};
+  if (!platform || !creator || !channelId) {
+    return NextResponse.json({ error: "platform, creator, channelId required" }, { status: 400 });
   }
   const result = await query(
-    `INSERT INTO creator_alert_rules (guild_id, platform, creator, role_id, channel_id, discord_user_id, notes, enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [guildId, platform, creator, roleId, channelId, discordUserId || null, notes || null, enabled ? 1 : 0]
+    `INSERT INTO creator_alert_rules (guild_id, platform, creator, role_id, channel_id, discord_user_id, custom_message, notes, enabled)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [guildId, platform, creator, roleId || null, channelId, discordUserId || null, customMessage || null, notes || null, enabled ? 1 : 0]
   );
   return NextResponse.json({ id: (result as any).insertId });
 });
@@ -33,7 +33,7 @@ export const POST = AuthMiddleware.withAuth(async (req, { params }: { params: Pr
 export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
   const { id: guildId } = await params;
   const body = await req.json();
-  const { id, platform, creator, roleId, channelId, discordUserId, notes, enabled } = body || {};
+  const { id, platform, creator, roleId, channelId, discordUserId, customMessage, notes, enabled } = body || {};
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   
   // Convert undefined values to null for database
@@ -42,6 +42,7 @@ export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Pro
   const safeRoleId = roleId !== undefined ? roleId : null;
   const safeChannelId = channelId !== undefined ? channelId : null;
   const safeDiscordUserId = discordUserId !== undefined ? discordUserId : null;
+  const safeCustomMessage = customMessage !== undefined ? customMessage : null;
   const safeNotes = notes !== undefined ? notes : null;
   const safeEnabled = enabled !== undefined ? (enabled ? 1 : 0) : null;
   
@@ -52,10 +53,11 @@ export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Pro
          role_id = COALESCE(?, role_id),
          channel_id = COALESCE(?, channel_id),
          discord_user_id = COALESCE(?, discord_user_id),
+         custom_message = COALESCE(?, custom_message),
          notes = COALESCE(?, notes),
          enabled = COALESCE(?, enabled)
      WHERE id = ? AND guild_id = ?`,
-    [safePlatform, safeCreator, safeRoleId, safeChannelId, safeDiscordUserId, safeNotes, safeEnabled, id, guildId]
+    [safePlatform, safeCreator, safeRoleId, safeChannelId, safeDiscordUserId, safeCustomMessage, safeNotes, safeEnabled, parseInt(id), guildId]
   );
   return NextResponse.json({ ok: true });
 });
@@ -70,12 +72,12 @@ export const DELETE = AuthMiddleware.withAuth(async (req, { params }: { params: 
   // Get the creator name before deleting the rule
   const [rule] = await query(
     `SELECT creator FROM creator_alert_rules WHERE id = ? AND guild_id = ?`,
-    [id, guildId]
+    [parseInt(id), guildId]
   );
   
   if (rule) {
     // Delete the rule
-    await query(`DELETE FROM creator_alert_rules WHERE id = ? AND guild_id = ?`, [id, guildId]);
+    await query(`DELETE FROM creator_alert_rules WHERE id = ? AND guild_id = ?`, [parseInt(id), guildId]);
     
     // Clear the cache for this creator
     await query(

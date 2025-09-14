@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         SUM(CASE WHEN gf.enabled = 1 THEN 1 ELSE 0 END) as enabled_guilds,
         SUM(CASE WHEN gf.enabled = 0 THEN 1 ELSE 0 END) as disabled_guilds
       FROM features f
-      LEFT JOIN guild_features gf ON f.feature_key = gf.feature_name
+      LEFT JOIN guild_features gf ON f.feature_key = gf.feature_key
       GROUP BY f.feature_key, f.feature_name, f.description, f.minimum_package, f.is_active
       ORDER BY f.feature_name
     `);

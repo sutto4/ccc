@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/authz";
+import { AuthMiddleware } from "@/lib/auth-middleware";
 
 // GET /api/guilds/[id]/channels - list text/news channels for channel selector
-export const GET = withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Promise<{ id: string }> }, auth) => {
   const { id: guildId } = await params;
   try {
     const botToken = process.env.DISCORD_BOT_TOKEN;

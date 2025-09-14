@@ -59,6 +59,7 @@ export class AuthMiddleware {
       const auth = await validateAuth(req);
 
       if (!auth) {
+        console.log('[AUTH-MIDDLEWARE] No valid authentication found, redirecting to signin');
         return NextResponse.json(
           {
             error: 'Authentication required',
@@ -69,12 +70,14 @@ export class AuthMiddleware {
             status: 401,
             headers: {
               'X-Auth-Required': 'true',
-              'X-Redirect-To': '/signin'
+              'X-Redirect-To': '/signin',
+              'Content-Type': 'application/json'
             }
           }
         );
       }
 
+      console.log(`[AUTH-MIDDLEWARE] User ${auth.discordId} authenticated successfully`);
       return handler(req, context, auth);
     };
   }

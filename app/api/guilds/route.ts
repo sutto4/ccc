@@ -4,6 +4,8 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import { getToken } from 'next-auth/jwt';
 import { apiAnalytics } from "@/lib/api-analytics-db";
 import { analyticsBatcher } from "@/lib/analytics-batcher";
+import { TokenManager } from "@/lib/token-manager";
+import { SessionManager } from "@/lib/session-manager";
 import mysql from 'mysql2/promise';
 
 const limiter = createRateLimiter(2000, 60_000); // 2000 requests per minute per key (scaled for high traffic)
@@ -13,8 +15,45 @@ const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 const permissionCache = new Map<string, { result: boolean, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Helper function to refresh token if needed
+async function ensureValidToken(accessToken: string, refreshToken: string, userId: string): Promise<string | null> {
+  try {
+    // Check if token is valid
+    const tokenStatus = await TokenManager.getTokenStatus(accessToken, Math.floor(Date.now() / 1000) + 3600);
+    
+    if (tokenStatus.isValid && !tokenStatus.needsRefresh) {
+      return accessToken;
+    }
+
+    // Token needs refresh or is invalid
+    console.log(`[GUILDS-API] Token needs refresh for user ${userId}`);
+    
+    // Check if we can attempt refresh
+    if (!SessionManager.canRefresh(userId)) {
+      console.log(`[GUILDS-API] Too many refresh attempts for user ${userId}, forcing re-login`);
+      return null;
+    }
+
+    // Attempt token refresh
+    const refreshedTokens = await TokenManager.refreshToken(refreshToken);
+    
+    if (refreshedTokens) {
+      console.log(`[GUILDS-API] Token refreshed successfully for user ${userId}`);
+      SessionManager.resetRefreshAttempts(userId);
+      return refreshedTokens.accessToken;
+    } else {
+      console.log(`[GUILDS-API] Token refresh failed for user ${userId}`);
+      SessionManager.incrementRefreshAttempts(userId);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[GUILDS-API] Error ensuring valid token for user ${userId}:`, error);
+    return null;
+  }
+}
+
 // Helper function to check user permissions for a guild
-async function checkUserGuildPermission(userId: string, guildId: string, accessToken: string): Promise<boolean> {
+async function checkUserGuildPermission(userId: string, guildId: string, validAccessToken: string): Promise<boolean> {
   // Check cache first to reduce API calls and logging
   const cacheKey = `${userId}:${guildId}`;
   const cached = permissionCache.get(cacheKey);
@@ -61,7 +100,7 @@ async function checkUserGuildPermission(userId: string, guildId: string, accessT
     try {
       const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${validAccessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -247,8 +286,30 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log('[AUTH-DEBUG] Authentication successful for Discord ID:', discordId);
 
   const accessToken = (token as any).accessToken as string;
+  const refreshToken = (token as any).refreshToken as string;
 
   if (!accessToken || !discordId) {
+    return NextResponse.json(
+      {
+        error: 'Authentication expired',
+        message: 'Please login again',
+        redirectTo: '/signin'
+      },
+      {
+        status: 401,
+        headers: {
+          'X-Auth-Required': 'true',
+          'X-Redirect-To': '/signin'
+        }
+      }
+    );
+  }
+
+  // Ensure we have a valid token (refresh if needed)
+  const validAccessToken = await ensureValidToken(accessToken, refreshToken, discordId);
+  
+  if (!validAccessToken) {
+    console.log(`[GUILDS-API] No valid token available for user ${discordId}, forcing re-login`);
     return NextResponse.json(
       {
         error: 'Authentication expired',
@@ -272,13 +333,13 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // DEBUG: console.log(`[SECURITY-AUDIT] REQUEST ID: ${requestId}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] USER ID: ${discordId}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] UNIQUE SESSION: ${discordId}-${requestId}`);
-  // DEBUG: console.log(`[SECURITY-AUDIT] ACCESS TOKEN START: ${accessToken?.substring(0, 20)}...`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] ACCESS TOKEN START: ${validAccessToken?.substring(0, 20)}...`);
   // DEBUG: console.log(`[SECURITY-AUDIT] ENVIRONMENT: ${process.env.NODE_ENV}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] BOT API URL: ${process.env.SERVER_API_BASE_URL}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] DATABASE: ${process.env.DB_HOST}/${process.env.DB_NAME}`);
 
   // Authentication is handled by middleware
-  // DEBUG: console.log('Access token available:', !!accessToken);
+  // DEBUG: console.log('Access token available:', !!validAccessToken);
   // DEBUG: console.log('Environment:', process.env.NODE_ENV);
   // DEBUG: console.log('Timestamp:', new Date().toISOString());
   // DEBUG: console.log('Process PID:', process.pid);
@@ -289,10 +350,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // DEBUG: console.log('[BOT-CONFIG] Bot base URL:', botBase);
 
   // Per-token rate limit to avoid hammering Discord (dev double-invocations etc.)
-  const tokenKey = `${discordId}:${accessToken.slice(0, 24)}`;
+  const tokenKey = `${discordId}:${validAccessToken.slice(0, 24)}`;
   // DEBUG: console.log(`[SECURITY-AUDIT] ===== CRITICAL SECURITY CHECK =====`);
   // DEBUG: console.log(`[SECURITY-AUDIT] Discord ID: ${discordId}`);
-  // DEBUG: console.log(`[SECURITY-AUDIT] Access Token Hash: ${accessToken.slice(0, 24)}`);
+  // DEBUG: console.log(`[SECURITY-AUDIT] Access Token Hash: ${validAccessToken.slice(0, 24)}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] Combined Token Key: ${tokenKey}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] Request Timestamp: ${new Date().toISOString()}`);
   // DEBUG: console.log(`[SECURITY-AUDIT] ====================================`);
@@ -342,13 +403,13 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       // DEBUG: console.log(`[GUILDS-DEBUG] Fetching user guilds from Discord API`);
       try {
         // Validate token before making the call
-        if (!accessToken || accessToken.length < 10) {
+        if (!validAccessToken || validAccessToken.length < 10) {
           throw new Error('Invalid access token');
         }
         
         userGuildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
           headers: { 
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${validAccessToken}`,
             'User-Agent': 'ServerMate/1.0'
           }
         });
@@ -370,7 +431,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         if (retryAfter > 0 && retryAfter <= 2) {
           await new Promise((r) => setTimeout(r, retryAfter * 1000));
           const retry = await fetch("https://discord.com/api/v10/users/@me/guilds", {
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: { Authorization: `Bearer ${validAccessToken}` }
           });
           if (retry.ok) return (await retry.json()) as any[];
           if (retry.status !== 429) {
@@ -541,13 +602,13 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   console.log(`[GUILDS-DEBUG] Starting permission checks for ${dbAccessibleUserGuilds.length} guilds`);
   console.log(`[GUILDS-DEBUG] User ID: ${userId}`);
-  console.log(`[GUILDS-DEBUG] Access token available: ${!!accessToken}`);
+  console.log(`[GUILDS-DEBUG] Access token available: ${!!validAccessToken}`);
 
   for (const userGuild of dbAccessibleUserGuilds) {
     try {
       console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
       // Check if user has management permissions in this guild
-      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, accessToken);
+      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken);
       console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
 
       // EXTRA DEBUGGING: Let's see what checkUserGuildPermission is doing
@@ -570,10 +631,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - FINAL PERMISSION RESULTS: ${accessibleUserGuilds.length}/${dbAccessibleUserGuilds.length} guilds accessible for user ${userId}`);
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - ACCESSIBLE GUILDS:`, accessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOKEN VALIDATION:`, {
-    hasToken: !!accessToken,
-    tokenLength: accessToken?.length,
+    hasToken: !!validAccessToken,
+    tokenLength: validAccessToken?.length,
     discordId,
-    tokenStart: accessToken?.substring(0, 20) + '...'
+    tokenStart: validAccessToken?.substring(0, 20) + '...'
   });
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - TOTAL DB GUILDS:`, dbAccessibleUserGuilds.map(g => ({ id: g.id, name: g.name })));
   console.log(`[SECURITY-AUDIT] REQUEST ${requestId} - PERMISSION SUMMARY: User ${userId} can access ${accessibleUserGuilds.length} out of ${dbAccessibleUserGuilds.length} available guilds`);

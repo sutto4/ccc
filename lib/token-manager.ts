@@ -154,6 +154,7 @@ export class TokenManager {
         }
         
         // Increment refresh attempts for other errors
+        const attempts = this.refreshAttempts.get(refreshToken) || 0;
         this.refreshAttempts.set(refreshToken, attempts + 1);
         
         return null;
@@ -164,10 +165,11 @@ export class TokenManager {
       // For network errors, be more lenient and allow retries
       if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network'))) {
         console.log('[TOKEN-MANAGER] Network error during refresh - will retry');
+        const attempts = this.refreshAttempts.get(refreshToken) || 0;
         this.refreshAttempts.set(refreshToken, attempts + 1);
       } else {
         // For other errors, mark as failed
-        this.refreshAttempts.set(refreshToken, this.MAX_REFRESH_ATTEMPTS);
+        this.refreshAttempts.set(refreshToken, 3); // MAX_REFRESH_ATTEMPTS
       }
 
       return null;
