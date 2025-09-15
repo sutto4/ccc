@@ -18,14 +18,20 @@ export async function validateAuth(req: NextRequest): Promise<AuthContext | null
     });
 
     // Simple check: do we have a valid session?
-    if (!token || !(token as any).discordId) {
-      console.log('[AUTH] No session found');
+    if (!token) {
+      console.log('[AUTH] No token found');
       return null;
     }
 
-    const discordId = (token as any).discordId as string;
+    // Try different possible field names for Discord ID
+    const discordId = (token as any).discordId || (token as any).sub || (token as any).id || '';
     const role = ((token as any).role as string) || 'viewer';
     const accessToken = ((token as any).accessToken as string) || '';
+
+    if (!discordId) {
+      console.log('[AUTH] No Discord ID found in token');
+      return null;
+    }
 
     // Simple validation
     if (!accessToken || !discordId) {

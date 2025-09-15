@@ -6,27 +6,11 @@ import { AuthMiddleware } from '@/lib/auth-middleware';
 const cache = new Map<string, any>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
-export async function POST(
+export const POST = AuthMiddleware.withAuth(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  // Verify authentication
-  const authResult = await AuthMiddleware.withAuth(request);
-  if (!authResult.success) {
-    return NextResponse.json(
-      { 
-        error: authResult.error?.message || 'Authentication required',
-        message: 'Please login to continue',
-        redirectTo: '/signin'
-      },
-      { 
-        status: 401,
-        headers: {
-          'X-Redirect-To': '/signin'
-        }
-      }
-    );
-  }
+  { params }: { params: Promise<{ id: string }> },
+  auth: any
+) => {
 
   try {
     const { id: guildId } = await params;
@@ -85,7 +69,7 @@ export async function POST(
       // 2. Check if user is server owner via Discord API (quick check)
       let isOwner = false;
       try {
-        const { accessToken } = authResult.user!;
+        const { accessToken } = auth;
         const guildResponse = await fetch(`https://discord.com/api/v10/users/@me/guilds`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -192,4 +176,4 @@ export async function POST(
     console.error('Error checking user permissions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
