@@ -7,39 +7,27 @@ import { AuthMiddleware } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
-import mysql from 'mysql2/promise';
+import { query } from '@/lib/db';
 
 const limiter = createRateLimiter(30, 60_000);
-
-// Database connection helper
-async function getDbConnection() {
-  return mysql.createConnection({
-    host: env.DB_HOST,
-    user: env.DB_USER,
-    password: env.DB_PASS,
-    database: env.DB_NAME,
-  });
-}
 
 // Check if user has access to this guild
 async function checkUserAccess(guildId: string, userId: string): Promise<boolean> {
   try {
-    const connection = await getDbConnection();
+    // Check if user has direct access (bypass role checks)
     try {
-      // Check if user has direct access (bypass role checks)
-      try {
-        const [userAccess] = await connection.execute(
-          'SELECT 1 FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
-          [guildId, userId]
-        );
+      const userAccess = await query(
+        'SELECT 1 FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+        [guildId, userId]
+      );
 
-        if ((userAccess as any[]).length > 0) {
-          console.log(`User ${userId} has direct access to guild ${guildId}`);
-          return true;
-        }
-      } catch (error) {
-        console.log('server_access_control table may not exist, continuing with other checks');
+      if ((userAccess as any[]).length > 0) {
+        console.log(`User ${userId} has direct access to guild ${guildId}`);
+        return true;
       }
+    } catch (error) {
+      console.log('server_access_control table may not exist, continuing with other checks');
+    }
 
       // Check if user's current Discord roles grant access
       const botToken = env.DISCORD_BOT_TOKEN;
@@ -78,34 +66,30 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
       const userMember = await userRolesResponse.json();
       const userRoleIds = userMember.roles || [];
 
-      // Get roles that grant access from database
-      try {
-        const [allowedRoles] = await connection.execute(`
-          SELECT role_id FROM server_role_permissions 
-          WHERE guild_id = ? AND can_use_app = 1
-        `, [guildId]);
+    // Get roles that grant access from database
+    try {
+      const allowedRoles = await query(`
+        SELECT role_id FROM server_role_permissions 
+        WHERE guild_id = ? AND can_use_app = 1
+      `, [guildId]);
 
-        const allowedRoleIds = (allowedRoles as any[]).map((r: any) => r.role_id);
+      const allowedRoleIds = (allowedRoles as any[]).map((r: any) => r.role_id);
 
-        // Check if user has ANY of the allowed roles RIGHT NOW
-        const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
+      // Check if user has ANY of the allowed roles RIGHT NOW
+      const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
 
-        if (hasAllowedRole) {
-          console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
-          return true;
-        }
-      } catch (error) {
-        console.log('server_role_permissions table may not exist, continuing with fallback');
+      if (hasAllowedRole) {
+        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        return true;
       }
-
-      // Fallback: If no access control tables exist or are empty, allow access if user is in the guild
-      // This is a temporary measure until proper access control is set up
-      console.log(`User ${userId} granted fallback access to guild ${guildId} (user is in guild but no access control configured)`);
-      return true;
-
-    } finally {
-      await connection.end();
+    } catch (error) {
+      console.log('server_role_permissions table may not exist, continuing with fallback');
     }
+
+    // Fallback: If no access control tables exist or are empty, allow access if user is in the guild
+    // This is a temporary measure until proper access control is set up
+    console.log(`User ${userId} granted fallback access to guild ${guildId} (user is in guild but no access control configured)`);
+    return true;
   } catch (error) {
     console.error('Database or Discord API error checking user access:', error);
     // Fallback: Allow access if there are any errors (temporary measure)

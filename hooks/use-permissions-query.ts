@@ -41,16 +41,27 @@ async function checkPermissions(guildId: string, userId: string, userRoles: stri
 export function usePermissionsQuery(guildId: string) {
   const { data: session } = useSession();
   
+  console.log('[PERMISSION-HOOK] Session data:', {
+    hasSession: !!session,
+    hasUser: !!session?.user,
+    userId: session?.user?.id,
+    discordId: (session as any)?.discordId,
+    userDiscordId: (session?.user as any)?.discordId,
+    sessionKeys: session ? Object.keys(session) : [],
+    userKeys: session?.user ? Object.keys(session.user) : [],
+    guildId
+  });
+  
   return useQuery({
     queryKey: queryKeys.permissions(guildId),
     queryFn: () => checkPermissions(
       guildId, 
-      (session?.user as any)?.discordId || session?.user?.id || '', 
+      (session as any)?.discordId || (session?.user as any)?.discordId || session?.user?.id || '', 
       (session?.user as any)?.roles || []
     ),
     staleTime: 5 * 60 * 1000, // 5 minutes - longer cache for better performance
     cacheTime: 10 * 60 * 1000, // 10 minutes cache
-    enabled: !!guildId && !!session?.user?.id,
+    enabled: !!guildId && !!((session as any)?.discordId || session?.user?.id || (session?.user as any)?.discordId),
     retry: 1,
     retryDelay: 1000,
   });

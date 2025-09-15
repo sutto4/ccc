@@ -11,55 +11,85 @@ function getPool(): mysql.Pool {
       user: env.DB_USER,
       password: env.DB_PASS,
       database: env.DB_NAME,
-      connectionLimit: 5, // Reduced to avoid max_user_connections limit
+      connectionLimit: 5, // Conservative limit to prevent leaks
       waitForConnections: true,
-      queueLimit: 10, // Reduced queue size
-      acquireTimeout: 60000, // 60 seconds timeout
-      timeout: 60000, // 60 seconds timeout
-      reconnect: true // Enable reconnection
+      queueLimit: 10,
+      // Add connection lifecycle management
+      idleTimeout: 60000, // 1 minute - release idle connections quickly
+      // Only include valid MySQL2 pool options
+      supportBigNumbers: true,
+      bigNumberStrings: true
     });
   }
   return pool;
 }
 
-// Force recreate pool if we have connection issues
-export async function resetPool() {
-  if (pool) {
-    try {
-      await pool.end();
-    } catch (error) {
-      console.error('Error ending pool:', error);
-    }
-    pool = null;
-  }
-  // Force recreation
-  getPool();
-  console.log('Database pool reset');
-}
+// Force recreate pool if we have connection issues (moved to bottom of file)
 
 export async function query(sql: string, params?: any[]): Promise<any> {
   if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) {
     throw new Error('Database not configured');
   }
   
-  try {
-    const p = getPool();
-    // Use pool.execute directly - it handles connections internally
-    const [rows] = await p.execute(sql, params || []);
-    return rows;
-  } catch (error: any) {
-    console.error('Database query error:', error);
-    
-    // If it's a connection error, reset the pool
-    if (error.code === 'ER_CON_COUNT_ERROR' || 
-        error.code === 'ER_ACCESS_DENIED_ERROR' ||
-        error.code === 'ER_TOO_MANY_USER_CONNECTIONS') {
-      console.log('Connection error detected, resetting pool...');
-      await resetPool();
+  // For connection limit errors, don't retry - just fail fast
+  if (sql.includes('server_access_control') && env.NODE_ENV === 'production') {
+    // Fast path for permission checks - single attempt only
+    try {
+      const p = getPool();
+      const [rows] = await p.execute(sql, params || []);
+      return rows;
+    } catch (error: any) {
+      if (error.code === 'ER_TOO_MANY_USER_CONNECTIONS') {
+        // For connection limit errors, just throw immediately
+        console.log('[DB] Connection limit reached, failing fast for permission check');
+        throw new Error('Database temporarily unavailable');
+      }
+      throw error;
     }
-    
-    throw error;
   }
+  
+  // For other queries, use limited retry logic
+  const maxRetries = 2; // Reduced from 3
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const p = getPool();
+      const [rows] = await p.execute(sql, params || []);
+      
+      if (attempt > 1) {
+        console.log(`[DB] Query succeeded on attempt ${attempt}`);
+      }
+      
+      return rows;
+    } catch (error: any) {
+      lastError = error;
+      
+      // For connection limit errors, don't retry
+      if (error.code === 'ER_TOO_MANY_USER_CONNECTIONS') {
+        console.log('[DB] Connection limit reached, failing immediately');
+        throw new Error('Database temporarily unavailable');
+      }
+      
+      // Only retry for specific recoverable errors
+      if (attempt < maxRetries && (
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'PROTOCOL_CONNECTION_LOST' ||
+          error.message === 'Pool is closed.'
+        )) {
+        
+        console.log(`[DB] Recoverable error on attempt ${attempt}, retrying...`);
+        pool = null; // Force pool recreation
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+      
+      // For all other errors, fail immediately
+      break;
+    }
+  }
+  
+  throw lastError;
 }
 
 export async function isAdmin(discordId: string): Promise<boolean> {
@@ -106,14 +136,36 @@ export async function closePool() {
   }
 }
 
+// Reset pool function (for fixing connection issues)
+export async function resetPool(): Promise<void> {
+  console.log('[DB] Resetting connection pool...');
+  try {
+    if (pool) {
+      console.log('[DB] Closing existing pool...');
+      await Promise.race([
+        pool.end(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      console.log('[DB] Pool closed successfully');
+    }
+  } catch (error) {
+    console.log('[DB] Error during pool reset:', error instanceof Error ? error.message : 'Unknown error');
+  } finally {
+    pool = null;
+    console.log('[DB] Pool reset completed - next query will create fresh pool');
+  }
+}
+
 // Debug function to check pool status
 export function getPoolStatus() {
   if (!pool) return { status: 'no-pool' };
   
   return {
     status: 'active',
-    totalConnections: 5, // connectionLimit from pool config
-    message: 'Pool is active and managing connections efficiently'
+    connectionLimit: 15,
+    queueLimit: 20,
+    supportBigNumbers: true,
+    message: 'Pool is active and configured for concurrent requests'
   };
 }
 

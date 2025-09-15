@@ -32,8 +32,14 @@ export const POST = AuthMiddleware.withAuth(async (
     }
 
     console.log(`\x1b[31m[PERMISSION]\x1b[0m Checking permissions for guild ${guildId}, user ${userId}`);
+    console.log(`\x1b[33m[PERMISSION-DEBUG]\x1b[0m Request body:`, { userId, userRoles });
+    console.log(`\x1b[33m[PERMISSION-DEBUG]\x1b[0m Auth object:`, { 
+      discordId: auth.discordId, 
+      accessToken: auth.accessToken ? 'present' : 'missing' 
+    });
 
     if (!userId || !userRoles) {
+      console.log(`\x1b[31m[PERMISSION-ERROR]\x1b[0m Missing required data - userId: ${userId}, userRoles: ${JSON.stringify(userRoles)}`);
       return NextResponse.json({ error: 'Missing userId or userRoles' }, { status: 400 });
     }
 

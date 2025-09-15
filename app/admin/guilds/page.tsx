@@ -75,7 +75,7 @@ export default function AdminGuilds() {
     const guildName = guild.name || guild.guild_name || '';
     const matchesSearch = guildName.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const isNew = guild.created_at && new Date(guild.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
+    const isNew = guild.created_at && new Date(guild.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
     
     const matchesStatus = statusFilter === 'all' || 
       (statusFilter === 'active' && (guild.status === 'active' || !guild.status)) ||
@@ -132,7 +132,7 @@ export default function AdminGuilds() {
             {[
               { value: 'all', label: 'All', count: guilds.length },
               { value: 'active', label: 'Active', count: guilds.filter(g => g.status === 'active' || !g.status).length },
-              { value: 'new', label: 'New', count: guilds.filter(g => g.created_at && new Date(g.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length }
+              { value: 'new', label: 'New', count: guilds.filter(g => g.created_at && new Date(g.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)).length }
             ].map(filter => (
               <button
                 key={filter.value}
@@ -228,10 +228,10 @@ export default function AdminGuilds() {
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="h-4 w-4 text-orange-500" />
-            <span className="text-sm font-medium">New (7 days)</span>
+            <span className="text-sm font-medium">New (24 hours)</span>
           </div>
           <div className="text-2xl font-bold">
-            {guilds.filter(g => g.created_at && new Date(g.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}
+            {guilds.filter(g => g.created_at && new Date(g.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)).length}
           </div>
           <div className="text-xs text-muted-foreground">Recently added</div>
         </div>
