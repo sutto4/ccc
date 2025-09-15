@@ -1,5 +1,4 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import mysql from "mysql2/promise";
 import { env } from "@/lib/env";
 
