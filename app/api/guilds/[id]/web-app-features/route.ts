@@ -58,7 +58,7 @@ export async function GET(
     let guildFeatures;
     try {
       guildFeatures = await query(
-        'SELECT gf.feature_name, gf.enabled, f.feature_key as display_name FROM guild_features gf LEFT JOIN features f ON gf.feature_key = f.feature_key WHERE gf.guild_id = ?',
+        'SELECT gf.feature_key, gf.enabled, f.feature_name as display_name FROM guild_features gf LEFT JOIN features f ON gf.feature_key = f.feature_key WHERE gf.guild_id = ?',
         [guildId]
       );
       console.log('🚨🚨🚨 GUILD FEATURES FROM DB:', guildFeatures);
