@@ -14,8 +14,8 @@ import { getToken } from "next-auth/jwt";
 import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import Image from "next/image";
-import mysql from 'mysql2/promise';
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
+import { query } from '@/lib/db';
 
 type Params = { id: string };
 
@@ -33,19 +33,12 @@ export default async function GuildLayout(
   const { id } = await props.params;
 
   // Quick permission check using server_access_control table
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASS || '',
-    database: process.env.DB_NAME || 'chester_bot',
-  });
-
   console.log(`[GUILD_LAYOUT] Checking access for guild ${id}, user token.sub: ${token.sub}`);
 
   let hasAccess = false;
   try {
     // Check server_access_control first (same as guilds API)
-    const [accessRows] = await connection.execute(
+    const accessRows = await query(
       'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
       [id, token.sub]
     );
@@ -56,7 +49,7 @@ export default async function GuildLayout(
     if (!hasAccess) {
       // Also try with discordId if available from token
       const discordId = token.sub; // JWT sub should be Discord ID
-      const [accessRows2] = await connection.execute(
+      const accessRows2 = await query(
         'SELECT has_access FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
         [id, discordId]
       );
@@ -64,8 +57,8 @@ export default async function GuildLayout(
       hasAccess = (accessRows2 as any[]).length > 0;
       console.log(`[GUILD_LAYOUT] Access check 2 (discordId): ${hasAccess}, rows found: ${(accessRows2 as any[]).length}`);
     }
-  } finally {
-    await connection.end();
+  } catch (error) {
+    console.error('[GUILD_LAYOUT] Database error:', error);
   }
 
   if (!hasAccess) {
