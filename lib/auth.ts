@@ -4,28 +4,9 @@ import DiscordProvider from "next-auth/providers/discord"
 import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
 import { env } from "@/lib/env"
-import { isAdmin } from "@/lib/db"
+import { isAdmin, query } from "@/lib/db"
 import { TokenManager } from "./token-manager"
 import { SessionManager } from "./session-manager"
-
-// Database connection helper for Discord bot database
-async function query(sql: string, params?: any[]) {
-  const mysql = require('mysql2/promise');
-  const connection = await mysql.createConnection({
-    host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-    user: process.env.APP_DB_USER || process.env.BOT_DB_USER || process.env.DB_USER || 'root',
-    password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || process.env.DB_PASS || '',
-    database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
-    port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || process.env.DB_PORT || 3306),
-  });
-
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows;
-  } finally {
-    await connection.end();
-  }
-}
 
 // Log user login events
 async function logUserLogin(discordId: string, email?: string, username?: string) {

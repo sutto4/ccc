@@ -1,57 +1,37 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { CommandRegistry } from "@/services/commandRegistry";
+import { query } from '@/lib/db';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: guildId } = await params;
   
   try {
-    // Require DB configuration
-    if (!env.DB_HOST || !env.DB_USER || !env.DB_NAME) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 });
+    // Check if guild exists (no status check - guild is confirmed active)
+    const guildRows = await query(
+      `SELECT guild_id FROM guilds WHERE guild_id = ? LIMIT 1`,
+      [guildId]
+    );
+
+    if (!Array.isArray(guildRows) || guildRows.length === 0) {
+      return NextResponse.json({ error: "Guild not found" }, { status: 404 });
     }
 
-    let mysql: any;
-    try {
-      ({ default: mysql } = await import("mysql2/promise"));
-    } catch {
-      return NextResponse.json({ error: "Database driver not installed. Run: pnpm add mysql2" }, { status: 500 });
-    }
+    // Get all features from the features table
+    const featuresRows = await query(
+      `SELECT feature_key, feature_name, description, minimum_package, is_active FROM features WHERE is_active = 1 ORDER BY feature_key`
+    );
 
-    const connection = await mysql.createConnection({
-      host: env.DB_HOST,
-      user: env.DB_USER,
-      password: env.DB_PASS,
-      database: env.DB_NAME,
-    });
-
+    // Get guild-specific feature settings
+    let guildFeaturesRows: any[] = [];
     try {
-      // Check if guild exists (no status check - guild is confirmed active)
-      const [guildRows] = await connection.execute(
-        `SELECT guild_id FROM guilds WHERE guild_id = ? LIMIT 1`,
+      guildFeaturesRows = await query(
+        `SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?`,
         [guildId]
       );
-
-      if (!Array.isArray(guildRows) || guildRows.length === 0) {
-        return NextResponse.json({ error: "Guild not found" }, { status: 404 });
-      }
-
-      // Get all features from the features table
-      const [featuresRows] = await connection.execute(
-        `SELECT feature_key, feature_name, description, minimum_package, is_active FROM features WHERE is_active = 1 ORDER BY feature_key`
-      );
-
-      // Get guild-specific feature settings
-      let guildFeaturesRows: any[] = [];
-      try {
-        const [guildFeaturesResult] = await connection.execute(
-          `SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?`,
-          [guildId]
-        );
-        guildFeaturesRows = guildFeaturesResult;
-      } catch (error) {
-        guildFeaturesRows = [];
-      }
+    } catch (error) {
+      guildFeaturesRows = [];
+    }
 
       // Create a map of guild feature settings using feature keys
       const guildFeaturesMap: Record<string, boolean> = {};
@@ -69,14 +49,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         features[`${featureKey}_package`] = row.minimum_package;
       });
       
-      return NextResponse.json({ 
-        guildId,
-        features 
-      });
-
-    } finally {
-      await connection.end();
-    }
+    return NextResponse.json({ 
+      guildId,
+      features 
+    });
 
   } catch (error) {
     console.error('[FEATURES-GET] Error fetching features:', error);

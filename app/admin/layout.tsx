@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import AdminSidebar from "@/components/admin-sidebar";
+import AdminSidebar from "@/components/admin-sidebar-new";
 import AdminTopbar from "@/components/admin-topbar";
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 
