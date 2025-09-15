@@ -235,8 +235,18 @@ export default function MassRoleAssign({ guildId, roles }: { guildId: string; ro
     return (
       <div className="p-8 text-center">
         <div className="text-red-600 mb-2">Access Denied</div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mb-4">
           You don't have permission to access the mass role assign feature. Contact a server administrator.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          If you're an administrator, you can configure role permissions in the{' '}
+          <a 
+            href={`/guilds/${guildId}/settings`} 
+            className="text-blue-600 hover:text-blue-800 underline"
+          >
+            server settings
+          </a>
+          .
         </p>
       </div>
     );

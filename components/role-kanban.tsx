@@ -369,9 +369,19 @@ export default function RoleKanban({ guildId, customGroups = [] }: { guildId: st
       <div className="flex items-center justify-center p-8">
         <div className="text-center">
           <div className="text-red-600 mb-2">⚠️ Access Denied</div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-4">
             You don't have permission to manage roles in this server.
             {!isOwner && " Contact a server administrator to grant you access."}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            If you're an administrator, you can configure role permissions in the{' '}
+            <a 
+              href={`/guilds/${guildId}/settings`} 
+              className="text-blue-600 hover:text-blue-800 underline"
+            >
+              server settings
+            </a>
+            .
           </p>
         </div>
       </div>

@@ -10,17 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Settings, Bot } from "lucide-react";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
+import { timezones } from '@/lib/timezones';
 
 interface GeneralSettings {
-  server_name: string;
   welcome_message: string;
   prefix: string;
-  language: string;
   timezone: string;
   auto_role: string;
-  log_channel: string;
+  modlog_channel: string;
 }
 
 export default function GeneralSettingsPage() {
@@ -40,13 +39,11 @@ function GeneralSettingsPageContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<GeneralSettings>({
-    server_name: "",
     welcome_message: "",
     prefix: "!",
-    language: "en",
     timezone: "UTC",
     auto_role: "",
-    log_channel: ""
+    modlog_channel: ""
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -68,13 +65,11 @@ function GeneralSettingsPageContent() {
         
         // For now, use placeholder data
         setSettings({
-          server_name: "My Discord Server",
           welcome_message: "Welcome to the server!",
           prefix: "!",
-          language: "en",
           timezone: "UTC",
           auto_role: "",
-          log_channel: ""
+          modlog_channel: ""
         });
         
       } catch (err: any) {
@@ -141,7 +136,7 @@ function GeneralSettingsPageContent() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold">General Settings</h2>
+            <h2 className="text-xl font-semibold">General Settings - UPDATED</h2>
             <p className="text-muted-foreground">
               Configure basic server settings and preferences
             </p>
@@ -183,23 +178,16 @@ function GeneralSettingsPageContent() {
         {/* Basic Settings */}
         <Card>
           <CardHeader>
-            <CardTitle>Basic Settings</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Basic Settings
+            </CardTitle>
             <CardDescription>
               Configure fundamental server preferences
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="server_name">Server Name</Label>
-                <Input
-                  id="server_name"
-                  value={settings.server_name}
-                  onChange={(e) => handleInputChange('server_name', e.target.value)}
-                  placeholder="Enter server name"
-                />
-              </div>
-              
               <div className="space-y-2">
                 <Label htmlFor="prefix">Command Prefix</Label>
                 <Input
@@ -209,6 +197,28 @@ function GeneralSettingsPageContent() {
                   placeholder="!"
                   maxLength={3}
                 />
+                <p className="text-xs text-muted-foreground">
+                  The prefix used for bot commands (e.g., !help)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Select value={settings.timezone} onValueChange={(value) => handleInputChange('timezone', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {timezones.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Used for scheduling and time-based features
+                </p>
               </div>
             </div>
 
@@ -221,115 +231,89 @@ function GeneralSettingsPageContent() {
                 placeholder="Enter welcome message for new members"
                 rows={3}
               />
+              <p className="text-xs text-muted-foreground">
+                Message sent to new members when they join the server
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Regional Settings */}
+
+        {/* Modlog Channel Settings */}
         <Card>
           <CardHeader>
-            <CardTitle>Regional Settings</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              Modlog Channel
+            </CardTitle>
             <CardDescription>
-              Configure language and timezone preferences
+              Configure where ServerMate sends system messages and logs
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="language">Language</Label>
-                <Select value={settings.language} onValueChange={(value) => handleInputChange('language', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="de">German</SelectItem>
-                    <SelectItem value="it">Italian</SelectItem>
-                    <SelectItem value="pt">Portuguese</SelectItem>
-                    <SelectItem value="ru">Russian</SelectItem>
-                    <SelectItem value="ja">Japanese</SelectItem>
-                    <SelectItem value="ko">Korean</SelectItem>
-                    <SelectItem value="zh">Chinese</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Select value={settings.timezone} onValueChange={(value) => handleInputChange('timezone', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UTC">UTC</SelectItem>
-                    <SelectItem value="EST">Eastern Time</SelectItem>
-                    <SelectItem value="CST">Central Time</SelectItem>
-                    <SelectItem value="MST">Mountain Time</SelectItem>
-                    <SelectItem value="PST">Pacific Time</SelectItem>
-                    <SelectItem value="GMT">GMT</SelectItem>
-                    <SelectItem value="CET">Central European Time</SelectItem>
-                    <SelectItem value="JST">Japan Standard Time</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="modlog_channel">Modlog Channel</Label>
+              <Input
+                id="modlog_channel"
+                value={settings.modlog_channel}
+                onChange={(e) => handleInputChange('modlog_channel', e.target.value)}
+                placeholder="Channel ID or name (e.g., #modlog)"
+              />
+              <p className="text-xs text-muted-foreground">
+                This channel will receive system messages from ServerMate including moderation logs, 
+                feature notifications, and other important updates.
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Automation Settings */}
+        {/* Auto-Assign Role */}
         <Card>
           <CardHeader>
-            <CardTitle>Automation Settings</CardTitle>
+            <CardTitle>Auto-Assign Role</CardTitle>
             <CardDescription>
-              Configure automatic server features
+              Automatically assign roles to new members
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="auto_role">Auto-Assign Role</Label>
-                <Input
-                  id="auto_role"
-                  value={settings.auto_role}
-                  onChange={(e) => handleInputChange('auto_role', e.target.value)}
-                  placeholder="Role ID or name"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Role to automatically assign to new members
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="log_channel">Log Channel</Label>
-                <Input
-                  id="log_channel"
-                  value={settings.log_channel}
-                  onChange={(e) => handleInputChange('log_channel', e.target.value)}
-                  placeholder="Channel ID or name"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Channel for bot logs and notifications
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="auto_role">Auto-Assign Role</Label>
+              <Input
+                id="auto_role"
+                value={settings.auto_role}
+                onChange={(e) => handleInputChange('auto_role', e.target.value)}
+                placeholder="Role ID or name"
+              />
+              <p className="text-xs text-muted-foreground">
+                Role to automatically assign to new members when they join the server
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Information Card */}
-        <Card className="bg-blue-50 border-blue-200">
+        {/* Quick Setup Guide */}
+        <Card className="bg-green-50 border-green-200">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-blue-800">
+            <CardTitle className="flex items-center gap-2 text-green-800">
               <AlertCircle className="h-5 w-5" />
-              Information
+              Quick Setup Guide
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-blue-700">
-              These settings control the basic behavior of your server. Changes are applied immediately 
-              and affect all bot interactions. Some settings may require bot permissions to function properly.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-green-700 font-medium">
+                Follow these steps to complete your ServerMate setup:
+              </p>
+              <ol className="text-sm text-green-700 space-y-1 list-decimal list-inside">
+                <li><strong>Set Role Permissions</strong> - Go to Role Permissions tab to configure who can access the web app</li>
+                <li><strong>Enable Features</strong> - Go to Features tab to turn on the features you want to use</li>
+                <li><strong>Configure Commands</strong> - Set up individual command permissions in the Features tab</li>
+                <li><strong>Set Modlog Channel</strong> - Choose where ServerMate sends system messages (above)</li>
+              </ol>
+              <p className="text-xs text-green-600 mt-2">
+                💡 Use the <code>/setup</code> command in Discord for a quick setup link anytime!
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

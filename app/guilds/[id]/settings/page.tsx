@@ -74,6 +74,10 @@ function GuildSettingsPageContent() {
     logChannel: ""
   });
 
+  // Channels state
+  const [channels, setChannels] = useState<Array<{ id: string; name: string; type: number }>>([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+
   // Subscription state
   const [subscription, setSubscription] = useState({
     status: "loading", // loading, active, past_due, canceled, etc.
@@ -123,6 +127,7 @@ function GuildSettingsPageContent() {
     if (session) {
       loadRoles();
       loadSubscription();
+      loadChannels();
     }
   }, [status, session, guildId]);
 
@@ -293,6 +298,23 @@ function GuildSettingsPageContent() {
       setGuildNames(guildNamesMap);
     } catch (error) {
       console.error('Failed to load guild names:', error);
+    }
+  };
+
+  const loadChannels = async () => {
+    try {
+      setLoadingChannels(true);
+      const response = await fetch(`/api/guilds/${guildId}/channels`);
+      if (response.ok) {
+        const data = await response.json();
+        setChannels(data.channels || []);
+      } else {
+        console.error('Failed to load channels');
+      }
+    } catch (error) {
+      console.error('Error loading channels:', error);
+    } finally {
+      setLoadingChannels(false);
     }
   };
 
@@ -670,33 +692,10 @@ function GuildSettingsPageContent() {
           <Card>
             <CardHeader title="General Settings" subtitle="Basic server configuration and preferences." />
             <CardContent className="space-y-6">
-              {/* Server Information */}
+              {/* Basic Settings */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Server Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="serverName">Server Name</Label>
-                    <Input
-                      id="serverName"
-                      placeholder="Enter server name"
-                      value={generalSettings.serverName}
-                      onChange={(e) => updateGeneralSetting('serverName', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="language">Language</Label>
-                    <select
-                      id="language"
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                      value={generalSettings.language}
-                      onChange={(e) => updateGeneralSetting('language', e.target.value)}
-                    >
-                      <option value="en">English</option>
-                      <option value="es">Spanish</option>
-                      <option value="fr">French</option>
-                      <option value="de">German</option>
-                    </select>
-                  </div>
+                <h3 className="text-lg font-medium">Basic Settings</h3>
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="timezone">Timezone</Label>
                     <select
@@ -705,54 +704,47 @@ function GuildSettingsPageContent() {
                       value={generalSettings.timezone}
                       onChange={(e) => updateGeneralSetting('timezone', e.target.value)}
                     >
-                      <option value="UTC">UTC</option>
-                      <option value="EST">Eastern Time</option>
-                      <option value="PST">Pacific Time</option>
-                      <option value="GMT">GMT</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="America/New_York">America/New_York (Eastern Time)</option>
+                      <option value="America/Chicago">America/Chicago (Central Time)</option>
+                      <option value="America/Denver">America/Denver (Mountain Time)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
+                      <option value="Europe/London">Europe/London (Greenwich Mean Time)</option>
+                      <option value="Europe/Paris">Europe/Paris (Central European Time)</option>
+                      <option value="Asia/Tokyo">Asia/Tokyo (Japan Standard Time)</option>
+                      <option value="Asia/Shanghai">Asia/Shanghai (China Standard Time)</option>
+                      <option value="Australia/Sydney">Australia/Sydney (Australian Eastern Time)</option>
                     </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="logChannel">Log Channel</Label>
-                    <Input
-                      id="logChannel"
-                      placeholder="#general"
-                      value={generalSettings.logChannel}
-                      onChange={(e) => updateGeneralSetting('logChannel', e.target.value)}
-                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used for scheduling and time-based features
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Bot Features */}
+              {/* Modlog Channel */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Bot Features</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="autoRole">Auto Role Assignment</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically assign roles to new members
-                      </p>
-                    </div>
-                    <Switch
-                      id="autoRole"
-                      checked={generalSettings.autoRole}
-                      onCheckedChange={(checked) => updateGeneralSetting('autoRole', checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="welcomeMessage">Welcome Messages</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Send welcome messages to new members
-                      </p>
-                    </div>
-                    <Switch
-                      id="welcomeMessage"
-                      checked={generalSettings.welcomeMessage}
-                      onCheckedChange={(checked) => updateGeneralSetting('welcomeMessage', checked)}
-                    />
-                  </div>
+                <h3 className="text-lg font-medium">Modlog Channel</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="modlogChannel">Modlog Channel</Label>
+                  <select
+                    id="modlogChannel"
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                    value={generalSettings.logChannel}
+                    onChange={(e) => updateGeneralSetting('logChannel', e.target.value)}
+                    disabled={loadingChannels}
+                  >
+                    <option value="">{loadingChannels ? "Loading channels..." : "Select a channel..."}</option>
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        #{channel.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    This channel will receive system messages from ServerMate including moderation logs, 
+                    feature notifications, and other important updates.
+                  </p>
                 </div>
               </div>
 
