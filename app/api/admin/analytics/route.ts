@@ -47,10 +47,16 @@ export const GET = async (req: Request) => {
 };
 
 // POST: Clear analytics data
-export const POST = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, { discordId }) => {
-  const isAdmin = await checkAdminAccess(discordId);
-  if (!isAdmin) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+export const POST = async (req: Request) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
+  // Check if user is admin/owner
+  if (auth.user.role !== 'admin' && auth.user.role !== 'owner') {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
   try {
@@ -59,15 +65,15 @@ export const POST = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, 
 
     if (action === 'cleanup') {
       apiAnalytics.cleanup();
-      return NextResponse.json({ message: "Analytics data cleaned up" });
+      return NextResponse.json({ message: 'Analytics data cleaned up' });
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Error processing analytics action:', error);
-    return NextResponse.json({ error: "Failed to process action" }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process action' }, { status: 500 });
   }
-});
+};
 
 // Simple admin check - replace with your actual admin logic
 async function checkAdminAccess(discordId: string): Promise<boolean> {
