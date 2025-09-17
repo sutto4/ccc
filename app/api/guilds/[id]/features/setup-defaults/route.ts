@@ -92,5 +92,5 @@ export const POST = async (_req: any, { params }: { params: Promise<{ id: string
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-});
+};
 
