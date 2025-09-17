@@ -53,7 +53,7 @@ export const PUT = async (req: any, { params }: { params: Promise<{ id: string }
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-});
+};
 
 // DELETE feature
 export const DELETE = async (_req: any, { params }: { params: Promise<{ id: string }> }) => {
@@ -103,5 +103,5 @@ export const DELETE = async (_req: any, { params }: { params: Promise<{ id: stri
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-});
+};
 

@@ -55,7 +55,7 @@ export const GET = async (req: Request) => {
     console.error('Error fetching service quotas:', error);
     return NextResponse.json({ error: "Failed to fetch service quotas" }, { status: 500 });
   }
-});
+};
 
 // POST: Update quota usage (for internal tracking)
 export const POST = async (req: Request) => {
@@ -81,7 +81,7 @@ export const POST = async (req: Request) => {
     console.error('Error tracking quota usage:', error);
     return NextResponse.json({ error: "Failed to track quota usage" }, { status: 500 });
   }
-});
+};
 
 // Simple admin check - replace with your actual admin logic
 async function checkAdminAccess(discordId: string): Promise<boolean> {

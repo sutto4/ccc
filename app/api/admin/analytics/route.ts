@@ -44,7 +44,7 @@ export const GET = async (req: Request) => {
     console.error('Error fetching analytics:', error);
     return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
   }
-});
+};
 
 // POST: Clear analytics data
 export const POST = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, { discordId }) => {
