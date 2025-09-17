@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Section from '@/components/ui/section';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,7 @@ const TARGET_TYPES = [
 
 const STATUS_OPTIONS = ['success', 'failed', 'pending'];
 
-export default function AdminLogsPageComplex() {
+function AdminLogsPageContent() {
   const searchParams = useSearchParams();
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -414,5 +414,13 @@ export default function AdminLogsPageComplex() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AdminLogsPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading logs…</div>}>
+      <AdminLogsPageContent />
+    </Suspense>
   );
 }
