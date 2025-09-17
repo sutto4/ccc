@@ -34,8 +34,13 @@ export function useGuildsQuery() {
   return useQuery<Guild[]>({
     queryKey: queryKeys.guilds(),
     queryFn: fetchGuilds,
-    staleTime: 5 * 60 * 1000, // 5 minutes - guilds rarely change
-    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    // Keep results fresh enough to avoid refetch-on-focus/mount storms
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    // Avoid automatic refetches that can pile up concurrent requests
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     retry: 1,
     retryDelay: 1000,
   });
@@ -45,8 +50,11 @@ export function useGuildQuery(guildId: string) {
   return useQuery<Guild | null>({
     queryKey: queryKeys.guild(guildId),
     queryFn: () => fetchGuild(guildId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     enabled: !!guildId,
     retry: 1,
     retryDelay: 1000,
