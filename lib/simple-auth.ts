@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { NextRequest } from 'next/server';
 import { env } from '@/lib/env';
 
-export async function authMiddleware(req: NextRequest) {
+export async function getSimpleAuth(req: NextRequest) {
   try {
     const token = await getToken({
       req,
@@ -13,12 +13,12 @@ export async function authMiddleware(req: NextRequest) {
       return { user: null, error: 'No token' };
     }
 
-    // Check if token has error (expired refresh token)
+    // Check if token has error
     if ((token as any).error === 'RefreshTokenExpired') {
       return { user: null, error: 'Token expired' };
     }
 
-    // Check if access token is expired
+    // Simple expiry check - if token is expired, just return null
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = (token as any).accessTokenExpiresAt || token.exp;
     
@@ -37,18 +37,7 @@ export async function authMiddleware(req: NextRequest) {
       error: null
     };
   } catch (error) {
-    console.error('[AUTH-MIDDLEWARE] Error:', error);
+    console.error('[SIMPLE-AUTH] Error:', error);
     return { user: null, error: 'Auth error' };
   }
-}
-
-export function createAuthResponse(error: string, redirectTo?: string) {
-  if (redirectTo) {
-    return NextResponse.redirect(new URL(redirectTo, process.env.NEXTAUTH_URL));
-  }
-  
-  return NextResponse.json(
-    { error: 'Unauthorized', message: error },
-    { status: 401 }
-  );
 }

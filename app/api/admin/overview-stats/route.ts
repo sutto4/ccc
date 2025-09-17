@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { AuthMiddleware } from '@/lib/auth-middleware';
+import { authMiddleware, createAuthResponse } from '@/lib/auth-middleware';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 interface OverviewStats {
   totalServers: number;
@@ -11,7 +14,13 @@ interface OverviewStats {
   uptime: string;
 }
 
-export const GET = AuthMiddleware.withAuth(async (request: NextRequest) => {
+export const GET = async (request: NextRequest) => {
+  // Check authentication
+  const auth = await authMiddleware(request);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   try {
     // Get basic guild stats
     const [guildStats] = await Promise.all([
@@ -72,4 +81,4 @@ export const GET = AuthMiddleware.withAuth(async (request: NextRequest) => {
       { status: 500 }
     );
   }
-});
+};

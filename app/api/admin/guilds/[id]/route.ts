@@ -1,43 +1,34 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
+import { query } from "@/lib/db";
 
-// Database connection helper for Discord bot database
-async function query(sql: string, params?: any[]) {
-  const mysql = require('mysql2/promise');
-  const connection = await mysql.createConnection({
-    host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-    user: process.env.APP_DB_USER || process.env.BOT_DB_USER || process.env.DB_USER || 'root',
-    password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || process.env.DB_PASS || '',
-    database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
-    port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || process.env.DB_PORT || 3306),
-  });
-
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows;
-  } finally {
-    await connection.end();
-  }
-}
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // GET individual guild info for admin
-export const GET = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
+export const GET = async (_req: any, { params }: { params: { id: string } }) => {
+  // Check authentication
+  const auth = await authMiddleware(_req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   console.log('[ADMIN-GUILDS] Auth context:', { 
-    hasAccessToken: !!auth?.accessToken, 
-    hasDiscordId: !!auth?.discordId, 
-    role: auth?.role 
+    hasAccessToken: !!auth.user.id, 
+    hasDiscordId: !!auth.user.id, 
+    role: auth.user.role 
   });
   
   // Check if user is admin
-  if (auth?.role !== 'admin' && auth?.role !== 'owner') {
-    console.log('[ADMIN-GUILDS] Access denied for role:', auth?.role);
+  if (auth.user.role !== 'admin' && auth.user.role !== 'owner') {
+    console.log('[ADMIN-GUILDS] Access denied for role:', auth.user.role);
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  console.log('[ADMIN-GUILDS] Admin access granted for role:', auth?.role);
+  console.log('[ADMIN-GUILDS] Admin access granted for role:', auth.user.role);
 
   try {
-    const { id: guildId } = await params;
+    const { id: guildId } = params;
     console.log('[ADMIN-GUILDS] Requested guild ID:', guildId);
     
     if (!/^[0-9]{5,20}$/.test(guildId)) {
@@ -142,9 +133,9 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
     
     try {
       const featuresResult = await query(
-        `SELECT feature_name, enabled 
-         FROM guild_features 
-         WHERE guild_id = ?`,
+        `SELECT gf.feature_key, gf.enabled
+         FROM guild_features gf
+         WHERE gf.guild_id = ?`,
         [guildId]
       );
 
@@ -153,10 +144,10 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
         featureRows = featuresResult[0];
       }
 
-      // Transform features to object
+      // Transform features to object keyed by feature_key
       if (Array.isArray(featureRows)) {
         featureRows.forEach((row: any) => {
-          features[row.feature_name] = row.enabled === 1 || row.enabled === true;
+          features[row.feature_key] = row.enabled === 1 || row.enabled === true;
         });
       }
     } catch (error) {
@@ -185,4 +176,4 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
       stack: error instanceof Error ? error.stack : 'No stack trace'
     }, { status: 500 });
   }
-});
+};

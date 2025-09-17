@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+	// Check authentication
+	const auth = await authMiddleware(req as any);
+	if (auth.error || !auth.user) {
+		return createAuthResponse(auth.error || 'Unauthorized');
+	}
+
 	const { id: guildId } = await params;
 	if (!/^[0-9]{5,20}$/.test(guildId)) {
 		return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });
@@ -48,5 +54,5 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
 	const groups = [];
 
 	return NextResponse.json({ groups });
-});
+};
 

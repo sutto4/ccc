@@ -3,30 +3,18 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
-import mysql from 'mysql2/promise';
-
-// Database connection helper
-async function getDbConnection() {
-  return mysql.createConnection({
-    host: env.DB_HOST,
-    user: env.DB_USER,
-    password: env.DB_PASS,
-    database: env.DB_NAME,
-  });
-}
+import { query } from '@/lib/db';
 
 // Check if user has admin access to manage access control
 async function checkAdminAccess(guildId: string, userId: string): Promise<boolean> {
   try {
-    const connection = await getDbConnection();
-    try {
-      // Check if user has direct admin access (bypass role checks)
-      const [adminAccess] = await connection.execute(
-        'SELECT 1 FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
-        [guildId, userId]
-      );
+    // Check if user has direct admin access (bypass role checks)
+    const adminAccess = await query(
+      'SELECT 1 FROM server_access_control WHERE guild_id = ? AND user_id = ? AND has_access = 1',
+      [guildId, userId]
+    );
 
       if ((adminAccess as any[]).length > 0) {
         console.log(`User ${userId} has direct admin access to guild ${guildId}`);
@@ -54,11 +42,11 @@ async function checkAdminAccess(guildId: string, userId: string): Promise<boolea
       const userMember = await userRolesResponse.json();
       const userRoleIds = userMember.roles || [];
 
-      // Get roles that grant admin access from database
-      const [allowedRoles] = await connection.execute(`
-        SELECT role_id FROM server_role_permissions 
-        WHERE guild_id = ? AND can_use_app = 1
-      `, [guildId]);
+    // Get roles that grant admin access from database
+    const allowedRoles = await query(`
+      SELECT role_id FROM server_role_permissions 
+      WHERE guild_id = ? AND can_use_app = 1
+    `, [guildId]);
 
       const allowedRoleIds = (allowedRoles as any[]).map((r: any) => r.role_id);
 
@@ -70,12 +58,8 @@ async function checkAdminAccess(guildId: string, userId: string): Promise<boolea
         return true;
       }
 
-      console.log(`User ${userId} has no admin access to guild ${guildId} - roles: ${userRoleIds.join(', ')}`);
-      return false;
-
-    } finally {
-      await connection.end();
-    }
+    console.log(`User ${userId} has no admin access to guild ${guildId} - roles: ${userRoleIds.join(', ')}`);
+    return false;
   } catch (error) {
     console.error('Database or Discord API error checking admin access:', error);
     return false; // Fail secure - deny access if anything fails
@@ -83,9 +67,15 @@ async function checkAdminAccess(guildId: string, userId: string): Promise<boolea
 }
 
 // GET: List all users with access to this guild
-export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as NextRequest);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
-  const userId = auth?.discordId;
+  const userId = auth.user.id;
 
   if (!userId) {
     return NextResponse.json({ error: "User ID not found" }, { status: 401 });
@@ -98,42 +88,42 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
   }
 
   try {
-    const connection = await getDbConnection();
-    try {
-      // Get all users with direct access
-      const [directAccess] = await connection.execute(`
-        SELECT user_id, has_access, granted_by, granted_at, notes
-        FROM server_access_control 
-        WHERE guild_id = ?
-        ORDER BY granted_at DESC
-      `, [guildId]);
+    // Get all users with direct access
+    const directAccess = await query(`
+      SELECT user_id, has_access, granted_by, granted_at, notes
+      FROM server_access_control 
+      WHERE guild_id = ?
+      ORDER BY granted_at DESC
+    `, [guildId]);
 
-      // Get all roles that grant access
-      const [roleAccess] = await connection.execute(`
-        SELECT role_id, can_use_app, updated_at
-        FROM server_role_permissions 
-        WHERE guild_id = ?
-        ORDER BY updated_at DESC
-      `, [guildId]);
+    // Get all roles that grant access
+    const roleAccess = await query(`
+      SELECT role_id, can_use_app, updated_at
+      FROM server_role_permissions 
+      WHERE guild_id = ?
+      ORDER BY updated_at DESC
+    `, [guildId]);
 
-      return NextResponse.json({
-        directAccess: directAccess,
-        roleAccess: roleAccess
-      });
-
-    } finally {
-      await connection.end();
-    }
+    return NextResponse.json({
+      directAccess: directAccess,
+      roleAccess: roleAccess
+    });
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-});
+};
 
 // POST: Grant access to a user
-export const POST = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const POST = async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as NextRequest);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
-  const userId = auth?.discordId;
+  const userId = auth.user.id;
 
   if (!userId) {
     return NextResponse.json({ error: "User ID not found" }, { status: 401 });
@@ -153,34 +143,34 @@ export const POST = AuthMiddleware.withAuth(async (req: Request, { params }: { p
       return NextResponse.json({ error: "Target user ID is required" }, { status: 400 });
     }
 
-    const connection = await getDbConnection();
-    try {
-      // Insert or update user access
-      await connection.execute(`
-        INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes)
-        VALUES (?, ?, 1, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-          has_access = 1, 
-          granted_by = VALUES(granted_by), 
-          notes = VALUES(notes),
-          granted_at = CURRENT_TIMESTAMP
-      `, [guildId, targetUserId, userId, notes || 'Granted by admin']);
+    // Insert or update user access
+    await query(`
+      INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes)
+      VALUES (?, ?, 1, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        has_access = 1, 
+        granted_by = VALUES(granted_by), 
+        notes = VALUES(notes),
+        granted_at = CURRENT_TIMESTAMP
+    `, [guildId, targetUserId, userId, notes || 'Granted by admin']);
 
-      return NextResponse.json({ success: true, message: "Access granted successfully" });
-
-    } finally {
-      await connection.end();
-    }
+    return NextResponse.json({ success: true, message: "Access granted successfully" });
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-});
+};
 
 // DELETE: Revoke access from a user
-export const DELETE = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const DELETE = async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as NextRequest);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
-  const userId = auth?.discordId;
+  const userId = auth.user.id;
 
   if (!userId) {
     return NextResponse.json({ error: "User ID not found" }, { status: 401 });
@@ -200,22 +190,16 @@ export const DELETE = AuthMiddleware.withAuth(async (req: Request, { params }: {
       return NextResponse.json({ error: "Target user ID is required" }, { status: 400 });
     }
 
-    const connection = await getDbConnection();
-    try {
-      // Revoke user access
-      await connection.execute(`
-        UPDATE server_access_control 
-        SET has_access = 0, notes = CONCAT(IFNULL(notes, ''), ' - Access revoked by ', ?)
-        WHERE guild_id = ? AND user_id = ?
-      `, [userId, guildId, targetUserId]);
+    // Revoke user access
+    await query(`
+      UPDATE server_access_control 
+      SET has_access = 0, notes = CONCAT(IFNULL(notes, ''), ' - Access revoked by ', ?)
+      WHERE guild_id = ? AND user_id = ?
+    `, [userId, guildId, targetUserId]);
 
-      return NextResponse.json({ success: true, message: "Access revoked successfully" });
-
-    } finally {
-      await connection.end();
-    }
+    return NextResponse.json({ success: true, message: "Access revoked successfully" });
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-});
+};

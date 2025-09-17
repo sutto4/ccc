@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { env } from "@/lib/env";
 import { cache } from "@/lib/cache";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { query } from '@/lib/db';
+import { SystemLogger } from '@/lib/system-logger';
 
 const limiter = createRateLimiter(30, 60_000);
 
@@ -79,7 +80,7 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
       const hasAllowedRole = userRoleIds.some((roleId: string) => allowedRoleIds.includes(roleId));
 
       if (hasAllowedRole) {
-        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter(id => allowedRoleIds.includes(id)).join(', ')}`);
+        console.log(`User ${userId} has role-based access to guild ${guildId} via roles: ${userRoleIds.filter((id: string) => allowedRoleIds.includes(id)).join(', ')}`);
         return true;
       }
     } catch (error) {
@@ -98,7 +99,13 @@ async function checkUserAccess(guildId: string, userId: string): Promise<boolean
   }
 }
 
-export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }, auth: any) => {
+export const GET = async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as NextRequest);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   if (!/^[0-9]{5,20}$/.test(guildId)) {
     return NextResponse.json({ error: "Invalid guild id" }, { status: 400 });
@@ -109,7 +116,7 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429, headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs || 0) / 1000)) } });
 
   // Check if user has access to this guild
-  const userId = auth?.discordId;
+  const userId = auth.user.id;
   if (!userId) {
     return NextResponse.json({ error: "User ID not found" }, { status: 401 });
   }
@@ -176,4 +183,4 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, { params }: { pa
   
   cache.set(cacheKey, normalized, 120_000);
   return NextResponse.json({ roles: normalized });
-});
+};

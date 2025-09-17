@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // POST setup default features for a guild
-export const POST = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
+export const POST = async (_req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(_req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   console.log('[SETUP-DEFAULTS] Setting up default features for guild');
   
   try {

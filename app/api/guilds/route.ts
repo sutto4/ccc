@@ -8,6 +8,9 @@ import { TokenManager } from "@/lib/token-manager";
 import { SessionManager } from "@/lib/session-manager";
 import { query } from "@/lib/db";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const limiter = createRateLimiter(2000, 60_000); // 2000 requests per minute per key (scaled for high traffic)
 const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 

@@ -14,7 +14,7 @@ export interface TokenValidationResult {
 
 export class TokenManager {
   private static readonly VALIDATION_CACHE_TTL = 1 * 60 * 1000; // 1 minute
-  private static readonly REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry - more aggressive refresh
+  private static readonly REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry - reasonable buffer
 
   private static validationCache = new Map<string, { isValid: boolean; timestamp: number }>();
   private static refreshAttempts = new Map<string, number>();
@@ -88,6 +88,7 @@ export class TokenManager {
     // expiresAt is stored as Unix timestamp (seconds), convert to milliseconds for comparison
     const expiresAtMs = expiresAt * 1000;
     const timeUntilExpiry = expiresAtMs - Date.now();
+    // Only refresh if token is actually expired or will expire in the next minute
     return timeUntilExpiry < this.REFRESH_THRESHOLD;
   }
 
@@ -112,11 +113,8 @@ export class TokenManager {
       return null;
     }
 
-    // Small delay to ensure no race conditions
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Mark refresh as in progress for any token
-    this.refreshInProgress.add('global-refresh');
+    // Mark refresh as in progress for this specific token
+    this.refreshInProgress.add(refreshToken);
 
     try {
       const response = await fetch('https://discord.com/api/oauth2/token', {

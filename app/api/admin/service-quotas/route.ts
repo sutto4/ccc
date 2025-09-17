@@ -1,12 +1,21 @@
 // Service Quotas API Route
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { serviceQuotas } from "@/lib/service-quotas";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // GET: Fetch service quota status
-export const GET = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, { discordId }) => {
+export const GET = async (req: Request) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   // Check if user is admin
-  const isAdmin = await checkAdminAccess(discordId);
+  const isAdmin = await checkAdminAccess(auth.user.id);
   if (!isAdmin) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -49,7 +58,13 @@ export const GET = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, {
 });
 
 // POST: Update quota usage (for internal tracking)
-export const POST = AuthMiddleware.withAuth(async (req: Request, _ctx: unknown, { discordId }) => {
+export const POST = async (req: Request) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   try {
     const body = await req.json();
     const { serviceName, quotaType, requestCount = 1, endpoint, userId, ipAddress } = body;

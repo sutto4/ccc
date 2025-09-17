@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { AuthMiddleware } from '@/lib/auth-middleware';
+import { authMiddleware, createAuthResponse } from '@/lib/auth-middleware';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // Simple in-memory cache for permission results
 const cache = new Map<string, any>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
-export const POST = AuthMiddleware.withAuth(async (
+export const POST = async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-  auth: any
+  { params }: { params: { id: string } }
 ) => {
+  // Check authentication
+  const auth = await authMiddleware(request);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
 
   try {
-    const { id: guildId } = await params;
+    const { id: guildId } = params;
     const body = await request.json();
     const { userId, userRoles } = body;
 
@@ -34,8 +41,8 @@ export const POST = AuthMiddleware.withAuth(async (
     console.log(`\x1b[31m[PERMISSION]\x1b[0m Checking permissions for guild ${guildId}, user ${userId}`);
     console.log(`\x1b[33m[PERMISSION-DEBUG]\x1b[0m Request body:`, { userId, userRoles });
     console.log(`\x1b[33m[PERMISSION-DEBUG]\x1b[0m Auth object:`, { 
-      discordId: auth.discordId, 
-      accessToken: auth.accessToken ? 'present' : 'missing' 
+      discordId: auth.user.id, 
+      accessToken: (auth as any).accessToken ? 'present' : 'missing' 
     });
 
     if (!userId || !userRoles) {
@@ -72,7 +79,7 @@ export const POST = AuthMiddleware.withAuth(async (
       // 2. Check if user is server owner via Discord API (quick check)
       let isOwner = false;
       try {
-        const { accessToken } = auth;
+        const accessToken = (auth as any).accessToken;
         const guildResponse = await fetch(`https://discord.com/api/v10/users/@me/guilds`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -173,4 +180,4 @@ export const POST = AuthMiddleware.withAuth(async (
     console.error('Error checking user permissions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-});
+};

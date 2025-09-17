@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // GET /api/guilds/[id]/members/search?q=username - search for Discord members by username
-export const GET = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }, auth) => {
-  const guildId = params.id;
+export const GET = async (req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
+  const { id: guildId } = await params;
   const { searchParams } = new URL(req.url);
   const query = searchParams.get('q');
 
@@ -51,4 +60,4 @@ export const GET = AuthMiddleware.withAuth(async (req, { params }: { params: Pro
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Failed to search members" }, { status: 500 });
   }
-});
+};

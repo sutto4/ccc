@@ -1,5 +1,5 @@
 import type { NextAuthOptions } from "next-auth"
-import NextAuth from "next-auth"
+import NextAuth, { getServerSession } from "next-auth"
 import DiscordProvider from "next-auth/providers/discord"
 import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
@@ -7,6 +7,8 @@ import { env } from "@/lib/env"
 import { isAdmin, query } from "@/lib/db"
 import { TokenManager } from "./token-manager"
 import { SessionManager } from "./session-manager"
+import { RefreshTokenManager } from "./refresh-token-manager"
+import { SystemLogger } from "./system-logger"
 
 // Log user login events
 async function logUserLogin(discordId: string, email?: string, username?: string) {
@@ -44,7 +46,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 7 * 24 * 60 * 60, // 7 days - shorter session for better stability
   },
   secret: env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
@@ -74,42 +76,22 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account, profile, trigger }) {
       // If this is a new login (account is present)
       if (account && profile) {
-        console.log('[AUTH] New login detected');
-        console.log('[AUTH] Account object:', {
-          provider: account.provider,
-          type: account.type,
-          accessToken: account.access_token ? 'present' : 'missing',
-          refreshToken: account.refresh_token ? 'present' : 'missing',
-          expiresAt: account.expires_at,
-          expiresAtFormatted: account.expires_at ? new Date(account.expires_at * 1000).toISOString() : 'N/A',
-          timeUntilExpiry: account.expires_at ? (account.expires_at - (Date.now() / 1000)) : 'N/A',
-          // Check if expires_at might be in milliseconds
-          possibleMsExpiry: account.expires_at ? new Date(account.expires_at).toISOString() : 'N/A',
-          isProbablyMs: account.expires_at ? (account.expires_at > Date.now()) : false
-        });
+        console.log('[AUTH] New login detected for user:', (profile as any).username);
 
+        // Store basic token data
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).accessToken = account.access_token
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).refreshToken = account.refresh_token
-        // Discord returns expires_at in seconds for ACCESS TOKEN (typically 1 hour)
-        let accessTokenExpiresAt = account.expires_at;
-        if (!accessTokenExpiresAt) {
-          // Default to 1 hour if not provided
-          accessTokenExpiresAt = Math.floor(Date.now() / 1000) + 3600;
-          console.log('[AUTH] No expires_at provided, defaulting to 1 hour');
-        } else {
-          console.log('[AUTH] Discord provided access token expires_at:', accessTokenExpiresAt, 'formatted:', new Date(accessTokenExpiresAt * 1000).toISOString());
+        
+        // Store refresh token securely in database
+        if (account.refresh_token) {
+          const refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+          await RefreshTokenManager.storeRefreshToken((profile as any).id, account.refresh_token, refreshTokenExpiresAt);
         }
-
-        // Refresh token typically expires in 7 days
-        const refreshTokenExpiresAt = Math.floor(Date.now() / 1000) + 604800;
-
+        
+        // Set token expiry - Discord tokens typically last 1 hour
+        const accessTokenExpiresAt = account.expires_at || (Math.floor(Date.now() / 1000) + 3600);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).accessTokenExpiresAt = accessTokenExpiresAt
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).refreshTokenExpiresAt = refreshTokenExpiresAt
-        // Keep expiresAt for backward compatibility (use access token expiration)
         token.expiresAt = accessTokenExpiresAt
 
         // Store Discord profile data
@@ -120,11 +102,12 @@ export const authOptions: NextAuthOptions = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(token as any).discordDiscriminator = (profile as any).discriminator
 
-        // Log the user login
+        // Log the user login (system logs)
         if (profile) {
+          const userId = String((profile as any).id);
           const userEmail = (profile as any).email as string | undefined;
           const userUsername = (profile as any).username as string | undefined;
-          await logUserLogin((profile as any).id, userEmail, userUsername);
+          await SystemLogger.logUserLogin({ id: userId, name: userUsername, email: userEmail, role: token.role as string | undefined });
         }
 
         // Check database for user role
@@ -145,47 +128,46 @@ export const authOptions: NextAuthOptions = {
         console.log('[AUTH] Token setup completed for user:', (profile as any).username);
       }
 
-      // Handle token refresh if needed
+      // Handle token refresh - only when token is actually expired or about to expire
       if (trigger === 'update' || (token as any).accessTokenExpiresAt) {
         const now = Math.floor(Date.now() / 1000);
         const accessTokenExpiresAt = (token as any).accessTokenExpiresAt;
-        const refreshTokenExpiresAt = (token as any).refreshTokenExpiresAt;
-
-        // Check if access token is expired or will expire in the next 5 minutes
-        if (accessTokenExpiresAt && (now >= accessTokenExpiresAt - 300)) {
+        
+        // Only refresh if token is expired or will expire in the next 5 minutes
+        if (accessTokenExpiresAt && now >= (accessTokenExpiresAt - 300)) {
           console.log('[AUTH] Access token expired or expiring soon, attempting refresh...');
 
-          // Check if refresh token is still valid
-          if (refreshTokenExpiresAt && now >= refreshTokenExpiresAt) {
-            console.log('[AUTH] Refresh token also expired, forcing re-login');
-            // Return a special token that will trigger re-authentication
-            return {
-              ...token,
-              error: 'RefreshTokenExpired'
-            };
-          }
-
           try {
-            const refreshedToken = await TokenManager.refreshToken((token as any).refreshToken);
+            // Get refresh token from database
+            const discordId = (token as any).discordId;
+            const refreshToken = await RefreshTokenManager.getRefreshToken(discordId);
+            
+            if (!refreshToken) {
+              console.log('[AUTH] No valid refresh token found, user will need to re-login');
+              return {
+                ...token,
+                error: 'RefreshTokenExpired'
+              };
+            }
+
+            const refreshedToken = await TokenManager.refreshToken(refreshToken);
             if (refreshedToken) {
               console.log('[AUTH] Token refreshed successfully');
               // Update token with new values
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).accessToken = refreshedToken.access_token;
+              ;(token as any).accessToken = refreshedToken.accessToken;
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).accessTokenExpiresAt = refreshedToken.expires_at;
+              ;(token as any).accessTokenExpiresAt = refreshedToken.expiresAt;
               // Update the expiresAt for backward compatibility
-              token.expiresAt = refreshedToken.expires_at;
+              token.expiresAt = refreshedToken.expiresAt;
               
-              // If a new refresh token is provided, update it
-              if (refreshedToken.refresh_token) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ;(token as any).refreshToken = refreshedToken.refresh_token;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ;(token as any).refreshTokenExpiresAt = Math.floor(Date.now() / 1000) + 604800; // 7 days
+              // If a new refresh token is provided, rotate it in the database
+              if (refreshedToken.refreshToken) {
+                const newRefreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+                await RefreshTokenManager.rotateRefreshToken(discordId, refreshedToken.refreshToken, newRefreshTokenExpiresAt);
               }
             } else {
-              console.log('[AUTH] Token refresh failed, marking token as expired');
+              console.log('[AUTH] Token refresh failed, user will need to re-login');
               return {
                 ...token,
                 error: 'RefreshTokenExpired'
@@ -204,17 +186,20 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    async session({ session, token }) {
-      if (token.error === 'RefreshTokenExpired') {
-        // This will cause the session to be invalid, triggering re-authentication
-        throw new Error('Token expired');
+    session: (async ({ session, token }: any) => {
+      // Handle token errors
+      if ((token as any).error === 'RefreshTokenExpired') {
+        console.log('[AUTH] Session expired, returning null');
+        return null as any;
       }
 
-      // Pass token data to session
+      if (!token) {
+        return null as any;
+      }
+
+      // Pass token data to session (no refresh token in session for security)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(session as any).accessToken = (token as any).accessToken
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).refreshToken = (token as any).refreshToken
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(session as any).discordId = (token as any).discordId
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -222,12 +207,12 @@ export const authOptions: NextAuthOptions = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(session as any).discordDiscriminator = (token as any).discordDiscriminator
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).role = token.role || "viewer"
+      ;(session as any).role = (token as any).role || "viewer"
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(session as any).expiresAt = (token as any).accessTokenExpiresAt
 
-      return session;
-    },
+      return session as any;
+    }) as any,
   },
 }
 

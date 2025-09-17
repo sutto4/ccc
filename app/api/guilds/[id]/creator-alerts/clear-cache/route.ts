@@ -4,7 +4,7 @@ import { query } from "@/lib/db";
 
 // POST clear cache for a guild
 export const POST = withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
-  const guildId = params.id;
+  const { id: guildId } = await params;
   
   try {
     // Clear all cache entries for this guild

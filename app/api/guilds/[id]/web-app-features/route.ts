@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authMiddleware, createAuthResponse } from '@/lib/auth-middleware';
 import { query } from '@/lib/db';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Check authentication
+  const auth = await authMiddleware(request);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
 
-    const guildId = params.id;
+  try {
+    const { id: guildId } = params;
 
     // Get guild subscription status
     let isPremium = false;
@@ -71,8 +74,8 @@ export async function GET(
     // Convert guild features to object format using feature keys
     const featureStates: Record<string, boolean> = {};
     guildFeatures.forEach((feature: any) => {
-      // feature_name column contains feature keys, not display names
-      featureStates[feature.feature_name] = feature.enabled;
+      // Use feature_key as the key for the states object
+      featureStates[feature.feature_key] = feature.enabled;
     });
 
     // Build response with all features and their states
@@ -113,13 +116,14 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Check authentication
+  const auth = await authMiddleware(request);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
 
-    const guildId = params.id;
+  try {
+    const { id: guildId } = params;
     const body = await request.json();
     const { features } = body;
 
@@ -130,7 +134,7 @@ export async function POST(
     // Update each feature
     for (const [featureKey, enabled] of Object.entries(features)) {
       await query(
-        'INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)',
+        'INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)',
         [guildId, featureKey, enabled]
       );
     }

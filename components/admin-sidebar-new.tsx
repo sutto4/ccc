@@ -14,7 +14,8 @@ import {
   ChevronDown,
   ChevronRight,
   Users,
-  Globe
+  Globe,
+  FileText
 } from "lucide-react";
 import { useState } from "react";
 
@@ -50,6 +51,11 @@ const ADMIN_ITEMS: NavItem[] = [
       { href: "/admin/guilds", label: "All Guilds", icon: Server },
       { href: "/admin/guilds/bulk", label: "Bulk Operations", icon: Database },
     ]
+  },
+  {
+    href: "/admin/logs",
+    label: "System Logs",
+    icon: FileText
   }
 ];
 

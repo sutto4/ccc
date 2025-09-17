@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { AuthMiddleware } from '@/lib/auth-middleware';
+import { authMiddleware, createAuthResponse } from '@/lib/auth-middleware';
 
-export const GET = AuthMiddleware.withAuth(async (request: NextRequest) => {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export const GET = async (request: NextRequest) => {
+  // Check authentication
+  const auth = await authMiddleware(request);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   try {
     // Get table structure
     const columns = await query('DESCRIBE guilds');

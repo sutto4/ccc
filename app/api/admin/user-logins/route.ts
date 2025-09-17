@@ -1,25 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-
-// Database connection helper for Discord bot database
-async function query(sql: string, params?: any[]) {
-  const mysql = require('mysql2/promise');
-  const connection = await mysql.createConnection({
-    host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-    user: process.env.APP_DB_USER || process.env.BOT_DB_USER || process.env.DB_USER || 'root',
-    password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || process.env.DB_PASS || '',
-    database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
-    port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || process.env.DB_PORT || 3306),
-  });
-
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows;
-  } finally {
-    await connection.end();
-  }
-}
+import { query } from "@/lib/db";
 
 export async function GET(request: Request) {
   try {

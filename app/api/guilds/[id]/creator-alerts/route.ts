@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // GET list
-export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = async (_req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(_req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   const rows = await query(
     `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, custom_message, notes, enabled
@@ -11,10 +20,16 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Pr
     [guildId]
   );
   return NextResponse.json({ rules: rows });
-});
+};
 
 // POST create
-export const POST = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const POST = async (req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   const body = await req.json();
   const { platform, creator, roleId, channelId, discordUserId, customMessage, notes, enabled } = body || {};
@@ -27,10 +42,16 @@ export const POST = AuthMiddleware.withAuth(async (req, { params }: { params: Pr
     [guildId, platform, creator, roleId || null, channelId, discordUserId || null, customMessage || null, notes || null, enabled ? 1 : 0]
   );
   return NextResponse.json({ id: (result as any).insertId });
-});
+};
 
 // PUT update
-export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const PUT = async (req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   const body = await req.json();
   const { id, platform, creator, roleId, channelId, discordUserId, customMessage, notes, enabled } = body || {};
@@ -60,10 +81,16 @@ export const PUT = AuthMiddleware.withAuth(async (req, { params }: { params: Pro
     [safePlatform, safeCreator, safeRoleId, safeChannelId, safeDiscordUserId, safeCustomMessage, safeNotes, safeEnabled, parseInt(id), guildId]
   );
   return NextResponse.json({ ok: true });
-});
+};
 
 // DELETE remove
-export const DELETE = AuthMiddleware.withAuth(async (req, { params }: { params: Promise<{ id: string }> }) => {
+export const DELETE = async (req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -89,6 +116,6 @@ export const DELETE = AuthMiddleware.withAuth(async (req, { params }: { params: 
   }
   
   return NextResponse.json({ ok: true });
-});
+};
 
 

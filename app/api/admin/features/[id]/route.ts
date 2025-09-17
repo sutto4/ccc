@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { query } from "@/lib/db";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // PUT update feature
-export const PUT = AuthMiddleware.withAuth(async (req, { params }, auth) => {
+export const PUT = async (req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   // Check if user is admin
-  if (auth?.role !== 'admin' && auth?.role !== 'owner') {
+  if (auth.user.role !== 'admin' && auth.user.role !== 'owner') {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
@@ -47,9 +56,15 @@ export const PUT = AuthMiddleware.withAuth(async (req, { params }, auth) => {
 });
 
 // DELETE feature
-export const DELETE = AuthMiddleware.withAuth(async (_req, { params }, auth) => {
+export const DELETE = async (_req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(_req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   // Check if user is admin
-  if (auth?.role !== 'admin' && auth?.role !== 'owner') {
+  if (auth.user.role !== 'admin' && auth.user.role !== 'owner') {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 

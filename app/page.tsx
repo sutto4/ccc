@@ -1,43 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { Bot, Shield, Users, Zap, Crown, CheckCircle, ArrowRight, Play, Sparkles, Rocket } from "lucide-react";
 import SignInModal from "@/components/signin-modal";
 
 export default function Page() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [stats, setStats] = useState({ totalServers: 0, totalMembers: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
-  
-  // Remove automatic redirect - allow users to stay on home page even when logged in
+
+  // Check if user is authenticated without redirecting
+  const isAuthenticated = status === 'authenticated' && !!session;
+  const isLoading = status === 'loading';
+  const user = session?.user;
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/" });
-  // Fetch stats for the home page
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setStatsLoading(true);
-        const response = await fetch('/api/stats/public');
-        if (response.ok) {
-          const data = await response.json();
-          setStats(data);
-        }
-      } catch (error) {
-        console.warn('Could not fetch stats:', error);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
   };
 
   // Fetch stats for the home page
@@ -75,7 +57,7 @@ export default function Page() {
           </div>
           
           <div className="flex items-center gap-4">
-            {session ? (
+            {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link
                   href="/guilds"
@@ -83,7 +65,7 @@ export default function Page() {
                 >
                   My Servers
                 </Link>
-                {(session.role === "admin" || session.role === "owner") && (
+                {((session as any)?.role === "admin" || (session as any)?.role === "owner") && (
                   <Link
                     href="/admin"
                     className="text-gray-300 hover:text-white transition-colors"
@@ -138,7 +120,7 @@ export default function Page() {
             </p>
         
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              {session ? (
+              {isAuthenticated ? (
                 // Logged in user - show My Servers button
                 <Link
                   href="/guilds"

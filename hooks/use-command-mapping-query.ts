@@ -5,7 +5,7 @@ import { queryKeys } from '@/lib/query-client';
 
 interface CommandMapping {
   command_name: string;
-  feature_name: string;
+  feature_key: string;
   description: string;
 }
 

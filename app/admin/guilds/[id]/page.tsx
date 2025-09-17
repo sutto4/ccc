@@ -189,34 +189,14 @@ function AdminGuildSettingsPageContent() {
         )
       );
       
-      // Automatically enable/disable associated commands
-      const commandsToUpdate = [];
-      
-      // Define command-to-feature mapping
-      const commandFeatureMap: Record<string, string> = {
-        'warn': 'moderation',
-        'kick': 'moderation', 
-        'ban': 'moderation',
-        'mute': 'moderation',
-        'role': 'moderation',
-        'setmodlog': 'moderation',
-        'custom': 'utilities',
-        'sendverify': 'utilities',
-        'setverifylog': 'utilities',
-        'feedback': 'utilities',
-        'embed': 'utilities'
-      };
-      
-      // Find commands that belong to this feature
-      Object.entries(commandFeatureMap).forEach(([commandName, featureName]) => {
-        if (featureName === guildFeature.feature_key) {
-          commandsToUpdate.push({
-            command_name: commandName,
-            feature_name: featureName,
-            enabled: enabled
-          });
-        }
-      });
+      // Automatically enable/disable associated commands using DB-driven mappings
+      const commandsToUpdate = (commandMappings || [])
+        .filter((cmd: any) => cmd.feature_key === guildFeature.feature_key)
+        .map((cmd: any) => ({
+          command_name: cmd.command_name,
+          feature_name: guildFeature.feature_key,
+          enabled
+        }));
       
       // Update commands if any were found
       if (commandsToUpdate.length > 0) {
@@ -431,12 +411,12 @@ function AdminGuildSettingsPageContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Group commands by feature */}
                   {Object.entries(
-                    commandMappings.reduce((acc, cmd) => {
-                      const feature = cmd.feature_name;
+                    commandMappings.reduce((acc: Record<string, any[]>, cmd: any) => {
+                      const feature = cmd.feature_key;
                       if (!acc[feature]) acc[feature] = [];
                       acc[feature].push(cmd);
                       return acc;
-                    }, {} as Record<string, typeof commandMappings>)
+                    }, {} as Record<string, any[]>)
                   ).map(([featureName, commands]) => (
                     <div key={featureName} className="space-y-3">
                       <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
@@ -445,7 +425,7 @@ function AdminGuildSettingsPageContent() {
                          featureName === 'sticky_messages' ? 'Sticky Messages' :
                          featureName}
                       </h4>
-                      {commands.map((cmd) => (
+                      {commands.map((cmd: any) => (
                         <div key={cmd.command_name} className="flex items-center justify-between p-2 border rounded">
                           <div className="flex-1">
                             <p className="font-medium text-sm">/{cmd.command_name}</p>
@@ -464,7 +444,7 @@ function AdminGuildSettingsPageContent() {
                               }}
                               className="w-4 h-4"
                             />
-                            <label htmlFor={`cmd-${cmd.command_name}`} className="text-xs">
+                          <label htmlFor={`cmd-${cmd.command_name}`} className="text-xs">
                               {commandStates[cmd.command_name] ? 'Enabled' : 'Disabled'}
                             </label>
                           </div>

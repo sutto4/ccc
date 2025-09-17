@@ -4,24 +4,45 @@ import { env } from "@/lib/env";
 
 let pool: mysql.Pool | null = null;
 
+// Ensure a single pool instance across module reloads/workers
+function getGlobalPool(): mysql.Pool | null {
+  const g = globalThis as unknown as { __MYSQL_POOL__?: mysql.Pool | null };
+  return g.__MYSQL_POOL__ ?? null;
+}
+
+function setGlobalPool(p: mysql.Pool | null) {
+  const g = globalThis as unknown as { __MYSQL_POOL__?: mysql.Pool | null };
+  g.__MYSQL_POOL__ = p;
+}
+
 function getPool(): mysql.Pool {
-  if (!pool) {
-    pool = mysql.createPool({
-      host: env.DB_HOST,
-      user: env.DB_USER,
-      password: env.DB_PASS,
-      database: env.DB_NAME,
-      connectionLimit: 5, // Conservative limit to prevent leaks
-      waitForConnections: true,
-      queueLimit: 10,
-      // Add connection lifecycle management
-      idleTimeout: 60000, // 1 minute - release idle connections quickly
-      // Only include valid MySQL2 pool options
-      supportBigNumbers: true,
-      bigNumberStrings: true
-    });
+  // Reuse global pool to avoid multiple pools and leaked Sleep connections
+  const existing = getGlobalPool();
+  if (existing) {
+    pool = existing;
+    return existing;
   }
-  return pool;
+
+  const created = mysql.createPool({
+    host: env.DB_HOST,
+    user: env.DB_USER,
+    password: env.DB_PASS,
+    database: env.DB_NAME,
+    connectionLimit: 8,
+    waitForConnections: true,
+    queueLimit: 20,
+    // Lifecycle tuning: keep few idles, close quickly
+    maxIdle: 2,
+    idleTimeout: 60_000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    supportBigNumbers: true,
+    bigNumberStrings: true
+  });
+
+  pool = created;
+  setGlobalPool(created);
+  return created;
 }
 
 // Force recreate pool if we have connection issues (moved to bottom of file)
@@ -65,10 +86,11 @@ export async function query(sql: string, params?: any[]): Promise<any> {
     } catch (error: any) {
       lastError = error;
       
-      // For connection limit errors, don't retry
+      // For connection limit errors, trigger emergency cleanup
       if (error.code === 'ER_TOO_MANY_USER_CONNECTIONS') {
-        console.log('[DB] Connection limit reached, failing immediately');
-        throw new Error('Database temporarily unavailable');
+        // Do NOT reset the pool here; failing fast prevents thrashing and new pool creation
+        console.log('[DB] Connection limit reached, failing fast');
+        throw error;
       }
       
       // Only retry for specific recoverable errors
@@ -133,6 +155,7 @@ export async function closePool() {
   if (pool) {
     await pool.end();
     pool = null;
+    setGlobalPool(null);
   }
 }
 
@@ -152,6 +175,7 @@ export async function resetPool(): Promise<void> {
     console.log('[DB] Error during pool reset:', error instanceof Error ? error.message : 'Unknown error');
   } finally {
     pool = null;
+    setGlobalPool(null);
     console.log('[DB] Pool reset completed - next query will create fresh pool');
   }
 }
@@ -195,3 +219,20 @@ export async function healthCheck(): Promise<{ healthy: boolean; details: any }>
     };
   }
 }
+
+// Emergency connection cleanup - run this when we hit connection limits
+export async function emergencyCleanup(): Promise<void> {
+  console.log('[DB] EMERGENCY: Resetting connection pool due to connection limit');
+  try {
+    if (pool) {
+      await pool.end();
+    }
+  } catch (error) {
+    console.log('[DB] Error during emergency cleanup:', error);
+  } finally {
+    pool = null;
+    setGlobalPool(null);
+    console.log('[DB] Emergency cleanup completed - pool reset');
+  }
+}
+

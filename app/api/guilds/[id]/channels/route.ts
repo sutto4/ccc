@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // GET /api/guilds/[id]/channels - list text/news channels for channel selector
-export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Promise<{ id: string }> }, auth) => {
+export const GET = async (_req: any, { params }: { params: Promise<{ id: string }> }) => {
+  // Check authentication
+  const auth = await authMiddleware(_req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
   const { id: guildId } = await params;
   try {
     const botToken = process.env.DISCORD_BOT_TOKEN;
@@ -28,4 +37,4 @@ export const GET = AuthMiddleware.withAuth(async (_req, { params }: { params: Pr
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Failed to fetch channels" }, { status: 500 });
   }
-});
+};

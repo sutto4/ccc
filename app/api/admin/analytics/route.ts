@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
-import { AuthMiddleware } from "@/lib/auth-middleware";
+import { authMiddleware, createAuthResponse } from "@/lib/auth-middleware";
 import { apiAnalytics } from "@/lib/api-analytics-db";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // GET: Fetch API analytics data
-export const GET = AuthMiddleware.requireRole('admin')(async (req: Request, _ctx: unknown, { discordId }) => {
+export const GET = async (req: Request) => {
+  // Check authentication
+  const auth = await authMiddleware(req as any);
+  if (auth.error || !auth.user) {
+    return createAuthResponse(auth.error || 'Unauthorized');
+  }
+
+  // Check if user is admin
+  if (auth.user.role !== 'admin' && auth.user.role !== 'owner') {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  }
 
   try {
     const [stats, recentRequests, topEndpoints, topUsers, hourlyStats] = await Promise.all([
