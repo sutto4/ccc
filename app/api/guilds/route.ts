@@ -18,45 +18,31 @@ const inFlightUserGuilds = new Map<string, Promise<any[]>>();
 const permissionCache = new Map<string, { result: boolean, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// Helper function to refresh token if needed
-async function ensureValidToken(accessToken: string, refreshToken: string, userId: string): Promise<string | null> {
-  try {
-    // Check if token is valid
-    const tokenStatus = await TokenManager.getTokenStatus(accessToken, Math.floor(Date.now() / 1000) + 3600);
-    
-    if (tokenStatus.isValid && !tokenStatus.needsRefresh) {
-      return accessToken;
-    }
-
-    // Token needs refresh or is invalid
-    console.log(`[GUILDS-API] Token needs refresh for user ${userId}`);
-    
-    // Check if we can attempt refresh
-    if (!SessionManager.canRefresh(userId)) {
-      console.log(`[GUILDS-API] Too many refresh attempts for user ${userId}, forcing re-login`);
-      return null;
-    }
-
-    // Attempt token refresh
-    const refreshedTokens = await TokenManager.refreshToken(refreshToken);
-    
-    if (refreshedTokens) {
-      console.log(`[GUILDS-API] Token refreshed successfully for user ${userId}`);
-      SessionManager.resetRefreshAttempts(userId);
-      return refreshedTokens.accessToken;
-    } else {
-      console.log(`[GUILDS-API] Token refresh failed for user ${userId}`);
-      SessionManager.incrementRefreshAttempts(userId);
-      return null;
-    }
-  } catch (error) {
-    console.error(`[GUILDS-API] Error ensuring valid token for user ${userId}:`, error);
-    return null;
-  }
+// Helper: return current token; rely on 401 handling to force re-login.
+// This removes an extra Discord validation roundtrip per request.
+async function ensureValidToken(accessToken: string, _refreshToken: string, _userId: string): Promise<string | null> {
+  return accessToken || null;
 }
 
 // Helper function to check user permissions for a guild
-async function checkUserGuildPermission(userId: string, guildId: string, validAccessToken: string): Promise<boolean> {
+// Cache presence of role permissions table to avoid SHOW TABLES per request
+let rolePermsTableCache: { present: boolean; checkedAt: number } | null = null;
+
+async function hasRolePermissionsTable(queryFn: typeof query): Promise<boolean> {
+  const now = Date.now();
+  if (rolePermsTableCache && now - rolePermsTableCache.checkedAt < 10 * 60_000) {
+    return rolePermsTableCache.present;
+  }
+  try {
+    const rows = await queryFn("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'server_role_permissions' LIMIT 1") as any[];
+    rolePermsTableCache = { present: Array.isArray(rows) && rows.length > 0, checkedAt: now };
+  } catch {
+    rolePermsTableCache = { present: false, checkedAt: now };
+  }
+  return rolePermsTableCache.present;
+}
+
+async function checkUserGuildPermission(userId: string, guildId: string, validAccessToken: string, ownerLookup?: Map<string, boolean>): Promise<boolean> {
   // Check cache first to reduce API calls and logging
   const cacheKey = `${userId}:${guildId}`;
   const cached = permissionCache.get(cacheKey);
@@ -92,45 +78,15 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
       console.error('Database error checking server_access_control:', dbError);
     }
 
-    // If no explicit access, check ownership via Discord API
-    let isOwner = false;
-    try {
-      const guildResponse = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
-        headers: {
-          Authorization: `Bearer ${validAccessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (guildResponse.ok) {
-        const guildData = await guildResponse.json();
-        isOwner = userId === guildData.owner_id;
-        if (process.env.NODE_ENV === 'development' && isOwner) {
-          console.log(`[PERMISSION] Guild ${guildId}: user ${userId} is verified owner`);
-        }
-      } else {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[PERMISSION] Could not verify ownership for guild ${guildId}`);
-        }
-        isOwner = false;
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[PERMISSION] Error checking ownership for guild ${guildId}`);
-      }
-      isOwner = false;
-    }
+    // If no explicit access, check ownership using previously fetched userGuilds (no extra Discord call)
+    let isOwner = ownerLookup ? (ownerLookup.get(guildId) === true) : false;
 
     // Check if any of user's roles have app access by querying the database
     let hasRoleAccess = false;
 
     try {
-      // Check if the server_role_permissions table exists
-      const tables = await query(
-        "SHOW TABLES LIKE 'server_role_permissions'"
-      );
-
-      if ((tables as any[]).length > 0) {
+      // Check if the server_role_permissions table exists (cached)
+      if (await hasRolePermissionsTable(query)) {
         // Query for role permissions
         const rows = await query(
           'SELECT role_id FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
@@ -470,7 +426,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         
         throw new Error(body || `Failed to fetch user guilds (${userGuildsRes.status})`);
       }
-      return (await userGuildsRes.json()) as any[];
+      const arr = (await userGuildsRes.json()) as any[];
+      // Precompute owner lookup map (from Discord user guilds payload)
+      try {
+        ownerLookup = new Map<string, boolean>(arr.map((g: any) => [String(g.id), !!g.owner]));
+      } catch {}
+      return arr;
     })();
 
     inFlightUserGuilds.set(tokenKey, promise);
@@ -618,6 +579,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     console.log(`[GUILDS-DEBUG] Access token available: ${!!validAccessToken}`);
   }
 
+  // Precompute owner flags from previously fetched userGuilds (no extra Discord calls)
+  let ownerLookup: Map<string, boolean> | undefined;
+  try {
+    ownerLookup = new Map<string, boolean>(userGuilds.map((g: any) => [String(g.id), !!g.owner]));
+  } catch {}
+
   // Run permission checks in parallel for much better performance
   const permissionPromises = dbAccessibleUserGuilds.map(async (userGuild) => {
     try {
@@ -625,7 +592,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
       }
       // Check if user has management permissions in this guild
-      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken);
+      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken, ownerLookup);
       
       if (process.env.NODE_ENV === 'development') {
         console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
