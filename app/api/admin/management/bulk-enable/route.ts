@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+// Function to notify Discord bot of bulk changes
+async function notifyBotBulkUpdate(type: 'features' | 'commands', items: string[], action: 'enable' | 'disable') {
+  try {
+    const botUrl = process.env.BOT_API_URL || 'http://127.0.0.1:3001';
+    const response = await fetch(`${botUrl}/api/admin/bulk-update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        type,
+        items,
+        action,
+        timestamp: new Date().toISOString()
+      })
+    });
+    
+    if (response.ok) {
+      console.log(`[BULK-${action.toUpperCase()}] Bot notification sent successfully for ${items.length} ${type}`);
+    } else {
+      console.warn(`[BULK-${action.toUpperCase()}] Bot notification failed:`, response.status);
+    }
+  } catch (error) {
+    console.error(`[BULK-${action.toUpperCase()}] Error notifying bot:`, error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { type, items } = await request.json();
@@ -48,9 +75,13 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Notify Discord bot of bulk changes
+    console.log(`[BULK-ENABLE] Notifying bot of bulk ${type} enable for ${items.length} items...`);
+    await notifyBotBulkUpdate(type, items, 'enable');
+    
     return NextResponse.json({
       success: true,
-      message: `Bulk enabled ${items.length} ${type} for all guilds`
+      message: `Bulk enabled ${items.length} ${type} for all guilds and bot notified`
     });
   } catch (error) {
     console.error('Error bulk enabling:', error);

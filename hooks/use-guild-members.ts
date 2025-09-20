@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { fetchMembersLegacy, fetchRoles, type Role } from "@/lib/api";
+import { fetchMembersLegacy, fetchRoles, type Role, type Member } from "@/lib/api";
 
 export type Member = {
   guildId: string;
@@ -99,64 +99,34 @@ export function useGuildMembers(guildId: string) {
       const currentPage = resetPage ? 1 : page;
       const offset = (currentPage - 1) * pageSize;
 
-      // Load members with search (API handles authentication server-side)
-      const membersData = await fetchMembersLegacy(guildId);
-
-      // console.log('API returned members:', membersData?.length || 0, 'members');
-
-      // Single loop: transform, filter, and count in one pass
-      const searchTerm = debouncedSearch.trim().toLowerCase();
-      const hasSearch = searchTerm.length > 0;
-
-      const allFilteredMembers: Member[] = [];
-
-      // console.log('Starting to process', membersData?.length || 0, 'members');
-      // console.log('Search term:', searchTerm, 'hasSearch:', hasSearch);
-      // console.log('Role filter:', roleFilter);
-
-      for (const mem of membersData) {
-        // Transform member data (only what's needed)
-        const member: Member = {
-          ...mem,
-          avatarUrl: mem.avatarUrl || null,
-          accountid: mem.accountid || null,
-          joinedAt: (mem as any).joinedAt || null
-        };
-
-        // Apply search filter
-        let shouldInclude = true;
-        if (hasSearch) {
-          const usernameMatch = member.username.toLowerCase().includes(searchTerm);
-          const idMatch = member.discordUserId.toLowerCase().includes(searchTerm);
-          shouldInclude = usernameMatch || idMatch;
-        }
-
-        // Apply role filter
-        if (shouldInclude && roleFilter) {
-          shouldInclude = member.roleIds.includes(roleFilter);
-        }
-
-        if (shouldInclude) {
-          allFilteredMembers.push(member);
-        }
+      // Load members with search and pagination (API handles authentication server-side)
+      const queryParams = new URLSearchParams();
+      queryParams.set('limit', pageSize.toString());
+      if (offset > 0) queryParams.set('after', offset.toString());
+      if (debouncedSearch) queryParams.set('q', debouncedSearch);
+      if (roleFilter) queryParams.set('role', roleFilter);
+      
+      const response = await fetch(`/api/guilds/${guildId}/members?${queryParams.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch members: ${response.statusText}`);
       }
+      
+      const data = await response.json();
 
-      // console.log('After filtering,', allFilteredMembers.length, 'members remain');
+      // console.log('API returned members:', data.members?.length || 0, 'members');
 
-      // Update total count
-      setTotalMembers(allFilteredMembers.length);
+      // Transform member data
+      const transformedMembers: Member[] = data.members.map((mem: Member) => ({
+        ...mem,
+        avatarUrl: mem.avatarUrl || null,
+        accountid: mem.accountid || null,
+        joinedAt: (mem as any).joinedAt || null
+      }));
 
-      // console.log('Filtered members:', allFilteredMembers.length, 'total, showing page with offset:', offset);
-
-      // Apply pagination
-      const startIndex = offset;
-      const endIndex = Math.min(startIndex + pageSize, allFilteredMembers.length);
-      const pageMembers = allFilteredMembers.slice(startIndex, endIndex);
-
-      // console.log('Page members:', pageMembers.length, 'members');
-
-      setMembers(pageMembers);
-      setHasMore(endIndex < allFilteredMembers.length);
+      // Update total count and pagination state
+      setTotalMembers(data.page.total || data.members.length);
+      setMembers(transformedMembers);
+      setHasMore(data.page.nextAfter !== null);
 
       if (resetPage) {
         setPage(1);
@@ -341,12 +311,17 @@ export function useGuildMembersKanban(guildId: string) {
       setError(null);
       
       // Load all members (API handles authentication server-side)
-      const membersData = await fetchMembersLegacy(guildId);
+      const response = await fetch(`/api/guilds/${guildId}/members?limit=1000`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch members: ${response.statusText}`);
+      }
       
-      // console.log('Kanban API returned members:', membersData?.length || 0, 'members');
+      const data = await response.json();
+      
+      // console.log('Kanban API returned members:', data.members?.length || 0, 'members');
       
       // Transform member data
-      const transformedMembers: Member[] = membersData.map(mem => ({
+      const transformedMembers: Member[] = data.members.map((mem: Member) => ({
         ...mem,
         avatarUrl: mem.avatarUrl || null,
         accountid: mem.accountid || null,

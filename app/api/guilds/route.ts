@@ -7,6 +7,7 @@ import { analyticsBatcher } from "@/lib/analytics-batcher";
 import { TokenManager } from "@/lib/token-manager";
 import { SessionManager } from "@/lib/session-manager";
 import { query } from "@/lib/db";
+import { perfMonitor, measurePerf } from "@/lib/performance-monitor";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -174,10 +175,11 @@ async function checkUserGuildPermission(userId: string, guildId: string, validAc
 // Returns guilds the user belongs to, filtered to those where the bot is installed
 let requestCounter = 0;
 export const GET = async (req: NextRequest, _ctx: unknown) => {
-  // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
-  }
+  return measurePerf('guilds-api-total', async () => {
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[GUILDS-API] FUNCTION START: GET request received at ${new Date().toISOString()}`);
+    }
 
   const token = await getToken({
     req: req,
@@ -357,7 +359,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   }
 
   if (userGuilds.length === 0) {
-    const promise = (async () => {
+    const promise = measurePerf('discord-api-fetch', async () => {
       let userGuildsRes: Response;
       // DEBUG: console.log(`[GUILDS-DEBUG] Fetching user guilds from Discord API`);
       try {
@@ -432,7 +434,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         ownerLookup = new Map<string, boolean>(arr.map((g: any) => [String(g.id), !!g.owner]));
       } catch {}
       return arr;
-    })();
+    });
 
     inFlightUserGuilds.set(tokenKey, promise);
     try {
@@ -495,7 +497,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
     // DEBUG: console.log(`[SECURITY-AUDIT] User's Discord guilds:`, userGuilds.map(g => ({ id: g.id, name: g.name })));
 
     // Get bot-installed guilds first
-    const installedGuilds = await fetchInstalledGuilds(botBase);
+    const installedGuilds = await measurePerf('bot-api-fetch', () => fetchInstalledGuilds(botBase));
     const installedGuildIds = new Set((installedGuilds || []).map((g: any) => String(g.id || g.guildId || g.guild_id || (g as any).guild_id || "")));
 
     // DEBUG: console.log(`[GUILDS] Bot is installed in ${installedGuildIds.size} guilds`);
@@ -512,10 +514,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Fetch database access records for this user
   let dbAccessibleGuildIds = new Set<string>();
   try {
-    const accessRecords = await query(
+    const accessRecords = await measurePerf('db-access-control-query', () => query(
       'SELECT guild_id FROM server_access_control WHERE user_id = ? AND has_access = 1',
       [userId]
-    );
+    ));
 
     dbAccessibleGuildIds = new Set(accessRecords.map((record: any) => String(record.guild_id)));
     if (process.env.NODE_ENV === 'development') {
@@ -587,22 +589,24 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   // Run permission checks in parallel for much better performance
   const permissionPromises = dbAccessibleUserGuilds.map(async (userGuild) => {
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
-      }
-      // Check if user has management permissions in this guild
-      const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken, ownerLookup);
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
-      }
+    return measurePerf('permission-check', async () => {
+      try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[SECURITY-AUDIT] Checking permission for guild ${userGuild.id} (${userGuild.name}) - User: ${userId}`);
+        }
+        // Check if user has management permissions in this guild
+        const hasPermission = await checkUserGuildPermission(userId, userGuild.id, validAccessToken, ownerLookup);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[SECURITY-AUDIT] Permission result for guild ${userGuild.id}: ${hasPermission} - User: ${userId}`);
+        }
 
-      return { userGuild, hasPermission };
-    } catch (error) {
-      console.error(`[GUILDS] Error checking permission for guild ${userGuild.id}:`, error);
-      return { userGuild, hasPermission: false };
-    }
+        return { userGuild, hasPermission };
+      } catch (error) {
+        console.error(`[GUILDS] Error checking permission for guild ${userGuild.id}:`, error);
+        return { userGuild, hasPermission: false };
+      }
+    }, { guildId: userGuild.id, guildName: userGuild.name });
   });
 
   // Wait for all permission checks to complete
@@ -649,7 +653,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   try {
     let groups: any[] = [];
     if (accessibleGuildIds.size > 0) {
-      groups = await query(`
+      groups = await measurePerf('db-group-info-query', () => query(`
         SELECT
           g.guild_id,
           sg.id as group_id,
@@ -658,7 +662,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         FROM guilds g
         LEFT JOIN server_groups sg ON g.group_id = sg.id
         WHERE g.guild_id IN (${Array.from(accessibleGuildIds).map(() => '?').join(',')})
-      `, Array.from(accessibleGuildIds));
+      `, Array.from(accessibleGuildIds)));
     }
 
     groups.forEach((g: any) => {
@@ -784,6 +788,7 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   }
 
   return NextResponse.json({ guilds: results });
+  });
 };
 
 async function fetchInstalledGuilds(botBase: string) {
@@ -796,7 +801,7 @@ async function fetchInstalledGuilds(botBase: string) {
   if (installedGuilds.length === 0 && botBase) {
     // DEBUG: console.log('[BOT-API] Fetching installed guilds from bot API:', `${botBase}/api/guilds`);
     try {
-      const botRes = await fetch(`${botBase}/api/guilds`);
+      const botRes = await measurePerf('bot-api-http-fetch', () => fetch(`${botBase}/api/guilds`));
       // DEBUG: console.log('[BOT-API] 🔗 Attempting to connect to:', `${botBase}/api/guilds`);
       // DEBUG: console.log('[BOT-API] 📊 Response status:', botRes.status);
 

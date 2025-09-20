@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
 import { addRole, removeRole, type Role } from "@/lib/api";
 import { UserRoleModal } from "@/components/ui/user-role-modal";
-import { useGuildMembers, type Row } from "@/hooks/use-guild-members";
+import { useGuildMembersOptimized, type Row } from "@/hooks/use-guild-members-optimized";
 import { useToast } from "@/hooks/use-toast";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 
@@ -25,7 +25,7 @@ function MembersPageContent() {
   const params = useParams<{ id: string }>();
   const guildId = params?.id ?? "";
   
-  // Use the shared hook for all member management
+  // Use the optimized shared hook for all member management
   const {
     loading,
     loadingRoles,
@@ -46,7 +46,7 @@ function MembersPageContent() {
     loadMore,
     roleMap,
     DEFAULT_AVATAR
-  } = useGuildMembers(guildId);
+  } = useGuildMembersOptimized(guildId);
   
   // UI state
   const [modalUser, setModalUser] = useState<Row | null>(null);

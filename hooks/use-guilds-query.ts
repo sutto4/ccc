@@ -5,7 +5,13 @@ import { queryKeys } from '@/lib/query-client';
 import { type Guild } from '@/lib/api';
 
 async function fetchGuilds(): Promise<Guild[]> {
-  const response = await fetch('/api/guilds');
+  // Try optimized endpoint first, fallback to original
+  let response = await fetch('/api/guilds-optimized');
+  
+  if (!response.ok) {
+    console.warn('[PERF] Optimized endpoint failed, trying original...');
+    response = await fetch('/api/guilds');
+  }
   
   if (!response.ok) {
     // Check if it's an authentication error

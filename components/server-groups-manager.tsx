@@ -72,9 +72,16 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
       console.log('Starting to load data...');
       
       // API routes handle authentication server-side via session cookies
-      const [groupsResponse, guildsResponse] = await Promise.all([
+      // Try optimized guilds API first, fallback to original
+      let guildsResponse = await fetch("/api/guilds-optimized");
+      if (!guildsResponse.ok) {
+        console.warn('[PERF] Optimized guilds endpoint failed, trying original...');
+        guildsResponse = await fetch("/api/guilds");
+      }
+      
+      const [groupsResponse] = await Promise.all([
         fetch("/api/server-groups"),
-        fetch("/api/guilds")
+        Promise.resolve(guildsResponse)
       ]);
 
       console.log('Groups response status:', groupsResponse.status);

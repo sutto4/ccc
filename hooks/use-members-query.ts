@@ -22,17 +22,27 @@ interface MembersParams {
 async function fetchMembersWithParams(guildId: string, params: MembersParams = {}): Promise<MembersResponse> {
   const { search = '', roleFilter = '', page = 1, pageSize = 100 } = params;
   
-  const members = await fetchMembersLegacy(guildId, {
-    search,
-    roleFilter,
-    page,
-    pageSize,
-  });
-
+  // Calculate offset for pagination
+  const offset = (page - 1) * pageSize;
+  
+  // Build query parameters for the /members endpoint
+  const queryParams = new URLSearchParams();
+  queryParams.set('limit', pageSize.toString());
+  if (offset > 0) queryParams.set('after', offset.toString());
+  if (search) queryParams.set('q', search);
+  if (roleFilter) queryParams.set('role', roleFilter);
+  
+  const response = await fetch(`/api/guilds/${guildId}/members?${queryParams.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch members: ${response.statusText}`);
+  }
+  
+  const data = await response.json();
+  
   return {
-    members: members.map(member => ({ ...member, rolesExpanded: false })),
-    totalCount: members.length,
-    hasMore: members.length === pageSize,
+    members: data.members.map((member: Member) => ({ ...member, rolesExpanded: false })),
+    totalCount: data.page.total || data.members.length,
+    hasMore: data.page.nextAfter !== null,
   };
 }
 
@@ -64,7 +74,14 @@ export function useRolesQuery(guildId: string) {
 export function useMembersKanbanQuery(guildId: string) {
   return useQuery<Member[]>({
     queryKey: queryKeys.membersKanban(guildId),
-    queryFn: () => fetchMembersLegacy(guildId),
+    queryFn: async () => {
+      const response = await fetch(`/api/guilds/${guildId}/members?limit=1000`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch members: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.members;
+    },
     staleTime: 1 * 60 * 1000, // 1 minute
     cacheTime: 3 * 60 * 1000, // 3 minutes cache
     enabled: !!guildId,

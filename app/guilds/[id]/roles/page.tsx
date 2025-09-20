@@ -25,33 +25,51 @@ async function RolesPage({ params }: { params: Promise<Params> }) {
 
   const { id: guildId } = await params;
 
-  // Fetch guilds using the authenticated API route
-  const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
+  // Try optimized guilds API first, fallback to original
+  let guildsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds-optimized`, {
     headers: {
       'Cookie': cookieStore.toString(), // Pass cookies for authentication
     },
   });
 
+  if (!guildsResponse.ok) {
+    console.warn('[PERF] Optimized guilds endpoint failed, trying original...');
+    guildsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds`, {
+      headers: {
+        'Cookie': cookieStore.toString(),
+      },
+    });
+  }
+
   let guilds: Guild[] = [];
-  if (response.ok) {
-    const data = await response.json();
+  if (guildsResponse.ok) {
+    const data = await guildsResponse.json();
     guilds = data.guilds || [];
   }
 
   const guild = guilds.find((g) => g.id === guildId);
   if (!guild) return notFound();
 
-  // Fetch roles using the authenticated API route
-  const rolesResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds/${guildId}/roles`, {
+  // Try optimized roles API first, fallback to original
+  let rolesResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds/${guildId}/roles-optimized`, {
     headers: {
       'Cookie': cookieStore.toString(), // Pass cookies for authentication
     },
   });
 
+  if (!rolesResponse.ok) {
+    console.warn('[PERF] Optimized roles endpoint failed, trying original...');
+    rolesResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/guilds/${guildId}/roles`, {
+      headers: {
+        'Cookie': cookieStore.toString(),
+      },
+    });
+  }
+
   let roles: any[] = [];
   if (rolesResponse.ok) {
     const data = await rolesResponse.json();
-    roles = data.roles || [];
+    roles = data.roles || data || []; // Handle both old and new response formats
   }
 
 

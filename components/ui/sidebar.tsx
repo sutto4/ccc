@@ -79,6 +79,7 @@ type NavLeafProps = {
 
 const TOP: Item[] = [
   { href: "/guilds", label: "My Servers", icon: Shield },
+  { href: "/server-groups", label: "Server Groups", icon: Folder },
   { href: "/admin", label: "Admin", icon: Settings },
 ];
 

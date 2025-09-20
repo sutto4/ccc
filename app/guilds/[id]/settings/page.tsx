@@ -321,7 +321,17 @@ function GuildSettingsPageContent() {
   const loadRoles = async () => {
     try {
       setLoading(true);
-      const fetchedRoles = await fetchRoles(guildId);
+      // Try optimized roles API first, fallback to original
+      let response = await fetch(`/api/guilds/${guildId}/roles-optimized`);
+      
+      if (!response.ok) {
+        console.warn('[PERF] Optimized roles endpoint failed, trying original...');
+        const fetchedRoles = await fetchRoles(guildId);
+        setRoles(fetchedRoles);
+        return;
+      }
+      
+      const fetchedRoles = await response.json();
       
       console.log('Raw fetched roles:', fetchedRoles);
       console.log('Role structure:', fetchedRoles.map(r => ({
@@ -600,8 +610,14 @@ function GuildSettingsPageContent() {
   const loadAvailableServers = async () => {
     try {
       setLoadingAvailableServers(true);
-      // Get all guilds the user has access to
-      const response = await fetch('/api/guilds');
+      // Get all guilds the user has access to - try optimized first
+      let response = await fetch('/api/guilds-optimized');
+      
+      if (!response.ok) {
+        console.warn('[PERF] Optimized guilds endpoint failed, trying original...');
+        response = await fetch('/api/guilds');
+      }
+      
       if (response.ok) {
         const userGuilds = await response.json();
         
