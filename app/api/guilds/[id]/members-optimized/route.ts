@@ -78,20 +78,20 @@ async function fetchRolesFromBot(guildId: string) {
 }
 
 async function getGuildMembersCount(guildId: string) {
-  return measurePerf('db-guild-members-count', async () => {
+  return measurePerf('guild-members-count', async () => {
     // Check cache first
     const cached = await cacheGet(CACHE_KEYS.GUILD_MEMBERS_COUNT(guildId));
     if (cached !== null) {
       return cached;
     }
 
-    // Get count from database if available
+    // Get count from guilds table (member_count field)
     try {
       const result = await query(
-        'SELECT COUNT(*) as count FROM guild_members WHERE guild_id = ?',
+        'SELECT member_count FROM guilds WHERE guild_id = ?',
         [guildId]
       );
-      const count = result[0]?.count || 0;
+      const count = result[0]?.member_count || 0;
       
       // Cache the result
       await cacheSet(CACHE_KEYS.GUILD_MEMBERS_COUNT(guildId), count, CACHE_TTLS.GUILD_MEMBERS_COUNT);
