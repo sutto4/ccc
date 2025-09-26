@@ -146,7 +146,16 @@ export default function ServerGroupsManager({ guildId }: ServerGroupsManagerProp
           variant: "success"
         });
       } else {
-        throw new Error("Failed to create group");
+        const errorData = await response.json();
+        if (response.status === 403) {
+          toast({
+            title: "Premium Required",
+            description: errorData.error || "Server groups are only available to premium customers. Please upgrade your plan.",
+            variant: "destructive"
+          });
+        } else {
+          throw new Error(errorData.error || "Failed to create group");
+        }
       }
     } catch (error) {
       console.error("Error creating group:", error);

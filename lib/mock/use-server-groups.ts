@@ -14,6 +14,12 @@ export interface ServerGroup {
   automodRulesCount: number;
   createdAt: string;
   updatedAt: string;
+  servers: {
+    id: string;
+    name: string;
+    memberCount: number;
+    isOnline: boolean;
+  }[];
 }
 
 // Mock data
@@ -29,7 +35,19 @@ const mockGroups: ServerGroup[] = [
     banSyncEnabled: true,
     automodRulesCount: 12,
     createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-20T14:30:00Z'
+    updatedAt: '2024-01-20T14:30:00Z',
+        servers: [
+          { id: '1', name: 'Gaming Central', memberCount: 1250, isOnline: true },
+          { id: '2', name: 'Esports Arena', memberCount: 890, isOnline: true },
+          { id: '3', name: 'Casual Gaming', memberCount: 2100, isOnline: false },
+          { id: '4', name: 'Competitive Hub', memberCount: 650, isOnline: true },
+          { id: '5', name: 'Community Server', memberCount: 3200, isOnline: true },
+          { id: '6', name: 'Tournament Central', memberCount: 480, isOnline: false },
+          { id: '7', name: 'Newbie Friendly', memberCount: 1100, isOnline: true },
+          { id: '8', name: 'Pro Players', memberCount: 320, isOnline: true },
+          { id: '9', name: 'Moderator Hub', memberCount: 750, isOnline: true },
+          { id: '10', name: 'VIP Lounge', memberCount: 180, isOnline: true }
+        ]
   },
   {
     id: '2',
@@ -42,7 +60,11 @@ const mockGroups: ServerGroup[] = [
     banSyncEnabled: false,
     automodRulesCount: 0,
     createdAt: '2024-01-10T09:00:00Z',
-    updatedAt: '2024-01-18T16:45:00Z'
+    updatedAt: '2024-01-18T16:45:00Z',
+    servers: [
+      { id: '4', name: 'Dev Team Alpha', memberCount: 45, isOnline: true },
+      { id: '5', name: 'Code Review Hub', memberCount: 32, isOnline: true }
+    ]
   },
   {
     id: '3',
@@ -55,7 +77,17 @@ const mockGroups: ServerGroup[] = [
     banSyncEnabled: true,
     automodRulesCount: 25,
     createdAt: '2024-01-05T08:00:00Z',
-    updatedAt: '2024-01-22T11:20:00Z'
+    updatedAt: '2024-01-22T11:20:00Z',
+    servers: [
+      { id: '6', name: 'Streamer Central', memberCount: 3200, isOnline: true },
+      { id: '7', name: 'Creator Collab', memberCount: 1800, isOnline: true },
+      { id: '8', name: 'Content Hub', memberCount: 950, isOnline: true },
+      { id: '9', name: 'Stream Setup', memberCount: 420, isOnline: false },
+      { id: '10', name: 'Creator Events', memberCount: 2100, isOnline: true },
+      { id: '11', name: 'Content Review', memberCount: 680, isOnline: true },
+      { id: '12', name: 'Stream Analytics', memberCount: 320, isOnline: true },
+      { id: '13', name: 'Creator Support', memberCount: 1500, isOnline: false }
+    ]
   }
 ];
 
@@ -85,7 +117,8 @@ export function useServerGroups() {
       banSyncEnabled: false,
       automodRulesCount: 0,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      servers: []
     };
 
     setGroups(prev => [newGroup, ...prev]);

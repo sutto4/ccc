@@ -648,20 +648,20 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
   // Create a set of accessible guild IDs for fast lookup
   const accessibleGuildIds = new Set(accessibleUserGuilds.map((g: any) => String(g.id)));
 
-  // Fetch group information for all accessible guilds
+  // Fetch group information for all accessible guilds using the new server_group_members system
   let groupInfo: any = {};
   try {
     let groups: any[] = [];
     if (accessibleGuildIds.size > 0) {
       groups = await measurePerf('db-group-info-query', () => query(`
         SELECT
-          g.guild_id,
+          sgm.guild_id,
           sg.id as group_id,
           sg.name as group_name,
           sg.description as group_description
-        FROM guilds g
-        LEFT JOIN server_groups sg ON g.group_id = sg.id
-        WHERE g.guild_id IN (${Array.from(accessibleGuildIds).map(() => '?').join(',')})
+        FROM server_group_members sgm
+        LEFT JOIN server_groups sg ON sgm.group_id = sg.id
+        WHERE sgm.guild_id IN (${Array.from(accessibleGuildIds).map(() => '?').join(',')})
       `, Array.from(accessibleGuildIds)));
     }
 
