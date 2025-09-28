@@ -116,7 +116,7 @@ export default function Page() {
             </div>
             
             <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed">
-              The Discord bot that makes server management effortless. Join our exclusive beta program and get premium features completely free.
+              The Discord bot that makes multi-server management effortless. Join our exclusive beta program and get premium features completely free.
             </p>
         
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
@@ -167,33 +167,84 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Subtle Stats Section */}
-      <section className="py-4 bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-8 text-sm text-gray-400">
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-blue-400" />
-              <span>
-                {statsLoading ? (
-                  <span className="animate-pulse">...</span>
-                ) : (
-                  <span className="text-white font-medium">{stats.totalServers.toLocaleString()}</span>
-                )}
-                <span className="ml-1">servers</span>
-              </span>
+      {/* Community Showcase */}
+      <section className="py-8 bg-gray-900">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-6">
+            <p className="text-sm text-gray-500 uppercase tracking-wide font-medium">
+              Communities using ServerMate
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Overall Stats */}
+            <div className="flex justify-center">
+              <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700/30">
+                <div className="flex items-center gap-6 text-sm text-gray-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-400" />
+                    <span>
+                      {statsLoading ? (
+                        <span className="animate-pulse">...</span>
+                      ) : (
+                        <span className="text-white font-medium">{stats.totalServers.toLocaleString()}</span>
+                      )}
+                      <span className="ml-1">total servers</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-emerald-400" />
+                    <span>
+                      {statsLoading ? (
+                        <span className="animate-pulse">...</span>
+                      ) : stats.totalMembers > 0 ? (
+                        <span className="text-white font-medium">{stats.totalMembers.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-gray-500">—</span>
+                      )}
+                      <span className="ml-1">total members</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-emerald-400" />
-              <span>
-                {statsLoading ? (
-                  <span className="animate-pulse">...</span>
-                ) : stats.totalMembers > 0 ? (
-                  <span className="text-white font-medium">{stats.totalMembers.toLocaleString()}</span>
-                ) : (
-                  <span className="text-gray-500">—</span>
-                )}
-                <span className="ml-1">members</span>
-              </span>
+            
+            {/* Featured Community */}
+            <div className="flex justify-center">
+              <a 
+                href="https://fatduckgaming.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="group block"
+              >
+                <div className="bg-gray-800/50 hover:bg-gray-800/70 rounded-lg p-4 border border-gray-700/50 hover:border-gray-600/50 transition-all duration-200 relative">
+                  <div className="absolute -top-1 -right-1">
+                    <div className="bg-emerald-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                      Partnered
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <img 
+                      src="https://i.imgur.com/AhJhpG3.png" 
+                      alt="Fat Duck Gaming" 
+                      className="w-10 h-10 rounded object-contain"
+                    />
+                    <div className="text-left">
+                      <div className="text-white font-semibold group-hover:text-blue-400 transition-colors">
+                        Fat Duck Gaming
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        27k members • 8 servers
+                      </div>
+                    </div>
+                    <div className="ml-auto text-gray-500 group-hover:text-gray-400 transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </a>
             </div>
           </div>
         </div>
