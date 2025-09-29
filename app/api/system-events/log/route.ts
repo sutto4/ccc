@@ -32,8 +32,16 @@ export const POST = async (req: NextRequest) => {
       request: req
     } as any;
 
+    console.log('[SYSTEM-LOG] Received log:', {
+      guildId: payload.guildId,
+      actionType: payload.actionType,
+      actionName: payload.actionName,
+      userName: payload.userName
+    });
+
     await SystemLogger.log(payload);
 
+    console.log('[SYSTEM-LOG] Successfully saved log to database');
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('[SYSTEM-LOG] Failed to receive log:', error);
