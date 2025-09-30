@@ -241,54 +241,87 @@ export const GET = async (req: NextRequest) => {
       const botGuildMap = new Map(botGuilds.map((g: any) => [String(g.id || g.guild_id), g]));
       const ownerLookup = new Map(userGuilds.map((g: any) => [String(g.id), !!g.owner]));
 
-      // Filter user guilds to only those with database access
-      const accessibleUserGuilds = userGuilds.filter((guild: any) => 
-        accessControlSet.has(guild.id)
-      );
+      // Candidate guilds are only those where the bot is installed AND user is a member
+      const candidateUserGuilds = userGuilds.filter((guild: any) => botGuildMap.has(String(guild.id)));
 
-      // Check permissions for accessible guilds in parallel
-      const permissionPromises = accessibleUserGuilds.map(async (userGuild: any) => {
-        const hasPermission = await checkGuildPermission(
-          discordId, 
-          userGuild.id, 
-          accessToken, 
-          ownerLookup
-        );
+      // Split candidates: already have explicit access vs need on-demand check
+      const preGrantedGuilds = candidateUserGuilds.filter((g: any) => accessControlSet.has(String(g.id)));
+      const needCheckGuilds = candidateUserGuilds.filter((g: any) => !accessControlSet.has(String(g.id)));
+
+      // Helper: upsert grant for sync-self
+      async function upsertSyncSelf(guildId: string) {
+        try {
+          await query(
+            `INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes)
+             VALUES (?, ?, 1, ?, 'sync-self')
+             ON DUPLICATE KEY UPDATE has_access = 1, notes = 'sync-self', granted_at = CURRENT_TIMESTAMP`,
+            [guildId, discordId, 'sync-self']
+          );
+        } catch (e) {
+          console.error('[ACCESS] Failed to upsert sync-self grant', { guildId, discordId, error: (e as any)?.message });
+        }
+      }
+
+      // Helper: revoke only automation-managed grants
+      async function revokeIfAutomated(guildId: string) {
+        try {
+          await query(
+            `UPDATE server_access_control
+             SET has_access = 0, notes = 'sync-self'
+             WHERE guild_id = ? AND user_id = ? AND (notes = 'sync-self' OR notes = 'role-sync')`,
+            [guildId, discordId]
+          );
+        } catch (e) {
+          console.error('[ACCESS] Failed to revoke sync-self/role-sync grant', { guildId, discordId, error: (e as any)?.message });
+        }
+      }
+
+      // For guilds without an explicit row, perform a single-user permission check and upsert if allowed
+      const evaluatedGuilds = await Promise.all(needCheckGuilds.map(async (userGuild: any) => {
+        const allowed = await checkGuildPermission(discordId, userGuild.id, accessToken, ownerLookup);
+        if (allowed) {
+          await upsertSyncSelf(String(userGuild.id));
+          return { userGuild, hasPermission: true };
+        } else {
+          await revokeIfAutomated(String(userGuild.id));
+          return { userGuild, hasPermission: false };
+        }
+      }));
+
+      // Pre-granted guilds are already accessible; still enforce permission check for consistency
+      const preGrantedEvaluations = await Promise.all(preGrantedGuilds.map(async (userGuild: any) => {
+        const hasPermission = await checkGuildPermission(discordId, userGuild.id, accessToken, ownerLookup);
         return { userGuild, hasPermission };
-      });
+      }));
 
-      const permissionResults = await Promise.all(permissionPromises);
-      const accessibleGuilds = permissionResults
-        .filter(result => result.hasPermission)
-        .map(result => result.userGuild);
+      const accessibleGuilds = [...preGrantedEvaluations, ...evaluatedGuilds]
+        .filter(r => r.hasPermission)
+        .map(r => r.userGuild);
 
       // Get group info for accessible guilds
       const accessibleGuildIds = accessibleGuilds.map((g: any) => g.id);
       const groupInfo = await fetchGroupInfo(accessibleGuildIds);
 
       // Build final results
-      const results = accessibleGuilds
-        .filter((userGuild: any) => botGuildMap.has(userGuild.id))
-        .map((userGuild: any) => {
-          const botGuild = botGuildMap.get(userGuild.id);
-          const group = groupInfo[userGuild.id];
+      const results = accessibleGuilds.map((userGuild: any) => {
+        const botGuild = botGuildMap.get(String(userGuild.id));
+        const group = groupInfo[userGuild.id];
 
-          return {
-            id: userGuild.id,
-            name: botGuild?.guild_name || botGuild?.name || userGuild.name || 'Unknown Guild',
-            memberCount: botGuild?.memberCount || 0,
-            roleCount: botGuild?.roleCount || 0,
-            iconUrl: botGuild?.iconUrl || (userGuild.icon ? 
-              `https://cdn.discordapp.com/icons/${userGuild.id}/${userGuild.icon}.png` : null),
-            premium: Boolean(botGuild?.premium || false),
-            createdAt: null,
-            group: group ? {
-              id: group.groupId,
-              name: group.groupName,
-              description: group.groupDescription
-            } : null
-          };
-        });
+        return {
+          id: userGuild.id,
+          name: botGuild?.guild_name || botGuild?.name || userGuild.name || 'Unknown Guild',
+          memberCount: botGuild?.memberCount || 0,
+          roleCount: botGuild?.roleCount || 0,
+          iconUrl: botGuild?.iconUrl || (userGuild.icon ? `https://cdn.discordapp.com/icons/${userGuild.id}/${userGuild.icon}.png` : null),
+          premium: Boolean(botGuild?.premium || false),
+          createdAt: null,
+          group: group ? {
+            id: group.groupId,
+            name: group.groupName,
+            description: group.groupDescription
+          } : null
+        };
+      });
 
       // Log performance summary
       const slowest = perfMonitor.getSlowestOperations(5);
