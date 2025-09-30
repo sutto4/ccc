@@ -278,12 +278,29 @@ export const GET = async (req: NextRequest) => {
 
       // For guilds without an explicit row, perform a single-user permission check and upsert if allowed
       const evaluatedGuilds = await Promise.all(needCheckGuilds.map(async (userGuild: any) => {
-        const allowed = await checkGuildPermission(discordId, userGuild.id, accessToken, ownerLookup);
-        if (allowed) {
-          await upsertSyncSelf(String(userGuild.id));
+        const guildId = String(userGuild.id);
+        // SECURITY GUARD: Only auto-grant if there are configured allowed roles OR user is owner
+        let allowedRolesCount = 0;
+        try {
+          const rows = await query(
+            'SELECT COUNT(*) as cnt FROM server_role_permissions WHERE guild_id = ? AND can_use_app = 1',
+            [guildId]
+          );
+          allowedRolesCount = Number((rows as any[])[0]?.cnt || 0);
+        } catch (e) {
+          // On DB error, do not auto-grant
+          allowedRolesCount = 0;
+        }
+
+        const isOwner = ownerLookup.get(guildId) === true;
+        const allowed = await checkGuildPermission(discordId, guildId, accessToken, ownerLookup);
+
+        // Only upsert if allowed AND (isOwner OR there are explicit allowed roles configured)
+        if (allowed && (isOwner || allowedRolesCount > 0)) {
+          await upsertSyncSelf(guildId);
           return { userGuild, hasPermission: true };
         } else {
-          await revokeIfAutomated(String(userGuild.id));
+          await revokeIfAutomated(guildId);
           return { userGuild, hasPermission: false };
         }
       }));
