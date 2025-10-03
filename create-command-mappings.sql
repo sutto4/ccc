@@ -30,7 +30,10 @@ INSERT IGNORE INTO command_mappings (command_name, feature_key, description) VAL
 ('sendverify', 'verification_system', 'Send verification message'),
 ('setverifylog', 'verification_system', 'Set verification log channel'),
 ('feedback', 'feedback_system', 'Submit feedback'),
-('embed', 'embedded_messages', 'Send embedded messages');
+('embed', 'embedded_messages', 'Send embedded messages'),
+
+-- AI commands
+('summarise', 'ai_summarization', 'Summarize messages using AI with LAST or FROM subcommands');
 
 -- Verify the table was created
 SELECT 'Command mappings table created successfully' as status;

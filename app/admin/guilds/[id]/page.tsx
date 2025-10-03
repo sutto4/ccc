@@ -107,7 +107,8 @@ function AdminGuildSettingsPageContent() {
         'FiveM QBcore Integration': 'fivem_qbcore',
         'Moderation Tools': 'moderation',
         'Reaction Roles': 'reaction_roles',
-        'User Verification System': 'verification_system'
+        'User Verification System': 'verification_system',
+        'AI Message Summarization': 'ai_summarization'
       };
       
       const transformedFeatures = featuresData.features.map((feature: Feature) => {

@@ -78,7 +78,7 @@ export const PUT = async (
     return createAuthResponse(auth.error || 'Unauthorized');
   }
 
-  const { id: guildId } = params;
+  const { id: guildId } = await params;
   
   try {
     // Require DB configuration
@@ -138,6 +138,29 @@ export const PUT = async (
        ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
       [guildId, feature_name, enabled ? 1 : 0]
     );
+
+    // Special handling for AI summarization feature
+    if (feature_name === 'ai_summarization') {
+      if (enabled) {
+        // Create AI configuration when enabling the feature
+        await query(
+          `INSERT INTO guild_ai_config (
+            guild_id, enabled, model, max_tokens_per_request, 
+            max_messages_per_summary, rate_limit_per_hour, rate_limit_per_day
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE 
+            enabled = VALUES(enabled),
+            updated_at = CURRENT_TIMESTAMP`,
+          [guildId, 1, 'gpt-3.5-turbo', 1000, 50, 10, 100]
+        );
+      } else {
+        // Disable AI configuration when disabling the feature
+        await query(
+          `UPDATE guild_ai_config SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?`,
+          [guildId]
+        );
+      }
+    }
 
     // Log the feature toggle action (include source = admin|guild)
     const source = (req.headers.get('referer') || '').includes('/admin/') ? 'admin' : 'guild';

@@ -76,7 +76,8 @@ INSERT IGNORE INTO features (feature_key, feature_name, display_name, descriptio
 ('creator_alerts', 'creator_alerts', 'Creator Alerts', 'Get notified about creator activities', 'premium'),
 ('bot_customisation', 'bot_customisation', 'Bot Customisation', 'Customize bot appearance and behavior', 'premium'),
 ('custom_groups', 'custom_groups', 'Custom Groups', 'Create and manage custom user groups', 'premium'),
-('premium_members', 'premium_members', 'Premium Members', 'Manage premium member benefits', 'premium');
+('premium_members', 'premium_members', 'Premium Members', 'Manage premium member benefits', 'premium'),
+('ai_summarization', 'ai_summarization', 'AI Message Summarization', 'Use AI to summarize Discord messages and conversations', 'premium');
 
 -- Insert a sample guild (replace with actual data)
 INSERT IGNORE INTO guilds (guild_id, name, owner_id, premium) VALUES

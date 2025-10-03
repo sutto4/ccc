@@ -132,7 +132,8 @@ function GuildFeaturesSettingsContent() {
       creator_alerts: 'Get notified about creator activities and updates',
       bot_customisation: 'Customize bot appearance, behavior, and responses',
       custom_groups: 'Create and manage custom user groups and permissions',
-      premium_members: 'Manage premium member benefits and exclusive features'
+      premium_members: 'Manage premium member benefits and exclusive features',
+      ai_summarization: 'Use AI to summarize Discord messages and conversations'
     };
     
     return descriptions[featureName] || 'Feature description not available';
@@ -457,6 +458,8 @@ function getFeatureIcon(featureName: string) {
       return <Users className={`${iconClass} text-pink-600`} />;
     case 'premium_members':
       return <Crown className={`${iconClass} text-yellow-600`} />;
+    case 'ai_summarization':
+      return <Bot className={`${iconClass} text-purple-600`} />;
     default:
       return <Zap className={`${iconClass} text-gray-600`} />;
   }
