@@ -13,8 +13,32 @@ export const GET = async (request: NextRequest) => {
   }
 
   try {
-    // Get basic guild data from database
-    const dbGuilds = await query('SELECT * FROM guilds ORDER BY created_at DESC LIMIT 50');
+    // Determine visibility scope
+    const userId = auth.user.id;
+    const userRole = (auth.user as any)?.role;
+    const isAdmin = userRole === 'admin' || userRole === 'owner';
+
+    let dbGuilds: any[] = [];
+
+    if (isAdmin) {
+      // Admins see every guild (no hard limit)
+      dbGuilds = await query('SELECT * FROM guilds ORDER BY created_at DESC');
+    } else {
+      // Non-admins see guilds they own or have explicit access to
+      // Using UNION to combine ownership and access lists, then de-duplicate by guild_id
+      dbGuilds = await query(
+        `SELECT g.*
+         FROM guilds g
+         WHERE g.owner_id = ?
+         UNION
+         SELECT g.*
+         FROM guilds g
+         INNER JOIN server_access_control s ON s.guild_id = g.guild_id AND s.has_access = 1
+         WHERE s.user_id = ?
+         ORDER BY created_at DESC`,
+        [userId, userId]
+      ) as any[];
+    }
 
     // Return database data with stored icon URLs
     const normalizedGuilds = (dbGuilds as any[]).map((guild: any) => {
@@ -32,7 +56,7 @@ export const GET = async (request: NextRequest) => {
       guilds: normalizedGuilds,
       pagination: {
         total: normalizedGuilds.length,
-        limit: 50,
+        limit: normalizedGuilds.length,
         offset: 0,
         hasMore: false
       }

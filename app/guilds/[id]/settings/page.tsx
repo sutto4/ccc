@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X, Bot, Brain, Clock, MessageSquare, BarChart3, DollarSign, ChevronDown, Search } from "lucide-react";
+import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X, DollarSign } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles, fetchGuildCommandPermissions, fetchWebAppFeatures, updateWebAppFeatures } from "@/lib/api";
 import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
@@ -109,24 +109,7 @@ function GuildSettingsPageContent() {
   // Guild names state for server allocation display
   const [guildNames, setGuildNames] = useState<Record<string, string>>({});
 
-  // AI Settings state
-  const [aiConfig, setAiConfig] = useState({
-    enabled: false,
-    model: 'gpt-3.5-turbo',
-    max_tokens_per_request: 1000,
-    max_messages_per_summary: 50,
-    custom_prompt: null as string | null,
-    rate_limit_per_hour: 10,
-    rate_limit_per_day: 100
-  });
-  const [aiUsageStats, setAiUsageStats] = useState<any>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSaving, setAiSaving] = useState(false);
-  const [aiRolePermissions, setAiRolePermissions] = useState<any[]>([]);
-  const [aiRolePermissionsLoading, setAiRolePermissionsLoading] = useState(false);
-  const [roleSelectorOpen, setRoleSelectorOpen] = useState(false);
-  const [roleSearchTerm, setRoleSearchTerm] = useState('');
-  const roleSelectorRef = useRef<HTMLDivElement>(null);
+  // AI Settings state - removed, now handled in dedicated AI features page
 
   // Premium modal state
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
@@ -356,7 +339,7 @@ function GuildSettingsPageContent() {
       const fetchedRoles = await response.json();
       
       console.log('Raw fetched roles:', fetchedRoles);
-      console.log('Role structure:', fetchedRoles.map(r => ({
+      console.log('Role structure:', fetchedRoles.map((r: any) => ({
         id: r.roleId,
         name: r.name,
         position: r.position,
@@ -366,7 +349,7 @@ function GuildSettingsPageContent() {
       
       // Since access control is now handled by the database, show all roles
       // The user will only see this if they have access to the guild
-      const relevantRoles = fetchedRoles.filter((role: Role) => {
+      const relevantRoles = fetchedRoles.filter((role: any) => {
         // Exclude @everyone role (position 0)
         if (role.position === 0) {
           return false;
@@ -428,9 +411,9 @@ function GuildSettingsPageContent() {
         });
       }
 
-      // Load AI configuration
-      loadAIConfig();
-      loadAIRolePermissions();
+      // Load AI configuration - removed, now handled in dedicated AI features page
+      // loadAIConfig();
+      // loadAIRolePermissions();
 
     } catch (error) {
       console.error('Error loading roles:', error);
@@ -667,178 +650,7 @@ function GuildSettingsPageContent() {
     }
   };
 
-  const loadAIConfig = async () => {
-    try {
-      setAiLoading(true);
-      
-      // Fetch AI configuration
-      const configResponse = await fetch(`/api/guilds/${guildId}/ai/config`);
-      if (configResponse.ok) {
-        const configData = await configResponse.json();
-        setAiConfig(configData);
-      }
-      
-      // Fetch usage stats
-      const statsResponse = await fetch(`/api/guilds/${guildId}/ai/usage`);
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setAiUsageStats(statsData);
-      }
-      
-    } catch (error) {
-      console.error('Failed to load AI config:', error);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const loadAIRolePermissions = async () => {
-    try {
-      setAiRolePermissionsLoading(true);
-      
-      const response = await fetch(`/api/guilds/${guildId}/feature-permissions?feature=ai_summarization`);
-      if (response.ok) {
-        const data = await response.json();
-        setAiRolePermissions(data.permissions[0]?.roles || []);
-      }
-      
-    } catch (error) {
-      console.error('Failed to load AI role permissions:', error);
-    } finally {
-      setAiRolePermissionsLoading(false);
-    }
-  };
-
-  const handleAIRolePermissionUpdate = async (roleId: string, allowed: boolean) => {
-    try {
-      setAiSaving(true);
-      
-      // Update local state
-      setAiRolePermissions(prev => {
-        const existing = prev.find(p => p.role_id === roleId);
-        if (existing) {
-          return prev.map(p => p.role_id === roleId ? { ...p, allowed } : p);
-        } else {
-          return [...prev, { role_id: roleId, allowed }];
-        }
-      });
-      
-      const response = await fetch(`/api/guilds/${guildId}/feature-permissions`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          feature_key: 'ai_summarization',
-          role_permissions: [{ role_id: roleId, allowed }]
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update role permissions: ${response.statusText}`);
-      }
-      
-      toast({
-        title: "Success",
-        description: "Role permissions updated successfully",
-      });
-      
-    } catch (error: any) {
-      console.error('Failed to update role permissions:', error);
-      toast({
-        title: "Error",
-        description: error.message || 'Failed to update role permissions',
-        variant: "destructive",
-      });
-      
-      // Revert changes on error
-      loadAIRolePermissions();
-    } finally {
-      setAiSaving(false);
-    }
-  };
-
-  const handleAddRolePermission = async (roleId: string) => {
-    await handleAIRolePermissionUpdate(roleId, true);
-  };
-
-  const handleRemoveRolePermission = async (roleId: string) => {
-    await handleAIRolePermissionUpdate(roleId, false);
-  };
-
-  // Get filtered roles for dropdown
-  const getFilteredRoles = () => {
-    const selectedRoleIds = aiRolePermissions.filter(p => p.allowed).map(p => p.role_id);
-    return roles.filter(role => 
-      !selectedRoleIds.includes(role.roleId) &&
-      role.name.toLowerCase().includes(roleSearchTerm.toLowerCase())
-    );
-  };
-
-  // Get selected roles
-  const getSelectedRoles = () => {
-    return aiRolePermissions
-      .filter(p => p.allowed)
-      .map(p => roles.find(role => role.roleId === p.role_id))
-      .filter(Boolean);
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (roleSelectorRef.current && !roleSelectorRef.current.contains(event.target as Node)) {
-        setRoleSelectorOpen(false);
-        setRoleSearchTerm('');
-      }
-    };
-
-    if (roleSelectorOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [roleSelectorOpen]);
-
-  const handleAIConfigUpdate = async (updates: any) => {
-    try {
-      setAiSaving(true);
-      
-      const updatedConfig = { ...aiConfig, ...updates };
-      setAiConfig(updatedConfig);
-      
-      const response = await fetch(`/api/guilds/${guildId}/ai/config`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update AI config: ${response.statusText}`);
-      }
-      
-      toast({
-        title: "Success",
-        description: "AI configuration updated successfully",
-      });
-      
-    } catch (error: any) {
-      console.error('Failed to update AI config:', error);
-      toast({
-        title: "Error",
-        description: error.message || 'Failed to update AI configuration',
-        variant: "destructive",
-      });
-      
-      // Revert changes on error
-      loadAIConfig();
-    } finally {
-      setAiSaving(false);
-    }
-  };
+  // AI-related functions removed - now handled in dedicated AI features page
 
   if (status === "loading" || loading) {
     return (
@@ -1374,74 +1186,77 @@ function GuildSettingsPageContent() {
 
 
         {/* Features Tab */}
-        <TabsContent value="commands-features" className="space-y-4">
+        <TabsContent value="commands-features" className="space-y-6">
+          {/* Slash Commands Card */}
           <Card>
-            <CardHeader title="Features" subtitle="Configure which commands and features are available in your server." />
-
-            <CardContent className="space-y-6">
-              {/* Command Management */}
-              <div className="space-y-4">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Settings className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
                 <h3 className="text-lg font-semibold">Slash Commands</h3>
                 <p className="text-sm text-muted-foreground">
                   Enable or disable individual slash commands for this server. Disabled commands won't appear in Discord.
                 </p>
-
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
                 {commandMappingsLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="w-6 h-6 animate-spin mr-2" />
                     Loading commands...
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
                     {/* Group commands by feature */}
                     {Object.entries(
                       commandMappings.reduce((acc, cmd) => {
-                        const feature = cmd.feature_name;
+                        const feature = cmd.feature_key;
                         if (!acc[feature]) acc[feature] = [];
                         acc[feature].push(cmd);
                         return acc;
                       }, {} as Record<string, typeof commandMappings>)
                     ).map(([featureName, commands]) => (
-                      <div key={featureName} className="space-y-3">
-                        <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                          {featureName === 'moderation' ? 'Moderation' : 
-                           featureName === 'utilities' ? 'Utilities' : 
-                           featureName === 'sticky_messages' ? 'Sticky Messages' :
-                           featureName}
+                    <div key={featureName} className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-base">
+                          {featureName === 'moderation' ? '🛡️ Moderation' : 
+                           featureName === 'utilities' ? '🔧 Utilities' : 
+                           featureName === 'sticky_messages' ? '📌 Sticky Messages' :
+                           `📋 ${featureName}`}
                         </h4>
-                        <div className="space-y-2">
+                        <Badge variant="outline" className="text-xs">
+                          {commands.length} command{commands.length !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
                           {commands.map((cmd) => {
                             const perm = commandPermissions?.commands[cmd.command_name];
                             const canModify = perm?.canModify ?? true;
                             const isEnabled = commandSettings[cmd.command_name] ?? perm?.guildEnabled ?? true;
 
                             return (
-                              <div key={cmd.command_name} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div key={cmd.command_name} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
                                 <div className="flex-1">
+                                <div className="flex items-center gap-2">
                                   <p className="font-medium text-sm">/{cmd.command_name}</p>
-                                  <p className="text-xs text-muted-foreground">{cmd.description}</p>
                                   {!perm?.adminEnabled && (
-                                    <p className="text-xs text-orange-600 mt-1">⚠️ Disabled by admin</p>
+                                    <Badge variant="destructive" className="text-xs">Disabled by admin</Badge>
                                   )}
                                 </div>
-                                <input
-                                  type="checkbox"
-                                  id={`cmd-${cmd.command_name}`}
+                                <p className="text-xs text-muted-foreground mt-1">{cmd.description}</p>
+                              </div>
+                              <Switch
                                   checked={isEnabled}
                                   disabled={!canModify}
-                                  onChange={canModify ? (e) => {
+                                onCheckedChange={canModify ? (checked) => {
                                     setCommandSettings((prev: any) => ({
                                       ...prev,
-                                      [cmd.command_name]: e.target.checked
-                                    }));
-                                  } : () => {
-                                    toast({
-                                      title: "Access Denied",
-                                      description: "This command is disabled by admin and cannot be modified.",
-                                      variant: "destructive"
-                                    });
-                                  }}
-                                  className={`w-4 h-4 ${!canModify ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    [cmd.command_name]: checked
+                                  }));
+                                } : undefined}
                                 />
                               </div>
                             );
@@ -1451,60 +1266,54 @@ function GuildSettingsPageContent() {
                     ))}
                   </div>
                 )}
-              </div>
+            </CardContent>
+          </Card>
 
-              {/* Feature Management */}
-              <div className="space-y-4 pt-6 border-t">
+          {/* Web App Features Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Settings className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
                 <h3 className="text-lg font-semibold">Web App Features</h3>
                 <p className="text-sm text-muted-foreground">
                   Control which features are available in the web interface for your server.
                 </p>
-
-                <div className="space-y-3">
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
                   {webAppFeatures?.features?.length > 0 ? (
                     webAppFeatures.features.map((feature) => {
                       const isEnabled = feature.enabled;
                       const canEnable = feature.canEnable;
                       const isPremiumFeature = feature.minimumPackage === 'premium';
-                      const isServerPremium = webAppFeatures.isPremium;
-                      
-                      console.log(`🚨🚨🚨 WEB APP FEATURE ${feature.key}:`, {
-                        isEnabled,
-                        canEnable,
-                        isPremiumFeature,
-                        isServerPremium,
-                        feature,
-                        webAppFeatures
-                      });
                       
                       return (
-                        <div key={feature.key} className={`flex items-center justify-between p-3 border rounded-lg ${!canEnable ? 'opacity-60' : ''}`}>
+                      <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <p className="font-medium text-sm">{feature.name}</p>
                               {isPremiumFeature && (
-                                <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                              <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
                                   Premium
-                                </span>
+                              </Badge>
                               )}
                               {!canEnable && isPremiumFeature && (
-                                <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                              <Badge variant="destructive" className="text-xs">
                                   Requires Premium
-                                </span>
+                              </Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground">{feature.description}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              {isEnabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                            <input
-                              type="checkbox"
-                              id={`feature-${feature.key}`}
+                        <Switch
                               checked={isEnabled}
                               disabled={!canEnable}
-                              onChange={(e) => {
+                          onCheckedChange={(checked) => {
                                 if (!canEnable) {
                                   toast({
                                     title: "Premium Required",
@@ -1518,351 +1327,33 @@ function GuildSettingsPageContent() {
                                   ...prev,
                                   states: {
                                     ...prev.states,
-                                    [feature.key]: e.target.checked
+                                [feature.key]: checked
                                   },
                                   features: prev.features.map(f => 
                                     f.key === feature.key 
-                                      ? { ...f, enabled: e.target.checked }
+                                  ? { ...f, enabled: checked }
                                       : f
                                   )
                                 }));
                               }}
-                              className={`w-4 h-4 ${!canEnable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                             />
-                          </div>
                         </div>
                       );
                     })
                   ) : (
-                    <div className="p-4 text-center text-muted-foreground">
+                  <div className="p-8 text-center text-muted-foreground">
+                    <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin" />
                       <p>Loading web app features...</p>
-                      {webAppFeatures && (
-                        <p className="text-xs mt-2">
-                          Debug: webAppFeatures = {JSON.stringify(webAppFeatures, null, 2)}
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
-              </div>
+            </CardContent>
+          </Card>
 
-              {/* AI Settings Section */}
-              <div className="space-y-4 pt-6 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Bot className="h-5 w-5" />
-                      AI Message Summarization
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Configure AI-powered message summarization for your server
-                    </p>
-                  </div>
-                  <Badge variant={aiConfig.enabled ? "default" : "secondary"} className="flex items-center gap-1">
-                    <Bot className="h-3 w-3" />
-                    {aiConfig.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-
-                {aiLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-                    Loading AI configuration...
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Enable/Disable Toggle */}
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Brain className="h-5 w-5 text-purple-600" />
-                        <div>
-                          <h4 className="font-medium">Enable AI Summarization</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Allow users to use /summarise commands
-                          </p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={aiConfig.enabled}
-                        onCheckedChange={(enabled) => handleAIConfigUpdate({ enabled })}
-                        disabled={aiSaving}
-                      />
-                    </div>
-
-                    {/* AI Model Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-model">AI Model</Label>
-                      <Select
-                        id="ai-model"
-                        value={aiConfig.model}
-                        onChange={(e) => handleAIConfigUpdate({ model: e.target.value })}
-                        disabled={aiSaving}
-                      >
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster, Cheaper)</option>
-                        <option value="gpt-4">GPT-4 (Higher Quality, More Expensive)</option>
-                      </Select>
-                    </div>
-
-                    {/* Max Tokens and Messages */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-max-tokens">Max Tokens per Request</Label>
-                        <Input
-                          id="ai-max-tokens"
-                          type="number"
-                          min="100"
-                          max="4000"
-                          value={aiConfig.max_tokens_per_request}
-                          onChange={(e) => handleAIConfigUpdate({ max_tokens_per_request: parseInt(e.target.value) })}
-                          disabled={aiSaving}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-max-messages">Max Messages per Summary</Label>
-                        <Input
-                          id="ai-max-messages"
-                          type="number"
-                          min="1"
-                          max="100"
-                          value={aiConfig.max_messages_per_summary}
-                          onChange={(e) => handleAIConfigUpdate({ max_messages_per_summary: parseInt(e.target.value) })}
-                          disabled={aiSaving}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Custom Prompt */}
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-custom-prompt">Custom Prompt (Optional)</Label>
-                      <Textarea
-                        id="ai-custom-prompt"
-                        placeholder="Enter a custom prompt to guide the AI's summarization behavior..."
-                        value={aiConfig.custom_prompt || ''}
-                        onChange={(e) => handleAIConfigUpdate({ custom_prompt: e.target.value || null })}
-                        disabled={aiSaving}
-                        rows={3}
-                      />
-                    </div>
-
-                    {/* Rate Limiting */}
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        Rate Limiting
-                      </Label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="ai-rate-hour">Requests per Hour</Label>
-                          <Input
-                            id="ai-rate-hour"
-                            type="number"
-                            min="1"
-                            max="100"
-                            value={aiConfig.rate_limit_per_hour}
-                            onChange={(e) => handleAIConfigUpdate({ rate_limit_per_hour: parseInt(e.target.value) })}
-                            disabled={aiSaving}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="ai-rate-day">Requests per Day</Label>
-                          <Input
-                            id="ai-rate-day"
-                            type="number"
-                            min="1"
-                            max="1000"
-                            value={aiConfig.rate_limit_per_day}
-                            onChange={(e) => handleAIConfigUpdate({ rate_limit_per_day: parseInt(e.target.value) })}
-                            disabled={aiSaving}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Usage Statistics */}
-                    {aiUsageStats && (
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <BarChart3 className="h-4 w-4" />
-                          Usage Statistics (Last 30 Days)
-                        </Label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="text-center p-3 bg-blue-50 rounded-lg">
-                            <div className="text-lg font-bold text-blue-600">
-                              {aiUsageStats.total_requests}
-                            </div>
-                            <div className="text-xs text-blue-700">Total Requests</div>
-                          </div>
-                          <div className="text-center p-3 bg-green-50 rounded-lg">
-                            <div className="text-lg font-bold text-green-600">
-                              {Number(aiUsageStats.total_tokens || 0).toLocaleString()}
-                            </div>
-                            <div className="text-xs text-green-700">Tokens Used</div>
-                          </div>
-                          <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                            <div className="text-lg font-bold text-yellow-600">
-                              ${Number(aiUsageStats.total_cost || 0).toFixed(4)}
-                            </div>
-                            <div className="text-xs text-yellow-700">Total Cost</div>
-                          </div>
-                          <div className="text-center p-3 bg-purple-50 rounded-lg">
-                            <div className="text-lg font-bold text-purple-600">
-                              {aiUsageStats.successful_requests}
-                            </div>
-                            <div className="text-xs text-purple-700">Successful</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Role Permissions */}
-                    <div className="space-y-3">
-                      <Label className="flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        Role Permissions
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Control which roles can use AI summarization. If no roles are selected, all users can use the feature.
-                      </p>
-                      
-                      {aiRolePermissionsLoading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                          Loading role permissions...
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Selected Roles */}
-                          {getSelectedRoles().length > 0 && (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium text-green-700">Allowed Roles</Label>
-                              <div className="flex flex-wrap gap-2">
-                                {getSelectedRoles().map((role) => (
-                                  <div
-                                    key={role.roleId}
-                                    className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg"
-                                  >
-                                    <div
-                                      className="w-3 h-3 rounded-full border"
-                                      style={{ 
-                                        backgroundColor: role.color || '#e5e7eb' 
-                                      }}
-                                    />
-                                    <span className="text-sm font-medium text-green-800">{role.name}</span>
-                                    <button
-                                      onClick={() => handleRemoveRolePermission(role.roleId)}
-                                      disabled={aiSaving}
-                                      className="text-green-600 hover:text-green-800 disabled:opacity-50"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Role Selector */}
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Add Roles</Label>
-                            <div className="relative" ref={roleSelectorRef}>
-                              <button
-                                onClick={() => setRoleSelectorOpen(!roleSelectorOpen)}
-                                disabled={aiSaving}
-                                className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <span className="text-sm text-gray-700">
-                                  {getFilteredRoles().length > 0 ? 'Select roles to allow...' : 'No available roles'}
-                                </span>
-                                <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${roleSelectorOpen ? 'rotate-180' : ''}`} />
-                              </button>
-                              
-                              {roleSelectorOpen && getFilteredRoles().length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-hidden">
-                                  {/* Search */}
-                                  <div className="p-2 border-b">
-                                    <div className="relative">
-                                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                                      <Input
-                                        placeholder="Search roles..."
-                                        value={roleSearchTerm}
-                                        onChange={(e) => setRoleSearchTerm(e.target.value)}
-                                        className="pl-8 text-sm"
-                                      />
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Role List */}
-                                  <div className="max-h-32 overflow-y-auto">
-                                    {getFilteredRoles().map((role) => (
-                                      <button
-                                        key={role.roleId}
-                                        onClick={() => {
-                                          handleAddRolePermission(role.roleId);
-                                          setRoleSearchTerm('');
-                                        }}
-                                        disabled={aiSaving}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 disabled:opacity-50"
-                                      >
-                                        <div
-                                          className="w-3 h-3 rounded-full border"
-                                          style={{ 
-                                            backgroundColor: role.color || '#e5e7eb' 
-                                          }}
-                                        />
-                                        <span className="text-sm font-medium">{role.name}</span>
-                                        <Plus className="h-3 w-3 text-gray-400 ml-auto" />
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Info */}
-                          {getSelectedRoles().length === 0 && (
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <p className="text-sm text-blue-700">
-                                <strong>No restrictions:</strong> All users can use AI summarization when no roles are selected.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Commands Info */}
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4" />
-                        Available Commands
-                      </Label>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">/summarise last &lt;count&gt;</Badge>
-                          <span className="text-sm text-muted-foreground">Summarize the last X messages</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">/summarise from &lt;message_id&gt;</Badge>
-                          <span className="text-sm text-muted-foreground">Summarize from a specific message ID to now</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Save Button */}
-              <div className="flex justify-end pt-4 border-t gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    console.log('Test button clicked!');
-                    alert('Test button works!');
-                  }}
-                >
-                  Test Button
-                </Button>
+          {/* Save Button Card */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex justify-end gap-2">
                 <Button
                   onClick={async () => {
                     console.log('=== SAVE BUTTON CLICKED ===');
@@ -1874,7 +1365,7 @@ function GuildSettingsPageContent() {
                       // Convert command settings to the format expected by the API
                       const allCommands = commandMappings.map(cmd => ({
                         name: cmd.command_name,
-                        feature: cmd.feature_name
+                        feature: cmd.feature_key
                       }));
                       
                       const commandsToUpdate = Object.entries(commandSettings).map(([name, enabled]) => {

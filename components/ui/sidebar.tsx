@@ -375,6 +375,17 @@ const Sidebar = React.memo(function Sidebar() {
         {/* Tools section (only show if any features are visible) */}
         {(isFeatureVisible("embedded_messages") || isFeatureVisible("reaction_roles") || isFeatureVisible("custom_commands") || isFeatureVisible("bot_customisation")) && (
           <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
+            {/* AI Features - always visible for now */}
+            <NavLeaf
+              href={guildId ? `/guilds/${guildId}/ai-features` : "/guilds"}
+              label="AI Features"
+              rightIcon={undefined}
+              active={guildId ? pathname.startsWith(`/guilds/${guildId}/ai-features`) : false}
+              featureEnabled={!!guildId}
+              guildSelected={!!guildId}
+              premiumRequired={false}
+              hasPremium={true}
+            />
             {/* Moderation - always visible for now */}
             <NavLeaf
               href={guildId ? `/guilds/${guildId}/moderation` : "/guilds"}

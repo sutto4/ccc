@@ -1,18 +1,30 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Menu } from "lucide-react";
 // import { ThemeToggle } from "@/components/theme-toggle";
 import InviteBotButton from "@/components/invite-bot-button";
 import { Bot } from "lucide-react";
 import UserMenu from "@/components/ui/user-menu";
 // import { useTheme } from "next-themes";
 
-export default function Topbar() {
+type TopbarProps = {
+  onMenuClick?: () => void;
+};
+
+export default function Topbar({ onMenuClick }: TopbarProps) {
   // const { resolvedTheme } = useTheme()
   return (
     <div className="flex h-18 items-center justify-between gap-3 px-3 md:px-4">
       {/* Branding */}
       <div className="flex items-center gap-2 md:gap-3">
+        {/* Mobile menu button */}
+        <button
+          className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-[hsl(var(--header-foreground))] hover:bg-[hsl(var(--border))]/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[hsl(var(--header))] focus:ring-[hsl(var(--border))]"
+          aria-label="Open navigation menu"
+          onClick={onMenuClick}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <img
           src="/brand/sm-light.png"
           alt="ServerMate"

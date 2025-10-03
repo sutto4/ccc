@@ -142,6 +142,103 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui";
 </Card>
 ```
 
+## Page Patterns
+
+### Feature Dashboard Pattern
+
+Use this pattern for feature-centric pages that combine status, configuration, permissions, usage, and help content. First implemented on `AI Features`.
+
+- When to use: Complex features that need at-a-glance status + grouped settings (e.g., AI, integrations, billing).
+- Goals: Clear visual hierarchy, quick scanning, minimal friction for common tasks.
+
+#### Structure
+- Header: Title with compact description.
+- Status Overview (Top Row): 2–3 compact cards with gradients for at-a-glance KPIs.
+  - Card size: equal width; grid `grid-cols-1 md:grid-cols-3`.
+  - Use subtle gradient backgrounds (50→100 tints) and a small decorative circle.
+  - Pair a left-aligned label with a right-aligned numeric/value emphasis.
+- Configuration Section: Two-column layout on large screens (`grid-cols-1 lg:grid-cols-2`).
+  - Left: read-only admin-managed controls (render as info blocks, not disabled inputs).
+  - Right: editable, high-value inputs (e.g., custom prompt) with explicit Save.
+- Usage Statistics: Four stat cards. Each: big number + supporting label + icon.
+- Permissions: Selected chips with remove actions; searchable dropdown to add roles.
+- Help/Commands: Two informational cards with examples.
+
+#### Visual Language
+- Cards: Rounded, bordered, light gradient backgrounds for emphasis sections.
+- Badges: Use to denote state (e.g., "Editable", "Admin Only").
+- Icons: Left-aligned, small (h-4 w-4). Use semantic color per section.
+- Spacing: Section headers use a small icon + title + divider line.
+- Read-only values: Present as information blocks (label + value + "Locked"), not disabled inputs.
+
+#### Color Guidance
+- Status: Purple/Blue gradients
+- Model/Tech: Blue
+- Usage: Green
+- Cost: Yellow
+- Permissions: Orange/Red
+- Editable actions: Purple button variant
+
+#### Example: Status Overview Card
+```tsx
+<div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-purple-50 to-blue-50 p-6">
+  <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <Brain className="h-4 w-4 text-purple-600" />
+        </div>
+        <h3 className="font-semibold text-gray-900">AI Status</h3>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${enabled ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+        <span className="text-sm font-medium text-gray-700">{enabled ? 'Active' : 'Inactive'}</span>
+      </div>
+    </div>
+    <div className="text-right">
+      <div className="text-2xl font-bold text-purple-600">{enabled ? 'ON' : 'OFF'}</div>
+      <div className="text-xs text-gray-500">Status</div>
+    </div>
+  </div>
+  <div className="absolute -top-2 -right-2 w-16 h-16 bg-purple-100 rounded-full opacity-20"></div>
+</div>
+```
+
+#### Example: Read-only Info Block (Admin Only)
+```tsx
+<div>
+  <Label className="text-sm font-medium text-gray-700">AI Model</Label>
+  <div className="mt-1 p-3 bg-white border rounded-lg">
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-medium">GPT-4 (Higher Quality)</span>
+      <div className="text-xs text-gray-500">Locked</div>
+    </div>
+  </div>
+</div>
+```
+
+#### Example: Editable Primary Block
+```tsx
+<div className="rounded-lg border bg-gradient-to-br from-purple-50 to-blue-50 p-4">
+  <div className="flex items-center gap-2 mb-3">
+    <MessageSquare className="h-4 w-4 text-purple-600" />
+    <h3 className="font-medium text-gray-900">Custom Prompt</h3>
+    <div className="ml-auto inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">Editable</div>
+  </div>
+  <Textarea rows={4} className="mt-1 bg-white border-purple-200 focus:border-purple-400 focus:ring-purple-400" />
+  <div className="flex justify-end mt-3">
+    <Button className="bg-purple-600 hover:bg-purple-700 text-white" size="sm">Save Prompt</Button>
+  </div>
+</div>
+```
+
+#### Do/Don't
+- Do use gradients sparingly for summary/stat cards and high-value edit areas.
+- Do group related settings into compact cards rather than long forms.
+- Do replace disabled inputs with read-only info blocks.
+- Don't mix too many colors in a single section; one accent per section.
+- Don't auto-save on change; provide explicit Save for meaningful edits.
+
 ## Utility Functions
 
 ### Class Name Merging

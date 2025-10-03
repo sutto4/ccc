@@ -5,7 +5,13 @@ import { useParams } from "next/navigation";
 import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Crown, Shield, Settings, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Crown, Shield, Settings, RefreshCw, Bot, Brain, Clock, BarChart3 } from "lucide-react";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
 
@@ -36,6 +42,16 @@ interface Guild {
   member_count?: number;
 }
 
+interface AIConfig {
+  enabled: boolean;
+  model: string;
+  max_tokens_per_request: number;
+  max_messages_per_summary: number;
+  custom_prompt: string | null;
+  rate_limit_per_hour: number;
+  rate_limit_per_day: number;
+}
+
 export default function AdminGuildSettingsPage() {
   return (
     <AuthErrorBoundary>
@@ -53,6 +69,27 @@ function AdminGuildSettingsPageContent() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [guildFeatures, setGuildFeatures] = useState<GuildFeature[]>([]);
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
+  const [aiConfig, setAiConfig] = useState<AIConfig>({
+    enabled: false,
+    model: 'gpt-3.5-turbo',
+    max_tokens_per_request: 1000,
+    max_messages_per_summary: 50,
+    custom_prompt: null,
+    rate_limit_per_hour: 10,
+    rate_limit_per_day: 100
+  });
+  const [aiConfigOriginal, setAiConfigOriginal] = useState<AIConfig>({
+    enabled: false,
+    model: 'gpt-3.5-turbo',
+    max_tokens_per_request: 1000,
+    max_messages_per_summary: 50,
+    custom_prompt: null,
+    rate_limit_per_hour: 10,
+    rate_limit_per_day: 100
+  });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiHasChanges, setAiHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +102,7 @@ function AdminGuildSettingsPageContent() {
     console.log('Admin page loaded, guildId:', guildId);
     if (guildId) {
       fetchGuildData();
+      loadAIConfig();
     }
   }, [guildId]);
 
@@ -256,6 +294,85 @@ function AdminGuildSettingsPageContent() {
       setTimeout(() => setError(null), 5000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const loadAIConfig = async () => {
+    try {
+      setAiLoading(true);
+      const response = await fetch(`/api/guilds/${guildId}/ai/config`);
+      if (!response.ok) {
+        throw new Error(`Failed to load AI config: ${response.statusText}`);
+      }
+      const configData = await response.json();
+      setAiConfig(configData);
+      setAiConfigOriginal(configData); // Store original for comparison
+      setAiHasChanges(false); // Reset changes flag
+    } catch (err: any) {
+      console.error('Failed to load AI config:', err);
+      setError(err.message || 'Failed to load AI configuration');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIConfigChange = (updates: Partial<AIConfig>) => {
+    const newConfig = { ...aiConfig, ...updates };
+    setAiConfig(newConfig);
+    
+    // Check if there are changes compared to original
+    const hasChanges = JSON.stringify(newConfig) !== JSON.stringify(aiConfigOriginal);
+    setAiHasChanges(hasChanges);
+  };
+
+  const saveAIConfig = async () => {
+    try {
+      setAiSaving(true);
+      
+      // Calculate what has changed
+      const changes: Partial<AIConfig> = {};
+      Object.keys(aiConfig).forEach(key => {
+        const typedKey = key as keyof AIConfig;
+        if (aiConfig[typedKey] !== aiConfigOriginal[typedKey]) {
+          changes[typedKey] = aiConfig[typedKey];
+        }
+      });
+
+      if (Object.keys(changes).length === 0) {
+        setSuccess('No changes to save');
+        setTimeout(() => setSuccess(null), 2000);
+        return;
+      }
+      
+      const response = await fetch(`/api/guilds/${guildId}/ai/config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(changes)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update AI config: ${response.statusText}`);
+      }
+      
+      // Update original config to match current
+      setAiConfigOriginal(aiConfig);
+      setAiHasChanges(false);
+      
+      setSuccess('AI configuration saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (error: any) {
+      console.error('Failed to save AI config:', error);
+      setError(error.message || 'Failed to save AI configuration');
+      setTimeout(() => setError(null), 5000);
+      
+      // Revert changes on error
+      setAiConfig(aiConfigOriginal);
+      setAiHasChanges(false);
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -523,6 +640,170 @@ function AdminGuildSettingsPageContent() {
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* AI Configuration Management */}
+        <Card>
+          <CardHeader>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              AI Configuration Management
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Configure AI-powered message summarization settings for this guild
+            </p>
+          </CardHeader>
+          <CardContent>
+            {aiLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                Loading AI configuration...
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Enable/Disable Toggle */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Brain className="h-5 w-5 text-purple-600" />
+                    <div>
+                      <h4 className="font-medium">Enable AI Summarization</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Allow users to use /summarise commands
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={aiConfig.enabled}
+                    onCheckedChange={(enabled) => handleAIConfigChange({ enabled })}
+                    disabled={aiSaving}
+                  />
+                </div>
+
+                {/* AI Model Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="ai-model">AI Model</Label>
+                  <Select
+                    id="ai-model"
+                    value={aiConfig.model}
+                    onChange={(e) => handleAIConfigChange({ model: e.target.value })}
+                    disabled={aiSaving}
+                  >
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster, Cheaper)</option>
+                    <option value="gpt-4">GPT-4 (Higher Quality, More Expensive)</option>
+                  </Select>
+                </div>
+
+                {/* Max Tokens and Messages */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-max-tokens">Max Tokens per Request</Label>
+                        <Input
+                          id="ai-max-tokens"
+                          type="number"
+                          min="100"
+                          max="4000"
+                          value={aiConfig.max_tokens_per_request}
+                          onChange={(e) => handleAIConfigChange({ max_tokens_per_request: parseInt(e.target.value) })}
+                          disabled={aiSaving}
+                        />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-max-messages">Max Messages per Summary</Label>
+                    <Input
+                      id="ai-max-messages"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={aiConfig.max_messages_per_summary}
+                      onChange={(e) => handleAIConfigChange({ max_messages_per_summary: parseInt(e.target.value) })}
+                      disabled={aiSaving}
+                    />
+                  </div>
+                </div>
+
+                {/* Custom Prompt */}
+                <div className="space-y-2">
+                  <Label htmlFor="ai-custom-prompt">Custom Prompt (Optional)</Label>
+                  <Textarea
+                    id="ai-custom-prompt"
+                    placeholder="Enter a custom prompt to guide the AI's summarization behavior..."
+                    value={aiConfig.custom_prompt || ''}
+                    onChange={(e) => handleAIConfigChange({ custom_prompt: e.target.value || null })}
+                    disabled={aiSaving}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Rate Limiting */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Rate Limiting
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-rate-hour">Requests per Hour</Label>
+                      <Input
+                        id="ai-rate-hour"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={aiConfig.rate_limit_per_hour}
+                        onChange={(e) => handleAIConfigChange({ rate_limit_per_hour: parseInt(e.target.value) })}
+                        disabled={aiSaving}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-rate-day">Requests per Day</Label>
+                      <Input
+                        id="ai-rate-day"
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={aiConfig.rate_limit_per_day}
+                        onChange={(e) => handleAIConfigChange({ rate_limit_per_day: parseInt(e.target.value) })}
+                        disabled={aiSaving}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-between items-center pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    {aiHasChanges ? (
+                      <span className="text-orange-600">You have unsaved changes</span>
+                    ) : (
+                      <span>All changes saved</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {aiHasChanges && (
+                      <Button
+                        onClick={() => {
+                          setAiConfig(aiConfigOriginal);
+                          setAiHasChanges(false);
+                        }}
+                        disabled={aiSaving}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancel Changes
+                      </Button>
+                    )}
+                    <Button
+                      onClick={saveAIConfig}
+                      disabled={aiSaving || !aiHasChanges}
+                      variant="default"
+                      size="sm"
+                    >
+                      {aiSaving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

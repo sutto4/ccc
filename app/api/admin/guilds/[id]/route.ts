@@ -28,7 +28,7 @@ export const GET = async (_req: any, { params }: { params: { id: string } }) => 
   console.log('[ADMIN-GUILDS] Admin access granted for role:', auth.user.role);
 
   try {
-    const { id: guildId } = params;
+    const { id: guildId } = await params;
     console.log('[ADMIN-GUILDS] Requested guild ID:', guildId);
     
     if (!/^[0-9]{5,20}$/.test(guildId)) {

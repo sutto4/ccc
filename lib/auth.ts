@@ -74,144 +74,170 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, account, profile, trigger }) {
-      // If this is a new login (account is present)
-      if (account && profile) {
-        console.log('[AUTH] New login detected for user:', (profile as any).username);
+      try {
+        // If this is a new login (account is present)
+        if (account && profile) {
+          console.log('[AUTH] New login detected for user:', (profile as any).username);
 
-        // Store basic token data
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).accessToken = account.access_token
-        
-        // Store refresh token securely in database
-        if (account.refresh_token) {
-          const refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-          await RefreshTokenManager.storeRefreshToken((profile as any).id, account.refresh_token, refreshTokenExpiresAt);
-        }
-        
-        // Set token expiry - Discord tokens typically last 1 hour
-        const accessTokenExpiresAt = account.expires_at || (Math.floor(Date.now() / 1000) + 3600);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).accessTokenExpiresAt = accessTokenExpiresAt
-        token.expiresAt = accessTokenExpiresAt
+          // Ensure token has proper structure
+          if (!token) {
+            token = {};
+          }
 
-        // Store Discord profile data
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).discordId = (profile as any).id
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).discordUsername = (profile as any).username
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(token as any).discordDiscriminator = (profile as any).discriminator
+          // Store basic token data with null checks
+          token.accessToken = account.access_token || null;
+          
+          // Store refresh token securely in database
+          if (account.refresh_token) {
+            const refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+            await RefreshTokenManager.storeRefreshToken((profile as any).id, account.refresh_token, refreshTokenExpiresAt);
+          }
+          
+          // Set token expiry - Discord tokens typically last 1 hour
+          const accessTokenExpiresAt = account.expires_at || (Math.floor(Date.now() / 1000) + 3600);
+          token.accessTokenExpiresAt = accessTokenExpiresAt;
+          token.expiresAt = accessTokenExpiresAt;
 
-        // Log the user login (system logs)
-        if (profile) {
-          const userId = String((profile as any).id);
-          const userEmail = (profile as any).email as string | undefined;
-          const userUsername = (profile as any).username as string | undefined;
-          await SystemLogger.logUserLogin({ id: userId, name: userUsername, email: userEmail, role: token.role as string | undefined });
-        }
+          // Store Discord profile data with null checks
+          token.discordId = (profile as any).id || null;
+          token.discordUsername = (profile as any).username || null;
+          token.discordDiscriminator = (profile as any).discriminator || null;
 
-        // Check database for user role
-        if ((profile as any).id && !token.role) {
-          try {
-            if (env.DB_HOST && env.DB_USER && env.DB_NAME) {
-              const isUserAdmin = await isAdmin((profile as any).id);
-              token.role = isUserAdmin ? "admin" : "viewer";
-            } else {
+          // Log the user login (system logs)
+          if (profile) {
+            const userId = String((profile as any).id);
+            const userEmail = (profile as any).email as string | undefined;
+            const userUsername = (profile as any).username as string | undefined;
+            await SystemLogger.logUserLogin({ id: userId, name: userUsername, email: userEmail, role: token.role as string | undefined });
+          }
+
+          // Check database for user role
+          if ((profile as any).id && !token.role) {
+            try {
+              if (env.DB_HOST && env.DB_USER && env.DB_NAME) {
+                const isUserAdmin = await isAdmin((profile as any).id);
+                token.role = isUserAdmin ? "admin" : "viewer";
+              } else {
+                token.role = "viewer";
+              }
+            } catch (error) {
+              console.error("Error checking user role:", error);
               token.role = "viewer";
             }
-          } catch (error) {
-            console.error("Error checking user role:", error);
-            token.role = "viewer";
           }
+
+          console.log('[AUTH] Token setup completed for user:', (profile as any).username);
         }
 
-        console.log('[AUTH] Token setup completed for user:', (profile as any).username);
-      }
+        // Handle token refresh - only when token is actually expired or about to expire
+        if (trigger === 'update' || token.accessTokenExpiresAt) {
+          const now = Math.floor(Date.now() / 1000);
+          const accessTokenExpiresAt = token.accessTokenExpiresAt;
+          
+          // Only refresh if token is expired or will expire in the next 5 minutes
+          if (accessTokenExpiresAt && now >= (accessTokenExpiresAt - 300)) {
+            console.log('[AUTH] Access token expired or expiring soon, attempting refresh...');
 
-      // Handle token refresh - only when token is actually expired or about to expire
-      if (trigger === 'update' || (token as any).accessTokenExpiresAt) {
-        const now = Math.floor(Date.now() / 1000);
-        const accessTokenExpiresAt = (token as any).accessTokenExpiresAt;
-        
-        // Only refresh if token is expired or will expire in the next 5 minutes
-        if (accessTokenExpiresAt && now >= (accessTokenExpiresAt - 300)) {
-          console.log('[AUTH] Access token expired or expiring soon, attempting refresh...');
-
-          try {
-            // Get refresh token from database
-            const discordId = (token as any).discordId;
-            const refreshToken = await RefreshTokenManager.getRefreshToken(discordId);
-            
-            if (!refreshToken) {
-              console.log('[AUTH] No valid refresh token found, user will need to re-login');
-              return {
-                ...token,
-                error: 'RefreshTokenExpired'
-              };
-            }
-
-            const refreshedToken = await TokenManager.refreshToken(refreshToken);
-            if (refreshedToken) {
-              console.log('[AUTH] Token refreshed successfully');
-              // Update token with new values
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).accessToken = refreshedToken.accessToken;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(token as any).accessTokenExpiresAt = refreshedToken.expiresAt;
-              // Update the expiresAt for backward compatibility
-              token.expiresAt = refreshedToken.expiresAt;
-              
-              // If a new refresh token is provided, rotate it in the database
-              if (refreshedToken.refreshToken) {
-                const newRefreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-                await RefreshTokenManager.rotateRefreshToken(discordId, refreshedToken.refreshToken, newRefreshTokenExpiresAt);
+            try {
+              // Get refresh token from database
+              const discordId = token.discordId;
+              if (!discordId) {
+                console.log('[AUTH] No Discord ID found, user will need to re-login');
+                return {
+                  ...token,
+                  error: 'RefreshTokenExpired'
+                };
               }
-            } else {
-              console.log('[AUTH] Token refresh failed, user will need to re-login');
+
+              const refreshToken = await RefreshTokenManager.getRefreshToken(discordId);
+              
+              if (!refreshToken) {
+                console.log('[AUTH] No valid refresh token found, user will need to re-login');
+                return {
+                  ...token,
+                  error: 'RefreshTokenExpired'
+                };
+              }
+
+              const refreshedToken = await TokenManager.refreshToken(refreshToken);
+              if (refreshedToken) {
+                console.log('[AUTH] Token refreshed successfully');
+                // Update token with new values
+                token.accessToken = refreshedToken.accessToken;
+                token.accessTokenExpiresAt = refreshedToken.expiresAt;
+                // Update the expiresAt for backward compatibility
+                token.expiresAt = refreshedToken.expiresAt;
+                
+                // If a new refresh token is provided, rotate it in the database
+                if (refreshedToken.refreshToken) {
+                  const newRefreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+                  await RefreshTokenManager.rotateRefreshToken(discordId, refreshedToken.refreshToken, newRefreshTokenExpiresAt);
+                }
+              } else {
+                console.log('[AUTH] Token refresh failed, user will need to re-login');
+                return {
+                  ...token,
+                  error: 'RefreshTokenExpired'
+                };
+              }
+            } catch (error) {
+              console.error('[AUTH] Error refreshing token:', error);
               return {
                 ...token,
                 error: 'RefreshTokenExpired'
               };
             }
-          } catch (error) {
-            console.error('[AUTH] Error refreshing token:', error);
-            return {
-              ...token,
-              error: 'RefreshTokenExpired'
-            };
           }
         }
-      }
 
-      return token;
+        return token;
+      } catch (error) {
+        console.error('[AUTH] Error in JWT callback:', error);
+        // Return a minimal token structure to prevent crashes
+        return {
+          error: 'JWTError',
+          role: 'viewer'
+        };
+      }
     },
 
     session: (async ({ session, token }: any) => {
-      // Handle token errors
-      if ((token as any).error === 'RefreshTokenExpired') {
-        console.log('[AUTH] Session expired, returning null');
-        return null as any;
+      try {
+        // Handle token errors
+        if (token?.error === 'RefreshTokenExpired') {
+          console.log('[AUTH] Session expired, returning null');
+          return null;
+        }
+
+        if (!token || !session) {
+          console.log('[AUTH] Missing token or session, returning null');
+          return null;
+        }
+
+        // Ensure session object exists and has proper structure
+        if (!session.user) {
+          session.user = {};
+        }
+
+        // Pass token data to session with proper null checks
+        session.accessToken = token.accessToken || null;
+        session.discordId = token.discordId || null;
+        session.discordUsername = token.discordUsername || null;
+        session.discordDiscriminator = token.discordDiscriminator || null;
+        session.role = token.role || "viewer";
+        session.expiresAt = token.accessTokenExpiresAt || null;
+
+        // Ensure user object has required properties
+        session.user.discordId = token.discordId || null;
+        session.user.role = token.role || "viewer";
+        session.user.email = token.email || null;
+        session.user.name = token.name || token.discordUsername || null;
+
+        return session;
+      } catch (error) {
+        console.error('[AUTH] Error in session callback:', error);
+        return null;
       }
-
-      if (!token) {
-        return null as any;
-      }
-
-      // Pass token data to session (no refresh token in session for security)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).accessToken = (token as any).accessToken
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).discordId = (token as any).discordId
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).discordUsername = (token as any).discordUsername
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).discordDiscriminator = (token as any).discordDiscriminator
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).role = (token as any).role || "viewer"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(session as any).expiresAt = (token as any).accessTokenExpiresAt
-
-      return session as any;
     }) as any,
   },
 }

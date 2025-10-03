@@ -37,7 +37,14 @@ function getPool(): mysql.Pool {
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     supportBigNumbers: true,
-    bigNumberStrings: true
+    bigNumberStrings: true,
+    // Add timeout configurations
+    acquireTimeout: 30_000, // 30 seconds to acquire connection
+    timeout: 30_000, // 30 seconds query timeout
+    reconnect: true,
+    // Connection retry settings
+    retryDelay: 2000,
+    maxReconnects: 3
   });
 
   pool = created;
@@ -97,12 +104,14 @@ export async function query(sql: string, params?: any[]): Promise<any> {
       if (attempt < maxRetries && (
           error.code === 'ECONNREFUSED' ||
           error.code === 'PROTOCOL_CONNECTION_LOST' ||
-          error.message === 'Pool is closed.'
+          error.code === 'ETIMEDOUT' ||
+          error.message === 'Pool is closed.' ||
+          error.message?.includes('timeout')
         )) {
         
-        console.log(`[DB] Recoverable error on attempt ${attempt}, retrying...`);
+        console.log(`[DB] Recoverable error on attempt ${attempt} (${error.code || error.message}), retrying...`);
         pool = null; // Force pool recreation
-        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Longer delay for timeouts
         continue;
       }
       
