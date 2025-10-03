@@ -42,6 +42,7 @@ type Item = { href: string; label: string; icon: React.ComponentType<any> };
 // Map display names to feature keys for consistent lookup across all functions
 // Defined outside component to avoid recreation on every render
 const displayNameToFeatureKey: Record<string, string> = {
+  'AI Message Summarization': 'ai_summarization',
   'Ban Syncing': 'ban_sync',
   'Bot Customisation': 'bot_customisation',
   'Creator Alerts': 'creator_alerts',
@@ -373,19 +374,21 @@ const Sidebar = React.memo(function Sidebar() {
         )}
         
         {/* Tools section (only show if any features are visible) */}
-        {(isFeatureVisible("embedded_messages") || isFeatureVisible("reaction_roles") || isFeatureVisible("custom_commands") || isFeatureVisible("bot_customisation")) && (
+        {(isFeatureVisible("ai_summarization") || isFeatureVisible("embedded_messages") || isFeatureVisible("reaction_roles") || isFeatureVisible("custom_commands") || isFeatureVisible("bot_customisation")) && (
           <CollapsibleSection title={<span className="font-bold">Tools</span>} defaultOpen>
-            {/* AI Features - always visible for now */}
-            <NavLeaf
-              href={guildId ? `/guilds/${guildId}/ai-features` : "/guilds"}
-              label="AI Features"
-              rightIcon={undefined}
-              active={guildId ? pathname.startsWith(`/guilds/${guildId}/ai-features`) : false}
-              featureEnabled={!!guildId}
-              guildSelected={!!guildId}
-              premiumRequired={false}
-              hasPremium={true}
-            />
+            {/* AI Features */}
+            {isFeatureVisible("ai_summarization") && (
+              <NavLeaf
+                href={guildId ? `/guilds/${guildId}/ai-features` : "/guilds"}
+                label="AI Features"
+                rightIcon={shouldShowCrown("ai_summarization") ? <Crown className="h-3.5 w-3.5 text-yellow-400" /> : undefined}
+                active={guildId ? pathname.startsWith(`/guilds/${guildId}/ai-features`) : false}
+                featureEnabled={!!(guildId && isFeatureAccessible("ai_summarization"))}
+                guildSelected={!!guildId}
+                premiumRequired={shouldShowCrown("ai_summarization")}
+                hasPremium={true} // Always true since we're checking feature access individually
+              />
+            )}
             {/* Moderation - always visible for now */}
             <NavLeaf
               href={guildId ? `/guilds/${guildId}/moderation` : "/guilds"}
