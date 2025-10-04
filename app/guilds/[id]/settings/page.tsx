@@ -1277,7 +1277,7 @@ function GuildSettingsPageContent() {
                             const isEnabled = commandSettings[cmd.command_name] ?? perm?.guildEnabled ?? true;
 
                             return (
-                            <div key={cmd.command_name} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <div key={cmd.command_name} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!perm?.adminEnabled ? 'opacity-60' : ''}`}>
                                 <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium text-sm">/{cmd.command_name}</p>
@@ -1290,8 +1290,8 @@ function GuildSettingsPageContent() {
                               <input
                                   type="checkbox"
                                   checked={isEnabled}
-                                  disabled={!canModify}
-                                  onChange={canModify ? (e) => {
+                                  disabled={!canModify || !perm?.adminEnabled}
+                                  onChange={canModify && perm?.adminEnabled ? (e) => {
                                     setCommandSettings((prev: any) => ({
                                       ...prev,
                                       [cmd.command_name]: e.target.checked
