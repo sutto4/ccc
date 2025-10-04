@@ -348,9 +348,19 @@ function AdminGuildSettingsPageContent() {
       {/* Guild Overview Header */}
       <div className="mb-6">
         <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Shield className="w-6 h-6 text-blue-600" />
+          <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden">
+            {guild.guild_icon_url ? (
+              <img 
+                src={guild.guild_icon_url} 
+                alt={`${guild.guild_name} server icon`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-blue-100 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-blue-600" />
               </div>
+            )}
+          </div>
           <div className="flex-1">
             <h2 className="text-xl font-semibold text-gray-900">{guild.guild_name}</h2>
             <div className="flex items-center gap-4 mt-1">
