@@ -26,12 +26,6 @@ interface Feature {
   disabled_guilds: number;
 }
 
-interface GuildFeature {
-  feature_name: string;
-  feature_key: string;
-  enabled: boolean;
-  package_override?: 'free' | 'premium';
-}
 
 interface Guild {
   guild_id: string;
@@ -67,7 +61,6 @@ function AdminGuildSettingsPageContent() {
   
   const [guild, setGuild] = useState<Guild | null>(null);
   const [features, setFeatures] = useState<Feature[]>([]);
-  const [guildFeatures, setGuildFeatures] = useState<GuildFeature[]>([]);
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
   const [aiConfig, setAiConfig] = useState<AIConfig>({
     enabled: false,
@@ -117,51 +110,13 @@ function AdminGuildSettingsPageContent() {
       const guildData = await guildResponse.json();
       setGuild(guildData.guild);
 
-      // Fetch all features
-      const featuresResponse = await fetch('/api/admin/features');
-      if (!featuresResponse.ok) throw new Error('Failed to fetch features');
-      const featuresData = await featuresResponse.json();
-      setFeatures(featuresData.features || []);
-
-      // Fetch guild features
-      const guildFeaturesResponse = await fetch(`/api/guilds/${guildId}/features`);
-      if (!guildFeaturesResponse.ok) throw new Error('Failed to fetch guild features');
-      const guildFeaturesData = await guildFeaturesResponse.json();
+      // Fetch web app features (same as regular guild settings page)
+      const webAppFeaturesResponse = await fetch(`/api/guilds/${guildId}/web-app-features`);
+      if (!webAppFeaturesResponse.ok) throw new Error('Failed to fetch web app features');
+      const webAppFeaturesData = await webAppFeaturesResponse.json();
       
-      // Transform guild features data
-      
-      // Create a mapping from display names to feature keys for API calls
-      const displayNameToFeatureKeyMap: Record<string, string> = {
-        'Ban Syncing': 'ban_sync',
-        'Bot Customisation': 'bot_customisation',
-        'Creator Alerts': 'creator_alerts',
-        'Custom Commands': 'custom_commands',
-        'Custom Dot Command Prefix': 'custom_prefix',
-        'Custom Groups': 'custom_groups',
-        'Embedded Messages': 'embedded_messages',
-        'FDG Donator Sync': 'fdg_donator_sync',
-        'Feedback Collection': 'feedback_system',
-        'FiveM ESX Integration': 'fivem_esx',
-        'FiveM QBcore Integration': 'fivem_qbcore',
-        'Moderation Tools': 'moderation',
-        'Reaction Roles': 'reaction_roles',
-        'User Verification System': 'verification_system',
-        'AI Message Summarization': 'ai_summarization'
-      };
-      
-      const transformedFeatures = featuresData.features.map((feature: Feature) => {
-        // The guild features API now returns feature keys, so we need to use the mapped key
-        const featureKey = displayNameToFeatureKeyMap[feature.feature_name];
-        const guildFeature = featureKey ? guildFeaturesData.features[featureKey] : undefined;
-        return {
-          feature_name: feature.feature_name,
-          feature_key: featureKey, // Store the actual feature key for API calls
-          enabled: guildFeature === true,
-          package_override: undefined // We'll add this functionality later
-        };
-      });
-      
-      setGuildFeatures(transformedFeatures);
+      // Use web app features data directly (same as regular guild settings page)
+      setFeatures(webAppFeaturesData.features);
       
       // Fetch current command states
       try {
@@ -190,22 +145,23 @@ function AdminGuildSettingsPageContent() {
     try {
       setSaving(true);
 
-      // Find the guild feature to get the actual feature key for the API call
-      const guildFeature = guildFeatures.find(f => f.feature_name === displayName);
+      // Find the feature to get the actual feature key for the API call
+      const feature = features.find(f => f.name === displayName);
       
-      if (!guildFeature) {
+      if (!feature) {
         console.error(`Feature not found: ${displayName}`);
         throw new Error(`Feature not found: ${displayName}`);
       }
       
+      // Use web app features API (same as regular guild settings page)
       const requestBody = {
-        feature_name: guildFeature.feature_key, // Use the actual feature key, not display name
-        enabled: enabled
+        features: {
+          [feature.key]: enabled
+        }
       };
       
-      
-      const response = await fetch(`/api/guilds/${guildId}/features`, {
-        method: 'PUT',
+      const response = await fetch(`/api/guilds/${guildId}/web-app-features`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
@@ -219,21 +175,15 @@ function AdminGuildSettingsPageContent() {
         throw new Error(`Failed to update feature: ${errorText}`);
       }
       
-      // Update local state
-      setGuildFeatures(prev => 
-        prev.map(f => 
-          f.feature_name === displayName 
-            ? { ...f, enabled } 
-            : f
-        )
-      );
+      // Refresh the feature data to get the latest state
+      await fetchGuildData();
       
       // Automatically enable/disable associated commands using DB-driven mappings
       const commandsToUpdate = (commandMappings || [])
-        .filter((cmd: any) => cmd.feature_key === guildFeature.feature_key)
+        .filter((cmd: any) => cmd.feature_key === feature.key)
         .map((cmd: any) => ({
           command_name: cmd.command_name,
-          feature_name: guildFeature.feature_key,
+          feature_name: feature.key,
           enabled
         }));
       
@@ -462,24 +412,23 @@ function AdminGuildSettingsPageContent() {
           <CardContent>
             <div className="space-y-4">
               {features.map((feature) => {
-                // Since both admin features and guild features use display names, we can match directly
-                const guildFeature = guildFeatures.find(f => f.feature_name === feature.feature_name);
-                const isEnabled = guildFeature?.enabled || false;
+                // Use the enabled state directly from the web app features data
+                const isEnabled = feature.enabled || false;
                 
                 return (
-                  <div key={feature.feature_name} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={feature.key} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium">{feature.feature_name}</h4>
-                        {feature.minimum_package === 'premium' && (
+                        <h4 className="font-medium">{feature.name}</h4>
+                        {feature.minimumPackage === 'premium' && (
                           <Crown className="w-4 h-4 text-yellow-500" />
                         )}
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          feature.minimum_package === 'premium' 
+                          feature.minimumPackage === 'premium' 
                             ? 'bg-yellow-100 text-yellow-800' 
                             : 'bg-green-100 text-green-800'
                         }`}>
-                          {feature.minimum_package}
+                          {feature.minimumPackage}
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">{feature.description}</p>
@@ -489,13 +438,13 @@ function AdminGuildSettingsPageContent() {
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
-                          id={`feature-${feature.feature_name}`}
+                          id={`feature-${feature.key}`}
                           checked={isEnabled}
                           disabled={saving}
-                          onChange={(e) => toggleFeature(feature.feature_name, e.target.checked)}
+                          onChange={(e) => toggleFeature(feature.name, e.target.checked)}
                           className="w-4 h-4"
                         />
-                        <label htmlFor={`feature-${feature.feature_name}`} className="text-sm">
+                        <label htmlFor={`feature-${feature.key}`} className="text-sm">
                           {isEnabled ? 'Enabled' : 'Disabled'}
                         </label>
                       </div>
