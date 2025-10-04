@@ -4,6 +4,7 @@ import { PropsWithChildren, useState, useEffect } from "react";
 import Sidebar from "@/components/ui/sidebar";
 import Topbar from "@/components/ui/topbar";
 import { WelcomeModal } from "@/components/welcome-modal";
+import GettingStartedWidget from "@/components/getting-started-widget";
 import { useSession } from "next-auth/react";
 
 export default function ConsoleShell({ children }: PropsWithChildren) {
@@ -12,6 +13,12 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
   const [userGuilds, setUserGuilds] = useState<any[]>([]);
   const [isPremium, setIsPremium] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [showGettingStarted, setShowGettingStarted] = useState(false);
+
+  // Debug getting started state
+  useEffect(() => {
+    console.log('[CONSOLE-SHELL] Getting started state changed:', showGettingStarted);
+  }, [showGettingStarted]);
 
   useEffect(() => {
     if (session?.user) {
@@ -125,7 +132,13 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
 
       {/* Top bar - full width, on top */}
       <header className="fixed top-0 left-0 right-0 h-[72px] bg-[hsl(var(--header))] text-[hsl(var(--header-foreground))] border-b border-[hsl(var(--border))] backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--header))]/80 z-50">
-        <Topbar onMenuClick={() => setIsMobileNavOpen(true)} />
+        <Topbar 
+          onMenuClick={() => setIsMobileNavOpen(true)}
+          onGettingStartedClick={() => {
+            console.log('[CONSOLE-SHELL] Topbar getting started clicked');
+            setShowGettingStarted(true);
+          }}
+        />
       </header>
 
       {/* Main content - responsive to sidebar presence */}
@@ -161,6 +174,12 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
         onClose={() => setShowWelcomeModal(false)}
         userGuilds={userGuilds}
         isPremium={isPremium}
+      />
+
+      {/* Getting Started Widget */}
+      <GettingStartedWidget 
+        forceOpen={showGettingStarted}
+        onOpenChange={setShowGettingStarted}
       />
 
       {/* Sound Notifications */}

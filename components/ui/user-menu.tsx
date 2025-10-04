@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSharedSession, signIn, signOut } from "@/components/providers";
+import { usePathname } from "next/navigation";
+import { Sparkles } from "lucide-react";
 
 function initialsFrom(str?: string | null) {
   if (!str) return "U";
@@ -10,10 +12,20 @@ function initialsFrom(str?: string | null) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-const UserMenu = React.memo(function UserMenu() {
+type UserMenuProps = {
+  onGettingStartedClick?: () => void;
+};
+
+const UserMenu = React.memo(function UserMenu({ onGettingStartedClick }: UserMenuProps) {
   const { data: session, status } = useSharedSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  
+  // Extract guild ID from pathname
+  const pathParts = pathname.split('/').filter(Boolean);
+  const isInGuild = pathParts[0] === "guilds" && pathParts[1];
+  const guildId = isInGuild ? pathParts[1] : null;
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -66,6 +78,22 @@ const UserMenu = React.memo(function UserMenu() {
             </div>
           </div>
           <div className="my-1 h-px bg-[hsl(var(--border))]" />
+          {guildId && (
+            <button
+              onClick={() => {
+                console.log('[USER-MENU] Getting Started clicked');
+                onGettingStartedClick?.();
+                setOpen(false);
+              }}
+              className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-blue-500/10 hover:text-blue-600 transition-colors duration-200"
+              role="menuitem"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Getting Started
+              </div>
+            </button>
+          )}
           <button
             onClick={() => signOut({ callbackUrl: "/guilds" })}
             className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-red-500/10 hover:text-red-600 transition-colors duration-200"

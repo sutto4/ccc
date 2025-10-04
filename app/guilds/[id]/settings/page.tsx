@@ -133,6 +133,7 @@ function GuildSettingsPageContent() {
       loadRoles();
       loadSubscription();
       loadChannels();
+      loadGeneralSettings();
     }
   }, [status, session, guildId]);
 
@@ -519,16 +520,54 @@ function GuildSettingsPageContent() {
     setPermissions(prev => prev.map(p => ({ ...p, canUseApp: false })));
   };
 
+  const loadGeneralSettings = async () => {
+    try {
+      const response = await fetch(`/api/guilds/${guildId}/general-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setGeneralSettings(prev => ({
+          ...prev,
+          logChannel: data.modChannelId || '',
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load general settings:', error);
+    }
+  };
+
   const updateGeneralSetting = (key: string, value: any) => {
     setGeneralSettings(prev => ({ ...prev, [key]: value }));
   };
 
   const saveGeneralSettings = async () => {
-    // Dummy save for now
-    toast({
-      title: "Success",
-      description: "General settings saved successfully",
-    });
+    try {
+      const response = await fetch(`/api/guilds/${guildId}/general-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          modChannelId: generalSettings.logChannel,
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "General settings saved successfully",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save settings');
+      }
+    } catch (error) {
+      console.error('Failed to save general settings:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save settings",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemoveServer = async (guildIdToRemove: string) => {

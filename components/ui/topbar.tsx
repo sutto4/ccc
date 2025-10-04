@@ -9,9 +9,10 @@ import UserMenu from "@/components/ui/user-menu";
 
 type TopbarProps = {
   onMenuClick?: () => void;
+  onGettingStartedClick?: () => void;
 };
 
-export default function Topbar({ onMenuClick }: TopbarProps) {
+export default function Topbar({ onMenuClick, onGettingStartedClick }: TopbarProps) {
   // const { resolvedTheme } = useTheme()
   return (
     <div className="flex h-18 items-center justify-between gap-3 px-3 md:px-4">
@@ -42,7 +43,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           <span>Invite Bot</span>
         </InviteBotButton>
         {/* Theme toggle temporarily disabled */}
-        <UserMenu />
+        <UserMenu onGettingStartedClick={onGettingStartedClick} />
       </div>
     </div>
   );
