@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,21 +10,20 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Shield, Settings, RefreshCw, Bot, Brain, Clock, BarChart3 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Crown, Shield, Settings, RefreshCw, Bot, Brain, Clock, BarChart3, Users, Database, Activity, AlertTriangle } from "lucide-react";
 import { AuthErrorBoundary } from '@/components/auth-error-boundary';
 import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
+import { fetchWebAppFeatures, updateWebAppFeatures } from "@/lib/api";
 
 interface Feature {
-  feature_key: string;
-  feature_name: string;
+  key: string;
+  name: string;
   description: string;
-  minimum_package: 'free' | 'premium';
-  is_active: boolean;
-  total_guilds: number;
-  enabled_guilds: number;
-  disabled_guilds: number;
+  minimumPackage: string;
+  enabled: boolean;
+  canEnable?: boolean;
 }
-
 
 interface Guild {
   guild_id: string;
@@ -34,6 +32,7 @@ interface Guild {
   premium: boolean;
   owner_name?: string;
   member_count?: number;
+  created_at: string;
 }
 
 interface AIConfig {
@@ -49,7 +48,7 @@ interface AIConfig {
 export default function AdminGuildSettingsPage() {
   return (
     <AuthErrorBoundary>
-      <AdminGuildSettingsPageContent undefined />
+      <AdminGuildSettingsPageContent />
     </AuthErrorBoundary>
   );
 }
@@ -60,7 +59,15 @@ function AdminGuildSettingsPageContent() {
   const guildId = params?.id;
   
   const [guild, setGuild] = useState<Guild | null>(null);
-  const [features, setFeatures] = useState<Feature[]>([]);
+  const [webAppFeatures, setWebAppFeatures] = useState<{
+    features: Feature[];
+    states: Record<string, boolean>;
+    isPremium: boolean;
+  }>({
+    features: [],
+    states: {},
+    isPremium: false
+  });
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
   const [aiConfig, setAiConfig] = useState<AIConfig>({
     enabled: false,
@@ -71,19 +78,11 @@ function AdminGuildSettingsPageContent() {
     rate_limit_per_hour: 10,
     rate_limit_per_day: 100
   });
-  const [aiConfigOriginal, setAiConfigOriginal] = useState<AIConfig>({
-    enabled: false,
-    model: 'gpt-3.5-turbo',
-    max_tokens_per_request: 1000,
-    max_messages_per_summary: 50,
-    custom_prompt: null,
-    rate_limit_per_hour: 10,
-    rate_limit_per_day: 100
-  });
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSaving, setAiSaving] = useState(false);
+  const [aiConfigOriginal, setAiConfigOriginal] = useState<AIConfig>(aiConfig);
   const [aiHasChanges, setAiHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -101,24 +100,25 @@ function AdminGuildSettingsPageContent() {
 
   const fetchGuildData = async () => {
     try {
-      console.log('Fetching guild data for guildId:', guildId);
       setLoading(true);
       
       // Fetch guild info
       const guildResponse = await fetch(`/api/admin/guilds/${guildId}`);
-      if (!guildResponse.ok) throw new Error('Failed to fetch guild info');
-      const guildData = await guildResponse.json();
-      setGuild(guildData.guild);
+      if (!guildResponse.ok) throw new Error('Failed to fetch guild');
+      const responseData = await guildResponse.json();
+      console.log('🔍 ADMIN GUILD RESPONSE:', responseData);
+      
+      // The API returns { guild: { ... } }, so extract the guild object
+      const guildData = responseData.guild || responseData;
+      setGuild(guildData);
 
       // Fetch web app features (same as regular guild settings page)
-      const webAppFeaturesResponse = await fetch(`/api/guilds/${guildId}/web-app-features`);
-      if (!webAppFeaturesResponse.ok) throw new Error('Failed to fetch web app features');
-      const webAppFeaturesData = await webAppFeaturesResponse.json();
-      
-      // Use web app features data directly (same as regular guild settings page)
-      setFeatures(webAppFeaturesData.features);
-      
-      // Fetch current command states
+      console.log('🔍 ADMIN LOADING WEB APP FEATURES...');
+      const featuresData = await fetchWebAppFeatures(guildId);
+      console.log('🔍 ADMIN FEATURES DATA:', featuresData);
+      setWebAppFeatures(featuresData);
+
+      // Fetch command states
       try {
         const commandsResponse = await fetch(`/api/guilds/${guildId}/commands`);
         if (commandsResponse.ok) {
@@ -146,51 +146,44 @@ function AdminGuildSettingsPageContent() {
       setSaving(true);
 
       // Find the feature to get the actual feature key for the API call
-      const feature = features.find(f => f.name === displayName);
+      const feature = webAppFeatures.features.find(f => f.name === displayName);
       
       if (!feature) {
         console.error(`Feature not found: ${displayName}`);
         throw new Error(`Feature not found: ${displayName}`);
       }
       
-      // Use web app features API (same as regular guild settings page)
-      const requestBody = {
-        features: {
-          [feature.key]: enabled
-        }
-      };
+      console.log(`🔍 ADMIN TOGGLING FEATURE: ${feature.key} = ${enabled}`);
       
-      const response = await fetch(`/api/guilds/${guildId}/web-app-features`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+      // Use the same API function as the regular guild settings page
+      await updateWebAppFeatures(guildId, {
+        [feature.key]: enabled
       });
 
-      console.log('API response status:', response.status);
-      console.log('API response ok:', response.ok);
+      // Update local features state (same as guild settings page)
+      setWebAppFeatures(prev => ({
+        ...prev,
+        states: {
+          ...prev.states,
+          [feature.key]: enabled
+        },
+        features: prev.features.map(f => 
+          f.key === feature.key ? { ...f, enabled } : f
+        )
+      }));
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API error response:', errorText);
-        throw new Error(`Failed to update feature: ${errorText}`);
-      }
-      
-      // Refresh the feature data to get the latest state
-      await fetchGuildData();
-      
-      // Automatically enable/disable associated commands using DB-driven mappings
-      const commandsToUpdate = (commandMappings || [])
+      // Get associated commands and update them
+      const commandsToUpdate = commandMappings
         .filter((cmd: any) => cmd.feature_key === feature.key)
         .map((cmd: any) => ({
           command_name: cmd.command_name,
-          feature_name: feature.key,
-          enabled
+          feature_name: cmd.feature_name,
+          enabled: enabled
         }));
       
-      // Update commands if any were found
+      console.log(`🚨🚨🚨 UPDATING ${commandsToUpdate.length} COMMANDS FOR FEATURE ${feature.key} 🚨🚨🚨`);
+
       if (commandsToUpdate.length > 0) {
-        console.log(`🚨🚨🚨 AUTO-UPDATING ${commandsToUpdate.length} COMMANDS FOR FEATURE ${displayName}! 🚨🚨🚨`);
-        
         const commandsResponse = await fetch(`/api/guilds/${guildId}/commands`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -280,7 +273,7 @@ function AdminGuildSettingsPageContent() {
       setAiSaving(true);
       
       // Calculate what has changed
-      const changes: Partial<AIConfig> = {};
+      const changes: any = {};
       Object.keys(aiConfig).forEach(key => {
         const typedKey = key as keyof AIConfig;
         if (aiConfig[typedKey] !== aiConfigOriginal[typedKey]) {
@@ -306,11 +299,9 @@ function AdminGuildSettingsPageContent() {
         throw new Error(`Failed to update AI config: ${response.statusText}`);
       }
       
-      // Update original config to match current
       setAiConfigOriginal(aiConfig);
       setAiHasChanges(false);
-      
-      setSuccess('AI configuration saved successfully');
+      setSuccess('AI configuration saved successfully!');
       setTimeout(() => setSuccess(null), 3000);
       
     } catch (error: any) {
@@ -328,65 +319,84 @@ function AdminGuildSettingsPageContent() {
 
   if (loading) {
     return (
-      <Section title="Admin Guild Settings">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Admin Guild Settings</h1>
+        </div>
         <div className="text-center py-8">Loading...</div>
-      </Section>
+      </div>
     );
   }
 
   if (!guild) {
     return (
-      <Section title="Admin Guild Settings">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Admin Guild Settings</h1>
+        </div>
         <div className="text-center py-8 text-red-600">Guild not found</div>
-      </Section>
+      </div>
     );
   }
 
   return (
-    <Section title={`Admin Settings - ${guild.guild_name}`}>
       <div className="space-y-6">
-        {/* Guild Info */}
-        <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              Guild Information
-            </h3>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Guild ID</p>
-                <p className="font-mono text-sm">{guild.guild_id}</p>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Admin Settings - {guild.guild_name}</h1>
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Owner</p>
-                <p className="text-sm">{guild.owner_name || 'Unknown'}</p>
+      
+      {/* Guild Overview Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border">
+          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+            <Shield className="w-6 h-6 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Members</p>
-                <p className="text-sm">{guild.member_count || 'Unknown'}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Premium Status</p>
-                <div className="flex items-center gap-2">
-                  {guild.premium ? (
-                    <>
-                      <Crown className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm">Premium</span>
-                    </>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Free</span>
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold text-gray-900">{guild.guild_name}</h2>
+            <div className="flex items-center gap-4 mt-1">
+              <span className="text-sm text-gray-600">ID: {guild.guild_id}</span>
+              <span className="text-sm text-gray-600">•</span>
+              <span className="text-sm text-gray-600">{guild.member_count || 'Unknown'} members</span>
+              <span className="text-sm text-gray-600">•</span>
+              <span className="text-sm text-gray-600">Owner: {guild.owner_name || 'Unknown'}</span>
+              {guild.premium && (
+                <>
+                  <span className="text-sm text-gray-600">•</span>
+                  <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+                    <Crown className="w-3 h-3 mr-1" />
+                    Premium
+                  </Badge>
+                </>
                   )}
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="features" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="features" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Features
+          </TabsTrigger>
+          <TabsTrigger value="commands" className="flex items-center gap-2">
+            <Bot className="h-4 w-4" />
+            Commands
+          </TabsTrigger>
+          <TabsTrigger value="ai-config" className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            AI Config
+          </TabsTrigger>
+          <TabsTrigger value="admin-tools" className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Admin Tools
+          </TabsTrigger>
+        </TabsList>
 
 
-
-        {/* Feature Management */}
+        {/* Features Tab */}
+        <TabsContent value="features" className="space-y-4">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -395,113 +405,241 @@ function AdminGuildSettingsPageContent() {
                   <Settings className="w-5 h-5" />
                   Feature Management
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  Enable/disable features for this guild. You can override premium requirements.
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Enable or disable features for this server
                 </p>
               </div>
               <Button
                 onClick={setupDefaultFeatures}
                 disabled={saving}
-                variant="outline"
-                size="sm"
+                  className="flex items-center gap-2"
               >
-                Setup Default Features
+                  <RefreshCw className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
+                  Setup Defaults
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {features.map((feature) => {
-                // Use the enabled state directly from the web app features data
-                const isEnabled = feature.enabled || false;
-                
-                return (
-                  <div key={feature.key} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium">{feature.name}</h4>
-                        {feature.minimumPackage === 'premium' && (
-                          <Crown className="w-4 h-4 text-yellow-500" />
-                        )}
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          feature.minimumPackage === 'premium' 
-                            ? 'bg-yellow-100 text-yellow-800' 
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {feature.minimumPackage}
-                        </span>
+                {loading && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin opacity-50" />
+                    <p>Loading features...</p>
+                  </div>
+                )}
+                {!loading && webAppFeatures.features.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Settings className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No features found.</p>
+                    <p className="text-xs mt-2">Check console for debug info</p>
+                    <Button 
+                      onClick={() => {
+                        console.log('🔍 MANUALLY TESTING FEATURES...');
+                        setWebAppFeatures({
+                          features: [
+                            {
+                              key: 'moderation',
+                              name: 'Moderation',
+                              description: 'Moderation tools and commands',
+                              minimumPackage: 'free',
+                              enabled: true,
+                              canEnable: true
+                            },
+                            {
+                              key: 'verification_system',
+                              name: 'Verification System',
+                              description: 'User verification system',
+                              minimumPackage: 'free',
+                              enabled: false,
+                              canEnable: true
+                            }
+                          ],
+                          states: {
+                            moderation: true,
+                            verification_system: false
+                          },
+                          isPremium: false
+                        });
+                      }}
+                      className="mt-4"
+                      variant="outline"
+                    >
+                      Load Test Features
+                    </Button>
+                  </div>
+                )}
+                {!loading && webAppFeatures.features.length > 0 && (
+                  <div className="space-y-6">
+                    {/* Free Features */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-700 mb-4 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        Free Features
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {webAppFeatures.features.filter(feature => feature.minimumPackage === 'free').map((feature) => {
+                          const isEnabled = feature.enabled;
+                          const canEnable = feature.canEnable;
+                          
+                          return (
+                            <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm">{feature.name}</p>
+                                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                                    Free
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isEnabled}
+                                  disabled={!canEnable || saving}
+                                  onChange={(e) => {
+                                    if (!canEnable) {
+                                      setError("This feature requires a premium subscription.");
+                                      setTimeout(() => setError(null), 3000);
+                                      return;
+                                    }
+                                    toggleFeature(feature.name, e.target.checked);
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                                <span className={`text-xs font-medium ${isEnabled ? 'text-green-600' : 'text-gray-500'}`}>
+                                  {isEnabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-sm text-muted-foreground">{feature.description}</p>
                     </div>
-                    
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`feature-${feature.key}`}
-                          checked={isEnabled}
-                          disabled={saving}
-                          onChange={(e) => toggleFeature(feature.name, e.target.checked)}
-                          className="w-4 h-4"
-                        />
-                        <label htmlFor={`feature-${feature.key}`} className="text-sm">
-                          {isEnabled ? 'Enabled' : 'Disabled'}
-                        </label>
+
+                    {/* Premium Features */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-yellow-700 mb-4 flex items-center gap-2">
+                        <Crown className="w-5 h-5 text-yellow-500" />
+                        Premium Features
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {webAppFeatures.features.filter(feature => feature.minimumPackage === 'premium').map((feature) => {
+                          const isEnabled = feature.enabled;
+                          const canEnable = feature.canEnable;
+                          const isPremiumFeature = feature.minimumPackage === 'premium';
+                          
+                          return (
+                            <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm">{feature.name}</p>
+                                  <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                                    Premium
+                                  </Badge>
+                                  {!canEnable && isPremiumFeature && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      Requires Premium
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isEnabled}
+                                  disabled={!canEnable || saving}
+                                  onChange={(e) => {
+                                    if (!canEnable) {
+                                      setError("This feature requires a premium subscription.");
+                                      setTimeout(() => setError(null), 3000);
+                                      return;
+                                    }
+                                    toggleFeature(feature.name, e.target.checked);
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                                <span className={`text-xs font-medium ${isEnabled ? 'text-green-600' : 'text-gray-500'}`}>
+                                  {isEnabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                )}
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
-        {/* Command Management */}
+        {/* Commands Tab */}
+        <TabsContent value="commands" className="space-y-4">
         <Card>
           <CardHeader>
             <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Settings className="w-5 h-5" />
+                <Bot className="w-5 h-5" />
               Command Management
             </h3>
-            <p className="text-sm text-muted-foreground">
-              Enable/disable individual slash commands for this guild. These settings override global feature toggles.
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage individual command states. Changes are applied immediately.
             </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
               {commandMappingsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="w-6 h-6 animate-spin mr-2" />
                   Loading commands...
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Group commands by feature */}
+                <div className="space-y-6">
                   {Object.entries(
                     commandMappings.reduce((acc: Record<string, any[]>, cmd: any) => {
-                      const feature = cmd.feature_key;
-                      if (!acc[feature]) acc[feature] = [];
-                      acc[feature].push(cmd);
+                      const featureName = cmd.feature_key || 'other';
+                      if (!acc[featureName]) acc[featureName] = [];
+                      acc[featureName].push(cmd);
                       return acc;
-                    }, {} as Record<string, any[]>)
-                  ).map(([featureName, commands]) => (
+                    }, {})
+                  ).map(([featureName, commands]) => {
+                    // Map feature names to display names
+                    const getFeatureDisplayName = (name: string) => {
+                      switch (name) {
+                        case 'moderation': return '🛡️ Moderation';
+                        case 'utilities': return '🔧 Utilities';
+                        case 'sticky_messages': return '📌 Sticky Messages';
+                        case 'verification_system': return '✅ Verification';
+                        case 'feedback_system': return '💬 Feedback';
+                        case 'embedded_messages': return '📝 Embedded Messages';
+                        case 'reaction_roles': return '🎭 Reaction Roles';
+                        case 'bot_customisation': return '🤖 Bot Customisation';
+                        case 'custom_commands': return '⚙️ Custom Commands';
+                        case 'ban_sync': return '🔄 Ban Sync';
+                        case 'creator_alerts': return '📢 Creator Alerts';
+                        case 'custom_prefix': return '🔤 Custom Prefix';
+                        case 'custom_groups': return '👥 Custom Groups';
+                        case 'fdg_donator_sync': return '💰 FDG Donator Sync';
+                        default: return `🔹 ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
+                      }
+                    };
+
+                    return (
                     <div key={featureName} className="space-y-3">
-                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                        {featureName === 'moderation' ? 'Moderation' : 
-                         featureName === 'utilities' ? 'Utilities' : 
-                         featureName === 'sticky_messages' ? 'Sticky Messages' :
-                         featureName}
+                      <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
+                        {getFeatureDisplayName(featureName)}
                       </h4>
-                      {commands.map((cmd: any) => (
-                        <div key={cmd.command_name} className="flex items-center justify-between p-2 border rounded">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {commands.map((cmd) => (
+                          <div key={cmd.command_name} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
                           <div className="flex-1">
-                            <p className="font-medium text-sm">/{cmd.command_name}</p>
+                              <p className="font-medium capitalize">{cmd.command_name}</p>
                             <p className="text-xs text-muted-foreground">{cmd.description}</p>
                           </div>
                           <div className="flex items-center space-x-2">
                             <input
                               type="checkbox"
-                              id={`cmd-${cmd.command_name}`}
                               checked={commandStates[cmd.command_name] || false}
                               onChange={(e) => {
                                 setCommandStates(prev => ({
@@ -511,48 +649,38 @@ function AdminGuildSettingsPageContent() {
                               }}
                               className="w-4 h-4"
                             />
-                          <label htmlFor={`cmd-${cmd.command_name}`} className="text-xs">
+                              <span className={`text-xs font-medium ${commandStates[cmd.command_name] ? 'text-green-600' : 'text-gray-500'}`}>
                               {commandStates[cmd.command_name] ? 'Enabled' : 'Disabled'}
-                            </label>
+                              </span>
+                            </div>
                           </div>
+                        ))}
                         </div>
-                      ))}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
-
-              <div className="flex justify-end pt-4 border-t">
+              <div className="flex justify-end mt-6">
                 <Button
                   onClick={async () => {
                     try {
-                      console.log('🚨🚨🚨 ADMIN SAVE COMMAND SETTINGS CLICKED! 🚨🚨🚨');
-                      console.log('=== SAVE COMMAND SETTINGS CLICKED ===');
                       setSaving(true);
+                      const commandUpdates: any[] = [];
                       
-                      // Get all command checkboxes and their current state
-                      const commandUpdates = [];
-                      
-                      // Process command checkboxes using database-driven commands
                       for (const cmd of commandMappings) {
                         const checkbox = document.getElementById(`cmd-${cmd.command_name}`) as HTMLInputElement;
                         if (checkbox) {
                           const isChecked = checkbox.checked;
                           commandUpdates.push({
                             command_name: cmd.command_name,
-                            feature_name: cmd.feature_name,
+                            feature_key: cmd.feature_key,
                             enabled: isChecked
                           });
                         }
                       }
                       
-                      console.log('🚨🚨🚨 COMMAND UPDATES TO PROCESS! 🚨🚨🚨');
-                      console.log('Command updates to process:', commandUpdates);
-                      
-                      // Process each command update
                       if (commandUpdates.length > 0) {
-                        console.log('🚨🚨🚨 PROCESSING COMMAND UPDATES! 🚨🚨🚨');
-                        
                         const response = await fetch(`/api/guilds/${guildId}/commands`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -561,222 +689,232 @@ function AdminGuildSettingsPageContent() {
                         
                         if (!response.ok) {
                           const errorText = await response.text();
-                          console.error('Failed to update commands:', errorText);
                           throw new Error(`Failed to update commands: ${errorText}`);
                         }
-                        
-                        console.log('🚨🚨🚨 COMMAND UPDATES SUCCESS! 🚨🚨🚨');
-                        console.log(`Successfully updated ${commandUpdates.length} commands`);
                       }
                       
-                      console.log('🚨🚨🚨 SHOWING SUCCESS MESSAGE! 🚨🚨🚨');
                       setSuccess(`Successfully updated ${commandUpdates.length} commands!`);
                       setTimeout(() => setSuccess(null), 3000);
                       
                     } catch (error) {
-                      console.error('Error saving command settings:', error);
-                      setError(`Failed to save settings: ${error.message}`);
+                      setError(`Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
                       setTimeout(() => setError(null), 5000);
                     } finally {
                       setSaving(false);
                     }
                   }}
                   disabled={saving}
-                  variant="outline"
-                  size="sm"
+                  className="flex items-center gap-2"
                 >
-                  {saving ? 'Saving...' : 'Save Command Settings'}
+                  <RefreshCw className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
+                  Save Command Changes
                 </Button>
-              </div>
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
-        {/* AI Configuration Management */}
-        <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Bot className="w-5 h-5" />
-              AI Configuration Management
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Configure AI-powered message summarization settings for this guild
-            </p>
-          </CardHeader>
-          <CardContent>
-            {aiLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-                Loading AI configuration...
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Enable/Disable Toggle */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Brain className="h-5 w-5 text-purple-600" />
+        {/* AI Config Tab */}
+        <TabsContent value="ai-config" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Brain className="w-5 h-5" />
+                AI Configuration Management
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage AI message summarization settings for this guild.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {aiLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+                  Loading AI configuration...
+                </div>
+              ) : (
+                <>
+                  {/* AI Enabled Toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
-                      <h4 className="font-medium">Enable AI Summarization</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Allow users to use /summarise commands
-                      </p>
+                      <h4 className="font-medium">AI Message Summarization</h4>
+                      <p className="text-sm text-muted-foreground">Enable or disable AI-powered message summarization</p>
                     </div>
+                    <Switch
+                      checked={aiConfig.enabled}
+                      onCheckedChange={(checked) => handleAIConfigChange({ enabled: checked })}
+                    />
                   </div>
-                  <Switch
-                    checked={aiConfig.enabled}
-                    onCheckedChange={(enabled) => handleAIConfigChange({ enabled })}
-                    disabled={aiSaving}
-                  />
-                </div>
 
-                {/* AI Model Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="ai-model">AI Model</Label>
-                  <Select
-                    id="ai-model"
-                    value={aiConfig.model}
-                    onChange={(e) => handleAIConfigChange({ model: e.target.value })}
-                    disabled={aiSaving}
-                  >
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster, Cheaper)</option>
-                    <option value="gpt-4">GPT-4 (Higher Quality, More Expensive)</option>
-                  </Select>
-                </div>
+                  {aiConfig.enabled && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Model Selection */}
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-model">AI Model</Label>
+                        <select
+                          id="ai-model"
+                          value={aiConfig.model}
+                          onChange={(e) => handleAIConfigChange({ model: e.target.value })}
+                          className="w-full p-2 border rounded-md"
+                        >
+                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                          <option value="gpt-4">GPT-4</option>
+                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        </select>
+                      </div>
 
-                {/* Max Tokens and Messages */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-max-tokens">Max Tokens per Request</Label>
+                      {/* Max Tokens Per Request */}
+                      <div className="space-y-2">
+                        <Label htmlFor="max-tokens">Max Tokens Per Request</Label>
                         <Input
-                          id="ai-max-tokens"
+                          id="max-tokens"
                           type="number"
                           min="100"
                           max="4000"
                           value={aiConfig.max_tokens_per_request}
                           onChange={(e) => handleAIConfigChange({ max_tokens_per_request: parseInt(e.target.value) })}
-                          disabled={aiSaving}
                         />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-max-messages">Max Messages per Summary</Label>
-                    <Input
-                      id="ai-max-messages"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={aiConfig.max_messages_per_summary}
-                      onChange={(e) => handleAIConfigChange({ max_messages_per_summary: parseInt(e.target.value) })}
-                      disabled={aiSaving}
-                    />
-                  </div>
-                </div>
+                      </div>
 
-                {/* Custom Prompt */}
-                <div className="space-y-2">
-                  <Label htmlFor="ai-custom-prompt">Custom Prompt (Optional)</Label>
-                  <Textarea
-                    id="ai-custom-prompt"
-                    placeholder="Enter a custom prompt to guide the AI's summarization behavior..."
-                    value={aiConfig.custom_prompt || ''}
-                    onChange={(e) => handleAIConfigChange({ custom_prompt: e.target.value || null })}
-                    disabled={aiSaving}
-                    rows={3}
-                  />
-                </div>
+                      {/* Max Messages Per Summary */}
+                      <div className="space-y-2">
+                        <Label htmlFor="max-messages">Max Messages Per Summary</Label>
+                        <Input
+                          id="max-messages"
+                          type="number"
+                          min="10"
+                          max="200"
+                          value={aiConfig.max_messages_per_summary}
+                          onChange={(e) => handleAIConfigChange({ max_messages_per_summary: parseInt(e.target.value) })}
+                        />
+                      </div>
 
-                {/* Rate Limiting */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Rate Limiting
-                  </Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-rate-hour">Requests per Hour</Label>
-                      <Input
-                        id="ai-rate-hour"
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={aiConfig.rate_limit_per_hour}
-                        onChange={(e) => handleAIConfigChange({ rate_limit_per_hour: parseInt(e.target.value) })}
-                        disabled={aiSaving}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-rate-day">Requests per Day</Label>
-                      <Input
-                        id="ai-rate-day"
-                        type="number"
-                        min="1"
-                        max="1000"
-                        value={aiConfig.rate_limit_per_day}
-                        onChange={(e) => handleAIConfigChange({ rate_limit_per_day: parseInt(e.target.value) })}
-                        disabled={aiSaving}
-                      />
-                    </div>
-                  </div>
-                </div>
+                      {/* Rate Limits */}
+                      <div className="space-y-2">
+                        <Label htmlFor="rate-limit-hour">Rate Limit Per Hour</Label>
+                        <Input
+                          id="rate-limit-hour"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={aiConfig.rate_limit_per_hour}
+                          onChange={(e) => handleAIConfigChange({ rate_limit_per_hour: parseInt(e.target.value) })}
+                        />
+                      </div>
 
-                {/* Save Button */}
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    {aiHasChanges ? (
-                      <span className="text-orange-600">You have unsaved changes</span>
-                    ) : (
-                      <span>All changes saved</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    {aiHasChanges && (
-                      <Button
-                        onClick={() => {
-                          setAiConfig(aiConfigOriginal);
-                          setAiHasChanges(false);
-                        }}
-                        disabled={aiSaving}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Cancel Changes
-                      </Button>
-                    )}
-                    <Button
-                      onClick={saveAIConfig}
-                      disabled={aiSaving || !aiHasChanges}
-                      variant="default"
-                      size="sm"
-                    >
-                      {aiSaving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      <div className="space-y-2">
+                        <Label htmlFor="rate-limit-day">Rate Limit Per Day</Label>
+                        <Input
+                          id="rate-limit-day"
+                          type="number"
+                          min="10"
+                          max="1000"
+                          value={aiConfig.rate_limit_per_day}
+                          onChange={(e) => handleAIConfigChange({ rate_limit_per_day: parseInt(e.target.value) })}
+                        />
+                      </div>
 
-        {/* Success/Error Messages */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-            {success}
+                      {/* Custom Prompt - Full Width */}
+                      <div className="md:col-span-2 space-y-2">
+                        <Label htmlFor="custom-prompt">Custom Prompt</Label>
+                        <Textarea
+                          id="custom-prompt"
+                          placeholder="Enter a custom prompt for AI message summarization..."
+                          value={aiConfig.custom_prompt || ''}
+                          onChange={(e) => handleAIConfigChange({ custom_prompt: e.target.value })}
+                          rows={4}
+                        />
+                      </div>
           </div>
         )}
         
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
+                  {/* Save Button */}
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={saveAIConfig}
+                      disabled={aiSaving || !aiHasChanges}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${aiSaving ? 'animate-spin' : ''}`} />
+                      Save AI Configuration
+                    </Button>
           </div>
-        )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Back to Admin */}
-        <div className="flex justify-start">
-          <Button variant="outline" onClick={() => window.history.back()}>
+        {/* Admin Tools Tab */}
+        <TabsContent value="admin-tools" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                Admin Tools
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Administrative actions for this guild
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 border rounded-lg">
+                  <h4 className="font-medium mb-2">Guild Reset</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Reset all features and commands to default state
+                  </p>
+                  <Button
+                    onClick={setupDefaultFeatures}
+                    disabled={saving}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
+                    Reset to Defaults
+                  </Button>
+                </div>
+
+                <div className="p-4 border rounded-lg">
+                  <h4 className="font-medium mb-2">Navigation</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Return to admin dashboard
+                  </p>
+                  <Button
+                    onClick={() => window.history.back()}
+                    variant="outline"
+                    className="w-full"
+                  >
             ← Back to Admin
           </Button>
         </div>
       </div>
-    </Section>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Status Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-6">
+          <div className="flex items-center gap-2 text-red-800">
+            <AlertTriangle className="w-4 h-4" />
+            <span className="font-medium">Error</span>
+          </div>
+          <p className="text-red-700 mt-1">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+          <div className="flex items-center gap-2 text-green-800">
+            <Activity className="w-4 h-4" />
+            <span className="font-medium">Success</span>
+          </div>
+          <p className="text-green-700 mt-1">{success}</p>
+        </div>
+      )}
+    </div>
   );
 
 }

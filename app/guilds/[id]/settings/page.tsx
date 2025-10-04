@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X, DollarSign } from "lucide-react";
+import { Settings, Shield, FileText, Save, RefreshCw, CheckIcon, CreditCard, ExternalLink, Folder, Plus, X, DollarSign, Crown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchRoles, fetchGuildCommandPermissions, fetchWebAppFeatures, updateWebAppFeatures } from "@/lib/api";
 import { useCommandMappingsQuery } from "@/hooks/use-command-mapping-query";
@@ -1270,7 +1270,7 @@ function GuildSettingsPageContent() {
                           {commands.length} command{commands.length !== 1 ? 's' : ''}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-1 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {commands.map((cmd) => {
                             const perm = commandPermissions?.commands[cmd.command_name];
                             const canModify = perm?.canModify ?? true;
@@ -1287,15 +1287,17 @@ function GuildSettingsPageContent() {
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">{cmd.description}</p>
                               </div>
-                              <Switch
+                              <input
+                                  type="checkbox"
                                   checked={isEnabled}
                                   disabled={!canModify}
-                                onCheckedChange={canModify ? (checked) => {
+                                  onChange={canModify ? (e) => {
                                     setCommandSettings((prev: any) => ({
                                       ...prev,
-                                    [cmd.command_name]: checked
-                                  }));
-                                } : undefined}
+                                      [cmd.command_name]: e.target.checked
+                                    }));
+                                  } : undefined}
+                                  className="w-4 h-4"
                                 />
                               </div>
                             );
@@ -1324,61 +1326,131 @@ function GuildSettingsPageContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-6">
                   {webAppFeatures?.features?.length > 0 ? (
-                    webAppFeatures.features.map((feature) => {
-                      const isEnabled = feature.enabled;
-                      const canEnable = feature.canEnable;
-                      const isPremiumFeature = feature.minimumPackage === 'premium';
-                      
-                      return (
-                      <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-sm">{feature.name}</p>
-                              {isPremiumFeature && (
-                              <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
-                                  Premium
-                              </Badge>
-                              )}
-                              {!canEnable && isPremiumFeature && (
-                              <Badge variant="destructive" className="text-xs">
-                                  Requires Premium
-                              </Badge>
-                              )}
-                            </div>
-                          <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
-                          </div>
-                        <Switch
-                              checked={isEnabled}
-                              disabled={!canEnable}
-                          onCheckedChange={(checked) => {
-                                if (!canEnable) {
-                                  toast({
-                                    title: "Premium Required",
-                                    description: "This feature requires a premium subscription.",
-                                    variant: "destructive"
-                                  });
-                                  return;
-                                }
-                                
-                                setWebAppFeatures(prev => ({
-                                  ...prev,
-                                  states: {
-                                    ...prev.states,
-                                [feature.key]: checked
-                                  },
-                                  features: prev.features.map(f => 
-                                    f.key === feature.key 
-                                  ? { ...f, enabled: checked }
-                                      : f
-                                  )
-                                }));
-                              }}
-                            />
+                    <>
+                      {/* Free Features */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-green-700 mb-4 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                          Free Features
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {webAppFeatures.features.filter(feature => feature.minimumPackage === 'free').map((feature) => {
+                            const isEnabled = feature.enabled;
+                            const canEnable = feature.canEnable;
+                            
+                            return (
+                              <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-sm">{feature.name}</p>
+                                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                                      Free
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={isEnabled}
+                                  disabled={!canEnable}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    if (!canEnable) {
+                                      toast({
+                                        title: "Premium Required",
+                                        description: "This feature requires a premium subscription.",
+                                        variant: "destructive"
+                                      });
+                                      return;
+                                    }
+                                    
+                                    setWebAppFeatures(prev => ({
+                                      ...prev,
+                                      states: {
+                                        ...prev.states,
+                                        [feature.key]: checked
+                                      },
+                                      features: prev.features.map(f => 
+                                        f.key === feature.key 
+                                        ? { ...f, enabled: checked }
+                                        : f
+                                      )
+                                    }));
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })
+                      </div>
+
+                      {/* Premium Features */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-yellow-700 mb-4 flex items-center gap-2">
+                          <Crown className="w-5 h-5 text-yellow-500" />
+                          Premium Features
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {webAppFeatures.features.filter(feature => feature.minimumPackage === 'premium').map((feature) => {
+                            const isEnabled = feature.enabled;
+                            const canEnable = feature.canEnable;
+                            const isPremiumFeature = feature.minimumPackage === 'premium';
+                            
+                            return (
+                              <div key={feature.key} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${isEnabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${!canEnable ? 'opacity-60' : ''}`}>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-sm">{feature.name}</p>
+                                    <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                                      Premium
+                                    </Badge>
+                                    {!canEnable && isPremiumFeature && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        Requires Premium
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={isEnabled}
+                                  disabled={!canEnable}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    if (!canEnable) {
+                                      toast({
+                                        title: "Premium Required",
+                                        description: "This feature requires a premium subscription.",
+                                        variant: "destructive"
+                                      });
+                                      return;
+                                    }
+                                    
+                                    setWebAppFeatures(prev => ({
+                                      ...prev,
+                                      states: {
+                                        ...prev.states,
+                                        [feature.key]: checked
+                                      },
+                                      features: prev.features.map(f => 
+                                        f.key === feature.key 
+                                        ? { ...f, enabled: checked }
+                                        : f
+                                      )
+                                    }));
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
                   ) : (
                   <div className="p-8 text-center text-muted-foreground">
                     <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin" />
