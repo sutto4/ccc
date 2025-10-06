@@ -177,7 +177,7 @@ function AdminGuildSettingsPageContent() {
         .filter((cmd: any) => cmd.feature_key === feature.key)
         .map((cmd: any) => ({
           command_name: cmd.command_name,
-          feature_name: cmd.feature_name,
+          feature_key: cmd.feature_key,
           enabled: enabled
         }));
       
@@ -649,6 +649,7 @@ function AdminGuildSettingsPageContent() {
                           </div>
                           <div className="flex items-center space-x-2">
                             <input
+                              id={`cmd-${cmd.command_name}`}
                               type="checkbox"
                               checked={commandStates[cmd.command_name] || false}
                               onChange={(e) => {
