@@ -4,11 +4,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, User, Clock, MessageSquare, Upload, X, FileText, Image, Link } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Shield, User, Clock, MessageSquare, Upload, FileText, Image, Link, Calendar, AlertCircle } from "lucide-react";
 import { ImageModal } from "@/components/ui/image-modal";
+import EvidenceModal from "./evidence-modal";
 
 interface ModerationCase {
   id: number;
@@ -47,12 +46,7 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
   const [caseData, setCaseData] = useState<ModerationCase | null>(null);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showEvidenceForm, setShowEvidenceForm] = useState(false);
-  const [evidenceType, setEvidenceType] = useState<'text' | 'image' | 'link' | 'file' | 'video'>('text');
-  const [evidenceContent, setEvidenceContent] = useState('');
-  const [uploadingEvidence, setUploadingEvidence] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState('');
 
@@ -83,80 +77,17 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
 
 
 
-  // Handle image modal
-  const openImageModal = (imageUrl: string) => {
-    setSelectedImageUrl(imageUrl);
+  const handleEvidenceAdded = () => {
+    // Refresh case details to get updated evidence count
+    fetchCaseDetails();
+  };
+
+  const handleImageClick = (url: string) => {
+    setSelectedImageUrl(url);
     setImageModalOpen(true);
   };
 
-  const closeImageModal = () => {
-    setImageModalOpen(false);
-    setSelectedImageUrl('');
-  };
-
-  // Upload evidence
-  const uploadEvidence = async (type?: string, content?: string) => {
-    const evidenceTypeToUse = type || evidenceType;
-    const evidenceContentToUse = content || evidenceContent.trim();
-
-    if (!evidenceContentToUse) return;
-
-    try {
-      setUploadingEvidence(true);
-      const response = await fetch(`/api/guilds/${guildId}/moderation/cases/${caseId}/evidence`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          evidence_type: evidenceTypeToUse,
-          content: evidenceContentToUse,
-          uploaded_by: currentUser?.name || currentUser?.username || currentUser?.id || 'Unknown User',
-          uploaded_by_id: currentUser?.id || 'unknown',
-        }),
-      });
-
-      if (response.ok) {
-        const newEvidence = await response.json();
-        setEvidenceContent('');
-        setShowEvidenceForm(false);
-        setUploadSuccess(true);
-        
-        // Add new evidence to the list
-        if (newEvidence.evidence) {
-          setEvidence(prev => [...prev, newEvidence.evidence]);
-        }
-        console.log('✅ Evidence uploaded successfully!');
-
-        // Hide success message after 3 seconds
-        setTimeout(() => setUploadSuccess(false), 3000);
-      } else {
-        console.error('❌ Failed to upload evidence:', await response.text());
-      }
-    } catch (error) {
-      console.error('❌ Error uploading evidence:', error);
-    } finally {
-      setUploadingEvidence(false);
-    }
-  };
-
   // Fetch current user session
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const response = await fetch('/api/auth/session');
-        if (response.ok) {
-          const session = await response.json();
-          setCurrentUser(session?.user);
-          // Removed console logs that exposed sensitive session data
-        }
-      } catch (error) {
-        console.error('Error fetching user session:', error);
-      }
-    };
-
-    fetchCurrentUser();
-  }, []);
 
   useEffect(() => {
     console.log('🔄 CaseDetail useEffect triggered:', { guildId, caseId });
@@ -289,7 +220,7 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
             <Button
               variant="default"
               size="sm"
-              onClick={() => setShowEvidenceForm(!showEvidenceForm)}
+              onClick={() => setShowEvidenceModal(true)}
               disabled={!caseId}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
@@ -311,101 +242,19 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
               <MessageSquare className="h-5 w-5 text-blue-600" />
               <span>Evidence ({evidence.length}) {caseId ? `- Case ${caseId}` : ''}</span>
             </CardTitle>
-            <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
-              <div className="text-xs font-medium text-gray-600 mr-2">Actions:</div>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setShowEvidenceForm(!showEvidenceForm)}
-                disabled={!caseId}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
-              >
-                <Upload className="h-4 w-4 mr-1" />
-                Add Evidence
-              </Button>
-
-            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowEvidenceModal(true)}
+              disabled={!caseId}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Add Evidence
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {uploadSuccess && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-              <span className="text-sm font-medium text-green-800">✓ Evidence uploaded successfully!</span>
-            </div>
-          )}
-          {showEvidenceForm && (
-            <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">Add Evidence</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowEvidenceForm(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm font-medium">Type</Label>
-                  <select
-                    value={evidenceType}
-                    onChange={(e) => setEvidenceType(e.target.value as any)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="text">Text</option>
-                    <option value="image">Image URL</option>
-                    <option value="link">Link</option>
-                    <option value="file">File Description</option>
-                    <option value="video">Video URL</option>
-                  </select>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Content</Label>
-                  {evidenceType === 'text' ? (
-                    <Textarea
-                      value={evidenceContent}
-                      onChange={(e) => setEvidenceContent(e.target.value)}
-                      placeholder="Enter evidence details..."
-                      className="mt-1"
-                      rows={4}
-                    />
-                  ) : (
-                    <Input
-                      value={evidenceContent}
-                      onChange={(e) => setEvidenceContent(e.target.value)}
-                      placeholder={
-                        evidenceType === 'image' ? 'Enter image URL...' :
-                        evidenceType === 'link' ? 'Enter link URL...' :
-                        evidenceType === 'video' ? 'Enter video URL...' :
-                        'Describe the file...'
-                      }
-                      className="mt-1"
-                    />
-                  )}
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowEvidenceForm(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => uploadEvidence()}
-                    disabled={uploadingEvidence || !evidenceContent.trim()}
-                  >
-                    {uploadingEvidence ? 'Adding...' : 'Add Evidence'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {evidence.length === 0 ? (
             <div className="text-center py-8">
@@ -448,7 +297,7 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
                           alt="Evidence"
                           className="max-w-full h-auto rounded border cursor-pointer hover:opacity-90 transition-opacity"
                           style={{ maxHeight: '200px' }}
-                          onClick={() => openImageModal(item.content)}
+                          onClick={() => handleImageClick(item.content)}
                           title="Click to view larger"
                         />
                       ) : item.evidence_type === 'video' && item.content.startsWith('http') ? (
@@ -482,10 +331,18 @@ export default function CaseDetail({ guildId, caseId, isPartOfGroup }: CaseDetai
       </Card>
       </div>
 
+      {/* Evidence Modal */}
+      <EvidenceModal
+        isOpen={showEvidenceModal}
+        onClose={() => setShowEvidenceModal(false)}
+        caseId={caseId}
+        onEvidenceAdded={handleEvidenceAdded}
+      />
+
       {/* Image Modal */}
       <ImageModal
         isOpen={imageModalOpen}
-        onClose={closeImageModal}
+        onClose={() => setImageModalOpen(false)}
         imageUrl={selectedImageUrl}
         alt="Evidence"
       />

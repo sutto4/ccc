@@ -47,4 +47,21 @@
     color: hsl(var(--card-foreground));
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   }
+  
+  /* Fix for select dropdown black background flash */
+  select.evidence-type-select {
+    background-color: white !important;
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+  }
+  
+  select.evidence-type-select option {
+    background-color: white !important;
+    color: #111827 !important;
+  }
+  
+  /* Override the global * rule specifically for this select */
+  .evidence-type-select {
+    border-color: #d1d5db !important;
+  }
 }

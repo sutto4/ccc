@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { List, Search, Filter, Plus, User, Shield, Clock, MessageSquare } from "lucide-react";
+import { List, Search, User, Shield, Clock, MessageSquare, Server, Calendar } from "lucide-react";
 import SyncFilters, { SyncFilterValue } from "./sync-filters";
 import { Label } from "@/components/ui/label";
 
@@ -32,9 +32,10 @@ interface CasesListProps {
   guildId: string;
   isPartOfGroup: boolean;
   onViewCase?: (caseId: string) => void;
+  selectedCaseId?: string | null;
 }
 
-export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesListProps) {
+export default function CasesList({ guildId, isPartOfGroup, onViewCase, selectedCaseId }: CasesListProps) {
   const [syncFilter, setSyncFilter] = useState<SyncFilterValue>("all");
   const [cases, setCases] = useState<ModerationCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,31 +109,38 @@ export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesL
 
   return (
     <div className="space-y-4">
+      {/* Group Info Banner */}
+      {isPartOfGroup && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardContent className="p-3">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <div className="flex-1">
+                <h3 className="font-medium text-blue-900 flex items-center space-x-2 text-sm">
+                  <Server className="h-4 w-4" />
+                  <span>Group Moderation View</span>
+                </h3>
+                <p className="text-xs text-blue-700">
+                  Showing cases from all servers in this group
+                </p>
+              </div>
+              <Badge variant="outline" className="border-blue-300 text-blue-700 text-xs">
+                Group View
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Search and Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span>Moderation Cases ({cases.length})</span>
-              {isPartOfGroup && (
-                <Badge variant="outline" className="text-xs">
-                  Group View
-                </Badge>
-              )}
-            </div>
-            <Button size="sm" variant="primary">
-              <Plus className="h-4 w-4 mr-2" />
-              New Case
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex space-x-4">
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search cases by user ID, moderator, or reason..."
+                  placeholder="Search by username, moderator, or reason..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -142,7 +150,7 @@ export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesL
             <select
               value={selectedAction}
               onChange={(e) => handleActionFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">All Actions</option>
               <option value="warn">Warn</option>
@@ -178,81 +186,99 @@ export default function CasesList({ guildId, isPartOfGroup, onViewCase }: CasesL
           </CardContent>
         ) : (
           <div className="divide-y divide-gray-200">
-            {cases.map((caseItem) => (
-              <div
-                key={caseItem.id}
-                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => handleViewCase(caseItem.case_id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-semibold">Case #{caseItem.case_id}</h3>
-                      <Badge
-                        variant={caseItem.active ? "default" : "secondary"}
-                        className={caseItem.active ? "bg-green-100 text-green-800" : ""}
-                      >
-                        {caseItem.active ? "Active" : "Inactive"}
-                      </Badge>
-                      <Badge
-                        variant={
-                          caseItem.action_type === 'ban' ? 'destructive' :
-                          caseItem.action_type === 'kick' ? 'secondary' :
-                          caseItem.action_type === 'mute' ? 'outline' :
-                          caseItem.action_type === 'timeout' ? 'outline' :
-                          'default'
-                        }
-                        className="capitalize"
-                      >
-                        {caseItem.action_type}
-                      </Badge>
-                    </div>
+            {cases.map((caseItem) => {
+              const isSelected = selectedCaseId === caseItem.case_id;
+              return (
+                <div
+                  key={caseItem.id}
+                  className={`p-3 cursor-pointer transition-colors border-l-4 ${
+                    isSelected 
+                      ? 'bg-blue-50 border-blue-500 hover:bg-blue-100' 
+                      : 'hover:bg-gray-50 border-transparent'
+                  }`}
+                  onClick={() => handleViewCase(caseItem.case_id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      {/* Header */}
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="font-semibold text-gray-900">#{caseItem.case_id}</h3>
+                        <Badge
+                          variant={caseItem.active ? "default" : "secondary"}
+                          className={`text-xs ${caseItem.active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
+                        >
+                          {caseItem.active ? "Active" : "Inactive"}
+                        </Badge>
+                        <Badge
+                          variant={
+                            caseItem.action_type === 'ban' ? 'destructive' :
+                            caseItem.action_type === 'kick' ? 'secondary' :
+                            caseItem.action_type === 'mute' ? 'outline' :
+                            caseItem.action_type === 'timeout' ? 'outline' :
+                            caseItem.action_type === 'warn' ? 'default' :
+                            'default'
+                          }
+                          className="text-xs capitalize"
+                        >
+                          {caseItem.action_type}
+                        </Badge>
+                      </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <div>
+                      {/* Content */}
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2 text-sm">
+                          <User className="h-3 w-3 text-gray-500" />
                           <span className="font-medium">{caseItem.target_username}</span>
-                          <div className="text-muted-foreground">{caseItem.target_user_id}</div>
+                          <span className="text-gray-500">by</span>
+                          <span className="text-gray-600">{caseItem.moderator_username}</span>
                         </div>
-                      </div>
+                        
+                        <div className="flex items-center space-x-4 text-xs text-gray-500">
+                          <span className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{new Date(caseItem.created_at).toLocaleDateString()}</span>
+                          </span>
+                          {caseItem.duration_label && (
+                            <span className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>{caseItem.duration_label}</span>
+                            </span>
+                          )}
+                          <span className="flex items-center space-x-1">
+                            <MessageSquare className="h-3 w-3" />
+                            <span>{caseItem.evidence_count}</span>
+                          </span>
+                        </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Shield className="h-4 w-4 text-muted-foreground" />
-                        <span>{caseItem.moderator_username}</span>
-                      </div>
+                        {/* Reason Preview */}
+                        {caseItem.reason && (
+                          <div className="text-xs text-gray-600 truncate">
+                            {caseItem.reason}
+                          </div>
+                        )}
 
-                      <div className="flex items-center space-x-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>{new Date(caseItem.created_at).toLocaleString()}</span>
+                        {/* Server Origin */}
+                        {caseItem.origin_server_name && (
+                          <div className="flex items-center space-x-1 mt-1">
+                            <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">
+                              <Server className="h-2 w-2 mr-1" />
+                              {caseItem.origin_server_name}
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {caseItem.reason && (
-                      <div className="mt-2 text-sm text-muted-foreground">
-                        <strong>Reason:</strong> {caseItem.reason}
+                    
+                    {/* Selection Indicator */}
+                    {isSelected && (
+                      <div className="ml-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       </div>
                     )}
-
-                    <div className="flex items-center space-x-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center space-x-1">
-                        <MessageSquare className="h-3 w-3" />
-                        <span>{caseItem.evidence_count} evidence</span>
-                      </span>
-                      {caseItem.duration_label && (
-                        <span>Duration: {caseItem.duration_label}</span>
-                      )}
-                      {caseItem.origin_server_name && (
-                        <span className="flex items-center space-x-1 text-blue-600">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                          <span>{caseItem.origin_server_name}</span>
-                        </span>
-                      )}
-                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {hasMore && (
               <div className="p-4 text-center">

@@ -14,7 +14,8 @@ import {
   Clock, 
   VolumeX,
   Volume2,
-  Ban
+  Ban,
+  Plus
 } from "lucide-react";
 import ActionModal, { ModAction } from "./components/action-modal";
 import CasesList from "./components/cases-list";
@@ -159,18 +160,24 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Shield className="h-8 w-8 text-red-500" />
-          <div>
-            <h1 className="text-3xl font-bold">Moderation</h1>
-            <p className="text-muted-foreground">
-              Manage server moderation, cases, and user actions
-            </p>
-          </div>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Shield className="h-6 w-6 text-red-500" />
+          <h1 className="text-2xl font-bold">Moderation</h1>
         </div>
+        <p className="text-muted-foreground">
+          Manage server moderation, cases, and user actions
+        </p>
+        
+        {/* Group Information */}
+        {finalIsPartOfGroup && (
+          <div className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200">
+            <Shield className="h-4 w-4 text-blue-500" />
+            Part of group: <span className="font-semibold">{finalGroupName}</span>
+          </div>
+        )}
         
         {/* Demo Group Toggle */}
         <div className="flex items-center space-x-3">
@@ -192,116 +199,92 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      {/* Group Information Banner */}
-      {stats.isGroupView && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <h3 className="font-medium text-blue-900">
-                  Server Group View: {finalGroupName || 'Unknown Group'}
-                </h3>
-                <p className="text-sm text-blue-700">
-                  Showing moderation data from {stats.groupGuildCount} server{stats.groupGuildCount !== 1 ? 's' : ''} in this group
-                </p>
-              </div>
-              <Badge variant="outline" className="border-blue-300 text-blue-700">
-                Group View
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Cases</CardTitle>
-            <List className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsLoading ? "..." : stats.totalCases.toLocaleString()}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Cases</p>
+              <p className="text-2xl font-bold">
+                {statsLoading ? "..." : stats.totalCases.toLocaleString()}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.totalCases === 0 ? "No cases yet" : 
-               stats.isGroupView ? `Across ${stats.groupGuildCount} server${stats.groupGuildCount !== 1 ? 's' : ''}` : 
-               "Total moderation cases"}
-            </p>
-          </CardContent>
+            <List className="h-8 w-8 text-blue-500" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {stats.totalCases === 0 ? "No cases yet" : 
+             stats.isGroupView ? `Across ${stats.groupGuildCount} server${stats.groupGuildCount !== 1 ? 's' : ''}` : 
+             "Total moderation cases"}
+          </p>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Bans</CardTitle>
-            <Ban className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsLoading ? "..." : stats.activeBans.toLocaleString()}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Active Bans</p>
+              <p className="text-2xl font-bold text-red-600">
+                {statsLoading ? "..." : stats.activeBans.toLocaleString()}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.activeBans === 0 ? "No active bans" : "Currently banned"}
-            </p>
-          </CardContent>
+            <Ban className="h-8 w-8 text-red-500" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {stats.activeBans === 0 ? "No active bans" : "Currently banned"}
+          </p>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Muted Users</CardTitle>
-            <VolumeX className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsLoading ? "..." : stats.activeMutes.toLocaleString()}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Muted Users</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {statsLoading ? "..." : stats.activeMutes.toLocaleString()}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.activeMutes === 0 ? "No muted users" : "Currently muted"}
-            </p>
-          </CardContent>
+            <VolumeX className="h-8 w-8 text-orange-500" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {stats.activeMutes === 0 ? "No muted users" : "Currently muted"}
+          </p>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsLoading ? "..." : stats.pendingReviews.toLocaleString()}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Pending Review</p>
+              <p className="text-2xl font-bold text-yellow-600">
+                {statsLoading ? "..." : stats.pendingReviews.toLocaleString()}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.pendingReviews === 0 ? "No pending cases" : "Need attention"}
-            </p>
-          </CardContent>
+            <Clock className="h-8 w-8 text-yellow-500" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {stats.pendingReviews === 0 ? "No pending cases" : "Need attention"}
+          </p>
         </Card>
       </div>
 
-      {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="cases" className="flex items-center space-x-2">
-            <List className="h-4 w-4" />
-            <span>Cases</span>
-          </TabsTrigger>
-          <TabsTrigger value="case-detail" className="flex items-center space-x-2">
-            <Shield className="h-4 w-4" />
-            <span>Case Detail</span>
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center space-x-2">
-            <Settings className="h-4 w-4" />
-            <span>Settings</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="cases" className="space-y-4">
+      {/* Two-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column - Cases List */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <List className="h-5 w-5" />
+              Moderation Cases
+            </h2>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              New Case
+            </Button>
+          </div>
+          
           {guildId ? (
             <CasesList
               guildId={guildId}
               isPartOfGroup={finalIsPartOfGroup}
               onViewCase={viewCaseDetails}
+              selectedCaseId={selectedCaseId}
             />
           ) : (
             <Card>
@@ -313,57 +296,72 @@ export default function ModerationPage({ params }: { params: Promise<{ id: strin
               </CardContent>
             </Card>
           )}
-        </TabsContent>
+        </div>
 
-        <TabsContent value="case-detail" className="space-y-4">
+        {/* Right Column - Case Details */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Case Details
+            </h2>
+            {selectedCaseId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedCaseId(null)}
+                className="text-xs"
+              >
+                Clear Selection
+              </Button>
+            )}
+          </div>
+
           {guildId && selectedCaseId ? (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setActiveTab("cases")}
-                  className="flex items-center space-x-2"
-                >
-                  ← Back to Cases
-                </Button>
-                <div className="text-sm text-muted-foreground">
-                  Viewing Case #{selectedCaseId}
+            <CaseDetail
+              guildId={guildId}
+              caseId={selectedCaseId}
+              isPartOfGroup={finalIsPartOfGroup}
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="text-center py-16">
+                  <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Case Selected</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Select a case from the list to view its details
+                  </p>
+                  <div className="text-sm text-muted-foreground">
+                    Click on any case in the left panel to get started
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Settings Section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Moderation Settings
+        </h2>
+        
+        {guildId ? (
+          <ModerationSettings guildId={guildId} isPartOfGroup={finalIsPartOfGroup} groupName={finalGroupName} />
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading moderation settings...</p>
               </div>
-              <CaseDetail
-                guildId={guildId}
-                caseId={selectedCaseId}
-                isPartOfGroup={finalIsPartOfGroup}
-              />
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Loading case details...</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-
-        <TabsContent value="settings" className="space-y-4">
-          {guildId ? (
-            <ModerationSettings guildId={guildId} isPartOfGroup={finalIsPartOfGroup} groupName={finalGroupName} />
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Loading moderation settings...</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Action Modal */}
       <ActionModal

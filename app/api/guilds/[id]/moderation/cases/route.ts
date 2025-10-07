@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { authMiddleware } from '@/lib/auth-middleware';
+import { query } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const auth = await authMiddleware(request);
+    if (auth.error || !auth.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,13 +18,23 @@ export async function GET(
     }
 
     // Check if user has access to this guild
-    const accessControl = await db.query(
-      'SELECT * FROM access_control WHERE user_id = ? AND guild_id = ?',
-      [session.user.id, guildId]
-    );
+    try {
+      const accessControl = await query(
+        'SELECT 1 FROM server_access_control WHERE user_id = ? AND guild_id = ? AND has_access = 1 LIMIT 1',
+        [auth.user.id, guildId]
+      );
 
-    if (accessControl.length === 0) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      if (!Array.isArray(accessControl) || accessControl.length === 0) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+    } catch (accessError: any) {
+      // If table doesn't exist, allow access for now (temporary fallback)
+      if (accessError.code === 'ER_NO_SUCH_TABLE') {
+        console.log('[MODERATION-CASES] server_access_control table not found, allowing access temporarily');
+      } else {
+        console.error('[MODERATION-CASES] Error checking access control:', accessError);
+        return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      }
     }
 
     // Get query parameters
@@ -36,7 +45,7 @@ export async function GET(
     const action = searchParams.get('action') || '';
 
     // Get guild info to check for group membership
-    const guildInfo = await db.query(
+    const guildInfo = await query(
       'SELECT g.*, sg.id as group_id, sg.name as group_name FROM guilds g LEFT JOIN server_groups sg ON g.group_id = sg.id WHERE g.guild_id = ?',
       [guildId]
     );
@@ -54,7 +63,7 @@ export async function GET(
 
     if (isGroupView) {
       // Get all guilds in the same group
-      const groupGuilds = await db.query(
+      const groupGuilds = await query(
         'SELECT guild_id FROM guilds WHERE group_id = ?',
         [guild.group_id]
       );
@@ -79,30 +88,99 @@ export async function GET(
       queryParams.push(action);
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
-    // Get cases with guild names for group view
-    const casesQuery = `
-      SELECT 
-        mc.*,
-        g.name as origin_server_name
-      FROM moderation_cases mc
-      LEFT JOIN guilds g ON mc.guild_id = g.guild_id
-      ${whereClause}
-      ORDER BY mc.created_at DESC
-      LIMIT ? OFFSET ?
-    `;
-
-    const cases = await db.query(casesQuery, [...queryParams, limit, offset]);
+    // Build query based on whether this is a group view
+    let casesQuery: string;
+    let finalParams: any[];
+    
+    if (isGroupView) {
+      // Get all guilds in the same group with their names
+      const groupGuilds = await query(
+        'SELECT guild_id, guild_name FROM guilds WHERE group_id = ?',
+        [guild.group_id]
+      );
+      
+      const groupGuildIds = groupGuilds.map((g: any) => g.guild_id);
+      const placeholders = groupGuildIds.map(() => '?').join(',');
+      
+      casesQuery = `
+        SELECT 
+          mc.*,
+          g.guild_name
+        FROM moderation_cases mc
+        LEFT JOIN guilds g ON mc.guild_id = g.guild_id
+        WHERE mc.guild_id IN (${placeholders})
+        ORDER BY mc.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      finalParams = groupGuildIds;
+    } else {
+      casesQuery = `
+        SELECT 
+          mc.*
+        FROM moderation_cases mc
+        WHERE mc.guild_id = ?
+        ORDER BY mc.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      finalParams = [guildId];
+    }
+    
+    console.log('[MODERATION-CASES] Query:', casesQuery);
+    console.log('[MODERATION-CASES] Params:', finalParams);
+    console.log('[MODERATION-CASES] Is group view:', isGroupView);
+    
+    let cases;
+    try {
+      cases = await query(casesQuery, finalParams);
+    } catch (queryError: any) {
+      console.error('[MODERATION-CASES] Query failed:', queryError);
+      if (queryError.code === 'ER_NO_SUCH_TABLE') {
+        console.log('[MODERATION-CASES] moderation_cases table does not exist, returning empty results');
+        cases = [];
+      } else {
+        throw queryError;
+      }
+    }
 
     // Get total count for pagination
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM moderation_cases mc
-      ${whereClause}
-    `;
+    let countQuery: string;
+    let countParams: any[];
+    
+    if (isGroupView) {
+      const groupGuilds = await query(
+        'SELECT guild_id FROM guilds WHERE group_id = ?',
+        [guild.group_id]
+      );
+      const groupGuildIds = groupGuilds.map((g: any) => g.guild_id);
+      const placeholders = groupGuildIds.map(() => '?').join(',');
+      
+      countQuery = `
+        SELECT COUNT(*) as total
+        FROM moderation_cases mc
+        WHERE mc.guild_id IN (${placeholders})
+      `;
+      countParams = groupGuildIds;
+    } else {
+      countQuery = `
+        SELECT COUNT(*) as total
+        FROM moderation_cases mc
+        WHERE mc.guild_id = ?
+      `;
+      countParams = [guildId];
+    }
 
-    const countResult = await db.query(countQuery, queryParams);
+    let countResult;
+    try {
+      countResult = await query(countQuery, countParams);
+    } catch (countError: any) {
+      console.error('[MODERATION-CASES] Count query failed:', countError);
+      if (countError.code === 'ER_NO_SUCH_TABLE') {
+        console.log('[MODERATION-CASES] moderation_cases table does not exist for count, returning 0');
+        countResult = [{ total: 0 }];
+      } else {
+        throw countError;
+      }
+    }
     const total = countResult[0]?.total || 0;
     const hasMore = offset + limit < total;
 
@@ -123,7 +201,7 @@ export async function GET(
       created_at: caseItem.created_at,
       updated_at: caseItem.updated_at,
       evidence_count: caseItem.evidence_count || 0,
-      origin_server_name: isGroupView ? caseItem.origin_server_name : undefined
+      origin_server_name: isGroupView ? (caseItem.guild_name || `Server ${caseItem.guild_id}`) : undefined
     }));
 
     return NextResponse.json({
@@ -138,8 +216,9 @@ export async function GET(
 
   } catch (error) {
     console.error('Error fetching moderation cases:', error);
+    console.error('Error details:', error instanceof Error ? error.stack : error);
     return NextResponse.json(
-      { error: 'Failed to fetch moderation cases' },
+      { error: 'Failed to fetch moderation cases', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

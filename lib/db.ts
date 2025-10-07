@@ -59,8 +59,8 @@ export async function query(sql: string, params?: any[]): Promise<any> {
     throw new Error('Database not configured');
   }
   
-  // For connection limit errors, don't retry - just fail fast
-  if (sql.includes('server_access_control') && env.NODE_ENV === 'production') {
+  // For connection limit errors, don't retry - just fail fast for permission checks
+  if ((sql.includes('access_control') || sql.includes('server_access_control')) && env.NODE_ENV === 'production') {
     // Fast path for permission checks - single attempt only
     try {
       const p = getPool();
