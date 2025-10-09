@@ -47,9 +47,9 @@ type EmbeddedMessageConfig = {
    enableButtons?: boolean;
  };
 
-export default function EmbeddedMessagesBuilder({ premium }: { premium: boolean }) {
+export default function EmbeddedMessagesBuilder({ premium, guildIdProp }: { premium: boolean; guildIdProp?: string }) {
   const params = useParams<{ id: string }>();
-  const guildId = params.id;
+  const guildId = guildIdProp || params.id;
   const { data: session } = useSession();
   const { toast } = useToast();
   

@@ -697,16 +697,77 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
   // Check if we have cached results for this user
   const resultsCacheKey = `guilds-results:${tokenKey}`;
+  // Force clear cache to pick up owner_id changes
+  cache.delete(resultsCacheKey);
   let results = cache.get<any[]>(resultsCacheKey);
   
   if (!results) {
+    // Fetch owner_id and created_at from database for all guilds
+    const guildIds = accessibleInstalledGuilds.map((g: any) => String(g.id || g.guild_id || ""));
+    let dbGuildData: Record<string, any> = {};
+    
+    if (guildIds.length > 0) {
+      try {
+        const placeholders = guildIds.map(() => '?').join(',');
+        // Try to select owner_id, fallback if column doesn't exist
+        let dbGuilds;
+        try {
+          dbGuilds = await query(
+            `SELECT guild_id, owner_id, created_at, status
+             FROM guilds
+             WHERE guild_id IN (${placeholders})`,
+            guildIds
+          ) as any[];
+        } catch (ownerError: any) {
+          // If owner_id column doesn't exist, query without it
+          if (ownerError.code === 'ER_BAD_FIELD_ERROR') {
+            console.log('[GUILDS-API] owner_id column not found, querying without it');
+            dbGuilds = await query(
+              `SELECT guild_id, created_at, status
+               FROM guilds
+               WHERE guild_id IN (${placeholders})`,
+              guildIds
+            ) as any[];
+          } else {
+            throw ownerError;
+          }
+        }
+        
+        dbGuilds.forEach((dbGuild: any) => {
+          dbGuildData[dbGuild.guild_id] = dbGuild;
+        });
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[GUILDS-API] Fetched DB data for guilds:', Object.keys(dbGuildData).length);
+          console.log('[GUILDS-API] Sample DB guild data:', dbGuilds[0]);
+        }
+      } catch (error) {
+        console.error('[GUILDS-API] Error fetching guild data from database:', error);
+      }
+    }
+
     // Now map with memberCount/roleCount data AND group info
     results = accessibleInstalledGuilds.map((botGuild: any) => {
     const botGuildId = String(botGuild.id || botGuild.guild_id || "");
     const group = groupInfo[botGuildId];
+    const dbData = dbGuildData[botGuildId];
+
+    const ownerId = botGuild.owner_id || dbData?.owner_id || null;
+    const joinedAt = botGuild.joined_at || botGuild.joinedAt || (dbData?.created_at ? new Date(dbData.created_at).toISOString() : null);
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[GUILDS-API] PROCESSING ACCESSIBLE GUILD: ${botGuild.name} - memberCount: ${botGuild.memberCount}, roleCount: ${botGuild.roleCount}, group: ${group ? JSON.stringify(group) : 'NONE'}`);
+      console.log(`[GUILDS-API] PROCESSING ${botGuild.name}:`, {
+        botGuildId,
+        memberCount: botGuild.memberCount,
+        roleCount: botGuild.roleCount,
+        group: group ? group.groupName : 'NONE',
+        ownerId_from_bot: botGuild.owner_id,
+        ownerId_from_db: dbData?.owner_id,
+        final_ownerId: ownerId,
+        joinedAt_from_bot: botGuild.joined_at,
+        joinedAt_from_db: dbData?.created_at,
+        final_joinedAt: joinedAt
+      });
     }
 
     return {
@@ -715,8 +776,10 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
       memberCount: Number(botGuild.memberCount) || 0,
       roleCount: Number(botGuild.roleCount) || 0,
       iconUrl: botGuild.iconUrl || null,
-      premium: Boolean(botGuild.premium || false),
-      createdAt: null,
+      premium: Boolean(botGuild.premium || dbData?.status === 'premium' || false),
+      createdAt: botGuild.created_at || botGuild.createdAt || (dbData?.created_at ? new Date(dbData.created_at).toISOString() : null),
+      ownerId: ownerId,
+      joinedAt: joinedAt,
       group: group ? {
         id: group.groupId,
         name: group.groupName,
@@ -782,9 +845,12 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
         id: results[0].id,
         name: results[0].name,
         memberCount: results[0].memberCount,
-        roleCount: results[0].roleCount
+        roleCount: results[0].roleCount,
+        ownerId: results[0].ownerId,
+        joinedAt: results[0].joinedAt
       } : null
     });
+    console.log(`[GUILDS-API] Full first guild object:`, results[0]);
   }
 
   return NextResponse.json({ guilds: results });
@@ -793,9 +859,9 @@ export const GET = async (req: NextRequest, _ctx: unknown) => {
 
 async function fetchInstalledGuilds(botBase: string) {
   const igCacheKey = `installedGuilds`;
-  // Clear cache to force fresh fetch
+  // Clear cache to force fresh fetch - ALWAYS clear to get latest owner_id data
   cache.delete(igCacheKey);
-  let installedGuilds = cache.get<any[]>(igCacheKey) || [];
+  let installedGuilds: any[] = [];
   // DEBUG: console.log('[BOT-API] Installed guilds from cache (after clear):', installedGuilds.length);
 
   if (installedGuilds.length === 0 && botBase) {

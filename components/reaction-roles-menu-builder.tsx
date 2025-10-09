@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Section from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -9,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HashIcon, ImageIcon, SendIcon, Trash2Icon, EditIcon, ToggleLeftIcon, ToggleRightIcon, SaveIcon, XIcon, RefreshCwIcon, LayoutGridIcon, CheckIcon, Upload, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean }) {
+export default function ReactionRolesMenuBuilder({ premium, guildIdProp }: { premium: boolean; guildIdProp?: string }) {
   const [channels, setChannels] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,9 +62,10 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
   const [customBotAvatar, setCustomBotAvatar] = useState("");
 
   const guildId = useMemo(() => {
+    if (guildIdProp) return guildIdProp;
     const m = typeof window !== 'undefined' ? window.location.pathname.match(/guilds\/(\d+)/) : null;
     return m?.[1] || "";
-  }, []);
+  }, [guildIdProp]);
 
   // Color picker modal state
   const [colorModalOpen, setColorModalOpen] = useState(false);
@@ -348,7 +348,7 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
    };
 
   return (
-    <Section title="Role Menu Publisher">
+    <>
       {!premium && (
         <div className="text-sm text-red-600 mb-4">Premium required to publish role menus.</div>
       )}
@@ -884,6 +884,6 @@ export default function ReactionRolesMenuBuilder({ premium }: { premium: boolean
          </DialogContent>
        </Dialog>
 
-     </Section>
-   );
- }
+    </>
+  );
+}

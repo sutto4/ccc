@@ -1,7 +1,6 @@
 "use client";
 
 import { PropsWithChildren, useState, useEffect } from "react";
-import Sidebar from "@/components/ui/sidebar";
 import Topbar from "@/components/ui/topbar";
 import { WelcomeModal } from "@/components/welcome-modal";
 import GettingStartedWidget from "@/components/getting-started-widget";
@@ -109,26 +108,6 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
 
   return (
     <div className="min-h-screen">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:block fixed left-0 top-0 h-screen w-[240px] bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))] border-r border-[hsl(var(--sidebar-border))] z-20">
-        <Sidebar />
-      </aside>
-
-      {/* Mobile Sidebar Drawer */}
-      {isMobileNavOpen && (
-        <div className="md:hidden">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40"
-            onClick={() => setIsMobileNavOpen(false)}
-            aria-hidden
-          />
-          {/* Drawer Panel */}
-          <div className="fixed left-0 top-0 h-screen w-[240px] bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))] border-r border-[hsl(var(--sidebar-border))] z-50 shadow-xl animate-in slide-in-from-left">
-            <Sidebar />
-          </div>
-        </div>
-      )}
 
       {/* Top bar - full width, on top */}
       <header className="fixed top-0 left-0 right-0 h-[72px] bg-[hsl(var(--header))] text-[hsl(var(--header-foreground))] border-b border-[hsl(var(--border))] backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--header))]/80 z-50">
@@ -141,13 +120,13 @@ export default function ConsoleShell({ children }: PropsWithChildren) {
         />
       </header>
 
-      {/* Main content - responsive to sidebar presence */}
-      <main className="md:ml-[240px] ml-0 pt-[72px] pl-4 pr-4 md:pr-6 pb-6 bg-background text-foreground overflow-x-hidden">
+      {/* Main content - no sidebar offset, symmetric/compact padding */}
+      <main className="ml-0 pt-[72px] px-0 md:px-2 pb-6 bg-background text-foreground overflow-x-hidden">
         <div className="w-full">{children}</div>
       </main>
 
-      {/* Fixed Footer - positioned at bottom of page */}
-      <footer className="fixed bottom-0 left-0 md:left-[240px] right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40">
+      {/* Fixed Footer - spans full width */}
+      <footer className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40">
         <div className="px-4 py-1">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">

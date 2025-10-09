@@ -64,7 +64,7 @@ export async function GET(
 
       // Load moderation settings from guild_features
       const [featureRows] = await connection.execute(
-        'SELECT feature_name, enabled, settings FROM guild_features WHERE guild_id = ? AND feature_name IN (?, ?)',
+        'SELECT feature_key, enabled, settings FROM guild_features WHERE guild_id = ? AND feature_name IN (?, ?)',
         [guildId, 'moderation', 'ban_sync']
       );
 

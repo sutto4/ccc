@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Check authentication
   const auth = await authMiddleware(request);
@@ -16,7 +16,7 @@ export async function GET(
   }
 
   try {
-    const { id: guildId } = params;
+    const { id: guildId } = await params;
 
     // Get guild subscription status
     let isPremium = false;
@@ -37,10 +37,23 @@ export async function GET(
     console.log('🚨🚨🚨 FETCHING FEATURES FROM DATABASE! 🚨🚨🚨');
     let allFeatures;
     try {
+      // Get active features + features that are enabled for this guild (even if inactive)
+      // Exclude fdg_donator_sync as it's a custom feature for specific customer
       allFeatures = await query(
-        'SELECT feature_key as feature_key, feature_name as feature_name, description, minimum_package FROM features WHERE is_active = TRUE ORDER BY feature_name'
+        `SELECT DISTINCT f.feature_key, f.feature_name, f.description, f.minimum_package 
+         FROM features f
+         LEFT JOIN guild_features gf ON f.feature_key = gf.feature_key AND gf.guild_id = ?
+         WHERE (f.is_active = TRUE OR gf.enabled = 1) AND f.feature_key != 'fdg_donator_sync'
+         ORDER BY f.minimum_package ASC, f.feature_name ASC`,
+        [guildId]
       );
-      console.log('🚨🚨🚨 ALL FEATURES FROM DB:', allFeatures);
+      
+      // Fix the feature name for ai_summarization after the query
+      allFeatures = allFeatures.map((feature: any) => ({
+        ...feature,
+        feature_name: feature.feature_key === 'ai_summarization' ? 'AI Message Summarization' : feature.feature_name
+      }));
+      console.log('🚨🚨🚨 FEATURES (active + guild-enabled):', allFeatures);
     } catch (error) {
       console.log('🚨🚨🚨 FEATURES TABLE ERROR, USING FALLBACK! 🚨🚨🚨');
       console.error('Features table error:', error);
@@ -51,7 +64,8 @@ export async function GET(
         { feature_key: 'embedded_messages', feature_name: 'Embedded Messages', description: 'Create and send rich embedded messages', minimum_package: 'free' },
         { feature_key: 'reaction_roles', feature_name: 'Reaction Roles', description: 'Set up reaction-based role assignments', minimum_package: 'free' },
         { feature_key: 'verification_system', feature_name: 'Verification System', description: 'User verification and role assignment', minimum_package: 'free' },
-        { feature_key: 'feedback_system', feature_name: 'Feedback Collection', description: 'Collect and manage user feedback', minimum_package: 'free' }
+        { feature_key: 'feedback_system', feature_name: 'Feedback Collection', description: 'Collect and manage user feedback', minimum_package: 'free' },
+        { feature_key: 'ai_summarization', feature_name: 'AI Message Summarization', description: 'Use AI to summarize Discord messages and conversations', minimum_package: 'premium' }
       ];
       console.log('🚨🚨🚨 USING FALLBACK FEATURES:', allFeatures);
     }
@@ -85,12 +99,16 @@ export async function GET(
         const canEnable = !isPremiumFeature || isPremium;
         const currentEnabled = featureStates[feature.feature_key] || false;
         
+        // For premium features: if they're enabled in guild_features, show them as enabled
+        // This allows special access to premium features even for non-premium servers
+        const finalEnabled = isPremiumFeature ? currentEnabled : (canEnable ? currentEnabled : false);
+        
         return {
           key: feature.feature_key,
           name: feature.feature_name,
           description: feature.description,
           minimumPackage: feature.minimum_package,
-          enabled: canEnable ? currentEnabled : false, // Force disable premium features for non-premium servers
+          enabled: finalEnabled,
           canEnable: canEnable
         };
       }),
@@ -114,7 +132,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Check authentication
   const auth = await authMiddleware(request);
@@ -123,7 +141,7 @@ export async function POST(
   }
 
   try {
-    const { id: guildId } = params;
+    const { id: guildId } = await params;
     const body = await request.json();
     const { features } = body;
 

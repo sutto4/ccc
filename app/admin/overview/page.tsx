@@ -12,9 +12,24 @@ import {
   Globe,
   Shield,
   Zap,
-  BarChart3
+  BarChart3,
+  Bot
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from 'next/dynamic';
+
+// Dynamically import the bot activity panel
+const BotActivityPanel = dynamic(() => import('@/components/admin/bot-activity-panel'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-4">
+      <div className="animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+        <div className="h-20 bg-gray-200 rounded"></div>
+      </div>
+    </div>
+  )
+});
 
 interface SystemStats {
   totalServers: number;
@@ -196,6 +211,12 @@ export default function AdminOverview() {
             </Link>
           ))}
         </div>
+      </div>
+
+      {/* Bot Activity Settings */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Bot Settings</h2>
+        <BotActivityPanel />
       </div>
 
       {/* Recent Activity */}

@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Section from "@/components/ui/section";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { CheckIcon, HashIcon, SmileIcon, User2Icon, PlusCircleIcon, Trash2Icon, InfoIcon, ChevronRightIcon } from "lucide-react";
+import { CheckIcon, HashIcon, SmileIcon, User2Icon, PlusCircleIcon, Trash2Icon, InfoIcon, ChevronRightIcon, AlertCircle } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -12,7 +13,7 @@ import EmojiPicker from "@/components/ui/emoji-picker";
 import { Select } from "@/components/ui/select";
 import { InlineSearchSelect } from "@/components/ui/inline-search-select";
 
-export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
+export default function ReactionRolesSetup({ premium, guildIdProp }: { premium: boolean; guildIdProp?: string }) {
   const [channelId, setChannelId] = useState("");
   const [channels, setChannels] = useState<any[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(true);
@@ -33,7 +34,7 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
 
   useEffect(() => {
     const match = window.location.pathname.match(/guilds\/(\d+)/);
-    const guildId = match?.[1];
+    const guildId = guildIdProp || match?.[1];
     if (!guildId) return;
     setLoadingChannels(true);
     fetch(`/api/guilds/${guildId}/channels`)
@@ -89,7 +90,7 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
     setSaveOk(false);
     setSaveError(null);
     const match = window.location.pathname.match(/guilds\/(\d+)/);
-    const guildId = match?.[1];
+    const guildId = guildIdProp || match?.[1];
     if (!guildId) { setSaveError("Missing guild id"); return; }
     if (!channelId) { setSaveError("Select a channel"); return; }
     if (!messageId) { setSaveError("Enter a message ID"); return; }
@@ -129,31 +130,37 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
 
   if (!premium) {
     return (
-      <Section title="Setup Reaction Roles">
-        <div className="text-center text-red-600 py-8">
-          This feature is only available to premium servers.
-        </div>
-      </Section>
+      <Card>
+        <CardContent className="p-8">
+          <div className="text-center space-y-3">
+            <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto" />
+            <p className="text-red-600 font-medium">
+              This feature is only available to premium servers.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
 
   return (
-    <Section title={<span className="flex items-center gap-2"><SmileIcon className="w-5 h-5 text-yellow-500" /> Setup Reaction Roles</span>}>
+    <Card>
+      <CardContent className="p-6 space-y-6">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Channel Picker with Popover and HoverCard */}
-        <div>
-          <label className="block mb-1 font-semibold flex items-center gap-1">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
             <HashIcon className="w-4 h-4 text-blue-500" /> Channel
             <Popover>
               <PopoverTrigger asChild>
-                <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer" />
+                <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
               </PopoverTrigger>
               <PopoverContent className="text-xs max-w-xs">
                 Select the channel where the reaction role message is posted.
               </PopoverContent>
             </Popover>
-          </label>
+          </Label>
           {loadingChannels ? (
             <div className="text-muted-foreground text-xs">Loading channels...</div>
           ) : channelsError ? (
@@ -169,18 +176,18 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
         </div>
 
         {/* Message ID input */}
-        <div>
-          <label className="block mb-1 font-semibold flex items-center gap-1">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
             <User2Icon className="w-4 h-4 text-purple-500" /> Message ID
             <Popover>
               <PopoverTrigger asChild>
-                <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer" />
+                <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
               </PopoverTrigger>
               <PopoverContent className="text-xs max-w-xs">
                 Paste the ID of the message to attach reaction roles to.
               </PopoverContent>
             </Popover>
-          </label>
+          </Label>
           <Input
             value={messageId}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessageId(e.target.value)}
@@ -190,18 +197,20 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
         </div>
 
         {/* Emoji → Role Mappings with RadioGroup and summary popover */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <SmileIcon className="w-4 h-4 text-yellow-500" />
-            <span className="font-semibold">Emoji → Role Mappings</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer" />
-              </PopoverTrigger>
-              <PopoverContent className="text-xs max-w-xs">
-                Add one or more emoji/role pairs. Users who react with the emoji will get the role.
-              </PopoverContent>
-            </Popover>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <SmileIcon className="w-4 h-4 text-yellow-500" />
+              Emoji → Role Mappings
+              <Popover>
+                <PopoverTrigger asChild>
+                  <InfoIcon className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+                </PopoverTrigger>
+                <PopoverContent className="text-xs max-w-xs">
+                  Add one or more emoji/role pairs. Users who react with the emoji will get the role.
+                </PopoverContent>
+              </Popover>
+            </Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button type="button" size="icon" variant="ghost" className="ml-2" title="Show summary">
@@ -222,9 +231,9 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
               </PopoverContent>
             </Popover>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {mappings.map((m, idx) => (
-              <div key={idx} className="flex gap-2 items-center bg-muted/40 rounded p-2">
+              <div key={idx} className="flex gap-3 items-center bg-muted/50 rounded-lg p-3 border border-border">
                 {/* Emoji Picker: show custom emojis if available, else fallback to input */}
                 {loadingEmojis ? (
                   <div className="text-muted-foreground text-xs">Loading emojis...</div>
@@ -283,17 +292,25 @@ export default function ReactionRolesSetup({ premium }: { premium: boolean }) {
         </div>
 
         {saveError && (
-          <div className="text-red-600 text-sm">{saveError}</div>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 text-sm">{saveError}</p>
+          </div>
         )}
         {saveOk && !saveError && (
-          <div className="text-green-600 text-sm">Saved!</div>
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-600 text-sm flex items-center gap-2">
+              <CheckIcon className="w-4 h-4" />
+              Saved successfully!
+            </p>
+          </div>
         )}
 
-        <Button type="submit" className="w-full font-bold text-lg py-3 mt-4" variant="default" disabled={saving}>
+        <Button type="submit" className="w-full" disabled={saving}>
           <SmileIcon className="w-5 h-5 mr-2" /> {saving ? 'Saving…' : 'Save Reaction Roles'}
         </Button>
       </form>
-    </Section>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -15,11 +15,20 @@ export const GET = async (_req: any, { params }: { params: Promise<{ id: string 
 
   const { id: guildId } = await params;
   const rows = await query(
-    `SELECT id, guild_id, platform, creator, role_id, channel_id, discord_user_id, custom_message, notes, enabled
+    `SELECT id, guild_id, platform, creator as channelOrUser, role_id as roleId, channel_id as channelId, 
+            discord_user_id as discordUserId, mention_role_ids as mentionRoleIds, custom_message as customMessage, notes, enabled
      FROM creator_alert_rules WHERE guild_id = ? ORDER BY id DESC`,
     [guildId]
-  );
-  return NextResponse.json({ rules: rows });
+  ) as any[];
+  
+  // Convert enabled to boolean and parse mentionRoleIds JSON
+  const rules = rows.map(rule => ({ 
+    ...rule, 
+    enabled: Boolean(rule.enabled),
+    mentionRoleIds: rule.mentionRoleIds ? JSON.parse(rule.mentionRoleIds) : []
+  }));
+  
+  return NextResponse.json({ rules });
 };
 
 // POST create
@@ -32,16 +41,38 @@ export const POST = async (req: any, { params }: { params: Promise<{ id: string 
 
   const { id: guildId } = await params;
   const body = await req.json();
-  const { platform, creator, roleId, channelId, discordUserId, customMessage, notes, enabled } = body || {};
-  if (!platform || !creator || !channelId) {
-    return NextResponse.json({ error: "platform, creator, channelId required" }, { status: 400 });
+  const { platform, channelOrUser, roleId, mentionRoleIds, channelId, discordUserId, customMessage, notes, enabled } = body || {};
+  if (!platform || !channelOrUser || !channelId) {
+    return NextResponse.json({ error: "platform, channelOrUser, channelId required" }, { status: 400 });
   }
+  
+  // Convert mentionRoleIds array to JSON string
+  const mentionRoleIdsJson = mentionRoleIds && mentionRoleIds.length > 0 ? JSON.stringify(mentionRoleIds) : null;
+  
   const result = await query(
-    `INSERT INTO creator_alert_rules (guild_id, platform, creator, role_id, channel_id, discord_user_id, custom_message, notes, enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [guildId, platform, creator, roleId || null, channelId, discordUserId || null, customMessage || null, notes || null, enabled ? 1 : 0]
-  );
-  return NextResponse.json({ id: (result as any).insertId });
+    `INSERT INTO creator_alert_rules (guild_id, platform, creator, role_id, channel_id, discord_user_id, mention_role_ids, custom_message, notes, enabled)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [guildId, platform, channelOrUser, (roleId && roleId.trim()) ? roleId : null, channelId, discordUserId || null, mentionRoleIdsJson, customMessage || null, notes || null, enabled ? 1 : 0]
+  ) as any;
+  
+  const insertId = result.insertId;
+  
+  // Fetch the created rule
+  const [rule] = await query(
+    `SELECT id, guild_id, platform, creator as channelOrUser, role_id as roleId, channel_id as channelId, 
+            discord_user_id as discordUserId, mention_role_ids as mentionRoleIds, custom_message as customMessage, notes, enabled
+     FROM creator_alert_rules 
+     WHERE id = ? AND guild_id = ?`,
+    [insertId, guildId]
+  ) as any[];
+  
+  return NextResponse.json({ 
+    rule: { 
+      ...rule, 
+      enabled: Boolean(rule?.enabled),
+      mentionRoleIds: rule?.mentionRoleIds ? JSON.parse(rule.mentionRoleIds) : []
+    } 
+  });
 };
 
 // PUT update

@@ -11,6 +11,8 @@ export type Guild = {
   iconUrl?: string | null
   premium?: boolean
   createdAt?: string | null
+  ownerId?: string | null
+  joinedAt?: string | null
   group?: {
     id: number
     name: string
